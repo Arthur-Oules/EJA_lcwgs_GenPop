@@ -122,6 +122,62 @@ plot(pcadapt_whitelist, option = "screeplot")
 plot(pcadapt_whitelist, option = "scores", pop = poplist.names, i = 1, j = 2)
 ```
 
+```{r pcadapt without Catalina}
+EJA_all_loci_catalina <- read.pcadapt(here("ustacks_populations_output", "EJA_all_loci-catalian", "populations.snps.vcf"), type = "vcf") #Read vcf file for every loci
+
+pcadapt_all_loci_catalina_raw <- pcadapt(input = EJA_all_loci_catalina, K = 20) #pcadapt analysis with high value of K
+plot(pcadapt_all_loci_catalina_raw, option = "screeplot") #screeplot to visually chose pca component to keep
+
+##K = 2 seems to be the most optimal for this data set
+
+pcadapt_all_loci_catalina <- pcadapt(input = EJA_all_loci_catalina, K = 2)
+
+poplist.names <- c(rep("carmel", 6), rep("monterey", 18), rep("palos_verdes", 9), rep("laguna", 9), rep("san_diego", 22), rep("punta_banda", 20), rep("cardon", 3)) #map individuals to populations
+
+plot(pcadapt_all_loci_catalina, option = "scores", pop = poplist.names, i = 1, j = 2)
+100*pcadapt_all_loci_catalina $singular.values**2
+plot(pcadapt_all_loci_catalina, option = "scores", pop = poplist.names, i = 2, j = 3)
+plot(pcadapt_all_loci_catalina, option = "scores", pop = poplist.names, i = 1, j = 3)
+```
+
+```{r Outliers without Catalina}
+#Getting catalog rank to vcf correspondence
+EJA_all_loci_catalina_vcf <- read.vcfR(here("ustacks_populations_output", "EJA_all_loci-catalian", "populations.snps.vcf"))
+vcf_to_catalog_ranks_catalina.raw <- getID(EJA_all_loci_catalina_vcf) #get vcf catalog ranks
+vcf_to_catalog_ranks_catalina.raw <- strsplit(x = vcf_to_catalog_ranks_catalina.raw, split = ':') #extract catalog ranks from other info
+
+vcf_to_catalog_ranks_catalina <- rep(NA, length(vcf_to_catalog_ranks_catalina.raw))
+for (i in 1:length(vcf_to_catalog_ranks_catalina)) vcf_to_catalog_ranks_catalina[i] <- vcf_to_catalog_ranks_catalina.raw[[i]][1]
+vcf_to_catalog_ranks_catalina <- as.numeric(vcf_to_catalog_ranks_catalina)
+
+
+#Outliers selection by pcadapt pvalues
+EJA_all_loci_catalina_padj <- p.adjust(pcadapt_all_loci_catalina$pvalues, method = "bonferroni")
+alpha <- 0.1 #alpha chosen following https://bcm-uga.github.io/pcadapt/articles/pcadapt.html recommendations
+EJA_catalina_outliers_vcf_ranks <- which(EJA_all_loci_catalina_padj < alpha)
+
+#Getting phi_st from population analysis
+phi_st_catalina <- read.table(file = here('ustacks_populations_output', 'EJA_all_loci-catalian', 'populations.phistats.tsv'), header = FALSE, sep = '\t', skip = 9, stringsAsFactors = FALSE)[,c(1,4)]
+colnames(phi_st_catalina) <- c('catalog_rank', 'phi_st')
+
+#Getting outliers catalog ranks
+EJA_catalina_outliers_catalog_ranks <- vcf_to_catalog_ranks_catalina[EJA_catalina_outliers_vcf_ranks]
+
+#Separating balancing selection from local adaptation (sorting outliers by phi_st)
+EJA_catalina_outliers_phi_st <- phi_st_catalina[phi_st_catalina$catalog_rank %in% EJA_catalina_outliers_catalog_ranks, ]
+dim(EJA_catalina_outliers_phi_st)[1]
+EJA_catalina_outliers_phi_st_filtered <- EJA_catalina_outliers_phi_st[EJA_catalina_outliers_phi_st$phi_st > .1, ]
+dim(EJA_catalina_outliers_phi_st_filtered)[1]
+
+
+#Saving outliers list as txt file for stacks2 whitelist analysis
+sink(here('output', 'EJA_catalina_outliers_catalog_ranks.txt'))
+for (outlier in EJA_catalina_outliers_phi_st_filtered$catalog_rank){
+  cat(paste0(outlier, '\n'), append = TRUE)
+}
+sink()
+```
+
 #Getting protein sequences for outliers
 
 ```{r Read the catalog and keep outliers sequences as fasta file}
