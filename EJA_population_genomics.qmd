@@ -53,7 +53,10 @@ reduce_all_numeric <- function(list) {
 Get_outliers <- function(vcf_path, pcadapt, filename){
   vcf <- read.vcfR(paste0(vcf_path, "/populations.snps.vcf"))
 
-  vcf_to_catalog_ranks <- vcf |> getID() |> strsplit(split = ":") |> reduce_all_numeric()
+  vcf_to_catalog_ranks <- vcf |>
+    getID() |>
+    strsplit(split = ":") |>
+    reduce_all_numeric()
   
   #Outliers selection by pcadapt pvalues
   padj <- p.adjust(pcadapt$pvalues, method = "bonferroni")
@@ -74,10 +77,21 @@ Get_outliers <- function(vcf_path, pcadapt, filename){
   
   #Separating balancing selection from local adaptation (sorting outliers by phi_st)
   outliers_phi_st <- phi_st[phi_st$catalog_rank %in% outliers_catalog_ranks, ]
-  print(paste0("There are ", dim(outliers_phi_st)[1], " outliers with an associated phi_st."))
+  print(
+    paste0(
+      "There are ",
+      dim(outliers_phi_st)[1],
+      " outliers with an associated phi_st."
+    )
+  )
   outliers_phi_st_filtered <- outliers_phi_st[outliers_phi_st$phi_st > .1, ]
-  print(paste0("There are ", dim(outliers_phi_st_filtered)[1], " outliers with a phi_st > 0.1."))
-  
+  print(
+    paste0(
+      "There are ",
+      dim(outliers_phi_st_filtered)[1],
+      " outliers with a phi_st > 0.1."
+    )
+  )
   
   #Saving outliers list as txt file for stacks2 whitelist analysis
   sink(here("output", paste0(filename, "_outliers_catalog_ranks.txt")))
@@ -85,7 +99,12 @@ Get_outliers <- function(vcf_path, pcadapt, filename){
     cat(paste0(outlier, "\n"), append = TRUE)
   }
   sink()
-  print(paste0("Outliers list saved as ", here("output", paste0(filename, "_outliers_catalog_ranks.txt"))))
+  print(
+    paste0(
+      "Outliers list saved as ",
+      here("output", paste0(filename, "_outliers_catalog_ranks.txt"))
+    )
+  )
   return(outliers_catalog_ranks)
 }
 ```
@@ -96,12 +115,15 @@ Get_outliers <- function(vcf_path, pcadapt, filename){
 ## pcadapt pre-analysis to chose K value for outliers selection
 
 ```{r }
-EJA_all_loci <- read.pcadapt(here("ustacks_populations_output", "all_loci", "populations.snps.vcf"), type = "vcf") #Read vcf file for every loci
+EJA_all_loci <- read.pcadapt(# Read vcf file for every loci
+  here("ustacks_populations_output", "all_loci", "populations.snps.vcf"),
+  type = "vcf"
+)
 
-pcadapt_all_loci_raw <- pcadapt(input = EJA_all_loci, K = 20) #pcadapt analysis with high value of K
+pcadapt_all_loci_raw <- pcadapt(input = EJA_all_loci, K = 20)
 plot(pcadapt_all_loci_raw, option = "screeplot") #screeplot to visually chose pca component to keep
 
-##K = 3 seems to be the most optimal for this data set
+# K = 3 seems to be the most optimal for this data set
 ```
 
 ## Analysis with optimal value of K
@@ -125,7 +147,13 @@ plot(pcadapt_all_loci, option = "scores", pop = poplist.names, i = 2, j = 3)
 plot(pcadapt_all_loci, option = "scores", pop = poplist.names, i = 1, j = 3)
 
 plot(pcadapt_all_loci, option = "qqplot")
-hist(pcadapt_all_loci$pvalues, xlab = "p-values", main = NULL, breaks = 50, col = "orange")
+hist(
+  pcadapt_all_loci$pvalues,
+  xlab = "p-values",
+  main = NULL,
+  breaks = 50,
+  col = "orange"
+)
 ```
 
 ## Getting outliers
@@ -148,14 +176,23 @@ EJA_blacklist <- read.pcadapt(
 pcadapt_blacklist_raw <- pcadapt(input = EJA_blacklist, K = 20)
 
 plot(pcadapt_blacklist_raw, option = "screeplot")
-plot(pcadapt_blacklist_raw, option = "scores", pop = poplist.names, i = 1, j = 2)
+plot(
+  pcadapt_blacklist_raw,
+  option = "scores",
+  pop = poplist.names,
+  i = 1, j = 2
+)
 ```
 
 ## pcadapt analysis with whitelist (outliers loci)
 
 ```{r}
 EJA_whitelist <- read.pcadapt(
-  here("ustacks_populations_output", "EJA_whitelist_outliers", "populations.snps.vcf"),
+  here(
+    "ustacks_populations_output",
+    "EJA_whitelist_outliers",
+    "populations.snps.vcf"
+  ),
   type = "vcf"
 )
 pcadapt_whitelist <- pcadapt(input = EJA_whitelist, K = 20)
@@ -167,7 +204,14 @@ plot(pcadapt_whitelist, option = "scores", pop = poplist.names, i = 1, j = 2)
 ## pcadapt without Catalina
 
 ```{r}
-EJA_all_loci_catalina <- read.pcadapt(here("ustacks_populations_output", "EJA_all_loci-catalian", "populations.snps.vcf"), type = "vcf") #Read vcf file for every loci
+EJA_all_loci_catalina <- read.pcadapt(#Read vcf file for every loci
+  here(
+    "ustacks_populations_output",
+    "EJA_all_loci-catalian",
+    "populations.snps.vcf"
+  ),
+  type = "vcf"
+)
 
 pcadapt_all_loci_catalina_raw <- pcadapt(input = EJA_all_loci_catalina, K = 20) #pcadapt analysis with high value of K
 plot(pcadapt_all_loci_catalina_raw, option = "screeplot") #screeplot to visually chose pca component to keep
@@ -186,7 +230,12 @@ poplist.names <- c(
   rep("cardon", 3)
 ) #map individuals to populations
 
-plot(pcadapt_all_loci_catalina, option = "scores", pop = poplist.names, i = 1, j = 2)
+plot(
+  pcadapt_all_loci_catalina,
+  option = "scores",
+  pop = poplist.names,
+  i = 1, j = 2
+)
 100*pcadapt_all_loci_catalina$singular.values**2
 ```
 
@@ -206,14 +255,23 @@ EJA_catalina_outliers_catalog_ranks <- Get_outliers(
 
 ```{r}
 #Read and prepare catalog fasta file
-catalog_fa <- read.csv(file = here("data", "catalog.fa"), stringsAsFactors = FALSE)
+catalog_fa <- read.csv(
+  here("data", "catalog.fa"),
+  stringsAsFactors = FALSE
+)
 colnames(catalog_fa) <- c("Sequences")
-catalog_sequences <- subset(catalog_fa, rownames(catalog.fa) %in% seq(1, dim(catalog_fa)[1], 2))
+catalog_sequences <- subset(
+  catalog_fa,
+  rownames(catalog.fa) %in% seq(1, dim(catalog_fa)[1], 2)
+)
 rownames(catalog_sequences) <- c(1:dim(catalog_sequences)[1])
 
 length(EJA_outliers_catalog_ranks) # Plot number of outliers
 
-outliers_sequences <- subset(catalog_sequences, rownames(catalog_sequences) %in% EJA_outliers_catalog_ranks) # Extracting sequences of outliers
+outliers_sequences <- subset(
+  catalog_sequences,
+  rownames(catalog_sequences) %in% EJA_outliers_catalog_ranks
+) # Extracting sequences of outliers
 head(outliers_sequences)
 # write.csv(outliers_sequences, file = here("output", "outliers_sequences.csv")) #If you want to save the outliers sequences as csv
 
@@ -259,7 +317,10 @@ for (query in xml_find_all(hit.query, ".//BlastOutput2")){ #Reads XML BLAST resu
     bit_score <- as.numeric(xml_text(xml_find_all(match_1, ".//bit-score"))) #Get bit score
     evalue    <- as.numeric(xml_text(xml_find_all(match_1, ".//evalue"))) #Get e-value
     
-    query_df  <- rbind(query_df, c(query_id, num, accession, title, organism, bit_score, evalue))
+    query_df  <- rbind(
+      query_df,
+      c(query_id, num, accession, title, organism, bit_score, evalue)
+    )
   }
 }
 counter <- 0
@@ -276,9 +337,11 @@ query_df_80 <- query_df[query_df$bit_score >= 80, ] #Keep only significant match
 dim(query_df_80)[1]
 query_df_80_PREDICTED <- query_df_80[grepl("PREDICTED", query_df_80$title), ] #keep only PREDICTED proteins. Removes non coding sequences and whole chromosome matches (causes problem when searching GeneBank)
 dim(query_df_80_PREDICTED)[1]
-query_df_80_PREDICTED_unique <- query_df_80_PREDICTED[!duplicated(query_df_80_PREDICTED$query_number), ] #Keep the first match for each locus
+query_df_80_PREDICTED_unique <-
+  query_df_80_PREDICTED[!duplicated(query_df_80_PREDICTED$query_number), ] #Keep the first match for each locus
 dim(query_df_80_PREDICTED_unique)[1]
-query_df_80_PREDICTED_unique_unique <- query_df_80_PREDICTED_unique[!duplicated(query_df_80_PREDICTED_unique$accession_number), ] #Removes duplicated accession numbers
+query_df_80_PREDICTED_unique_unique <-
+  query_df_80_PREDICTED_unique[!duplicated(query_df_80_PREDICTED_unique$accession_number), ] #Removes duplicated accession numbers
 dim(query_df_80_PREDICTED_unique_unique)[1]
 
 # write.csv(query_df_80_PREDICTED_unique_unique, file = here("output", "query_df_80_PREDICTED_unique_unique.csv"))
@@ -287,14 +350,22 @@ dim(query_df_80_PREDICTED_unique_unique)[1]
 ## Get protein sequences from GenBank
 
 ```{r}
-prot_sequences = data.frame(
-  "protein_sequence" = rep(NA, length(query_df_80_PREDICTED_unique_unique$accession_number)),
+prot_sequences = data.frame(# Initialisation
+  "protein_sequence" = rep(
+    NA,
+    length(query_df_80_PREDICTED_unique_unique$accession_number)
+  ),
   row.names          = query_df_80_PREDICTED_unique_unique$accession_number
-) #Initialisation
+)
 
 pb = txtProgressBar(min = 0, max = dim(prot_sequences)[1], initial = 0) #Setup progress bar
 for (i in 1:dim(prot_sequences)[1]){
-  sequence_info <- entrez_fetch("nuccore", rownames(prot_sequences)[i], rettype ="fasta_cds_aa", retmode = "text") #Fetch protein info from GenBank from accession number
+  sequence_info <- entrez_fetch(
+    "nuccore",
+    rownames(prot_sequences)[i],
+    rettype ="fasta_cds_aa",
+    retmode = "text"
+  ) #Fetch protein info from GenBank from accession number
   prot_sequences[rownames(prot_sequences)[i], ] <- gsub(
     pattern     = "\n",
     replacement = "",
@@ -318,7 +389,8 @@ sink()
 ## Outliers protein match table
 
 ```{r}
-Table_2 <- query_df_80_PREDICTED_unique_unique[, c("query_number", "accession_number", "title")]
+Table_2 <-
+  query_df_80_PREDICTED_unique_unique[, c("query_number", "accession_number", "title")]
 colnames(Table_2)[1] <- "Locus_ID"
 write.csv(x = Table_2, file = here("output", "Table_2.csv"), row.names = FALSE)
 ```
@@ -340,7 +412,8 @@ mid_pos <- rep(NA, 24) #Initialise midrank vector
 count_pos <- as.data.frame(table(chromosome.names)) #Number of locus per chromosome
 
 for (i in 1:24){
-  mid_pos[i] <- Position(function(x) x == i, chromosome.names) + count_pos$Freq[i]/2
+  mid_pos[i] <-
+    Position(function(x) x == i, chromosome.names) + count_pos$Freq[i]/2
 }
 
 notNA.idx <- !is.na(pcadapt_all_loci$pvalues) 
@@ -366,14 +439,21 @@ manhattan_plot <- ggplot(manhattan_df, aes(x = x, y = y)) +
   scale_x_continuous(breaks = mid_pos, labels = 1:24) +
   labs(x = "chromosome", y = "-log10(p-value)") +
   theme_bw() +
-  theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank())
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
 
 ggsave(
   here("output", "graphs", "manhattan_plot.pdf"),
   plot = manhattan_plot,
   width = 16,
   height = 7
-); system2("open", args = c("-a Preview.app", here("output", "graphs", "manhattan_plot.pdf")), wait = FALSE)
+); system2(
+  "open",
+  args = c("-a Preview.app", here("output", "graphs", "manhattan_plot.pdf")),
+  wait = FALSE
+)
 
 EJA_outliers_pvalues_rank <- data.frame(
   "vcf_rank"                 = EJA_outliers_vcf_ranks,
@@ -393,20 +473,35 @@ ggsave(
   plot = manhattan_plot_labels,
   width = 16,
   height = 7
-); system2("open", args = c("-a Preview.app", here("output", "graphs", "manhattan_plot_labels.pdf")), wait = FALSE)
+); system2(
+  "open",
+  args = c(
+    "-a Preview.app",
+    here("output", "graphs", "manhattan_plot_labels.pdf")
+  ),
+  wait = FALSE
+)
 ```
 
 ## Figure 1
 
 ### PCA plot
 
+#### Data formatting
+
 ```{r}
-PCA_df <- data.frame("x" = -pcadapt_all_loci$scores[, 1], "y" = -pcadapt_all_loci$scores[, 2], "pop" = poplist.names)
+PCA_df <- data.frame(
+  "x" = -pcadapt_all_loci$scores[, 1],
+  "y" = -pcadapt_all_loci$scores[, 2],
+  "pop" = poplist.names
+)
 
 PCA_average <- data.frame("pop" = levels(as.factor(poplist.names)))
 for (i in 1:length(PCA_average$pop)){
-  PCA_average$average_x[i] <- mean(PCA_df[PCA_df$pop == PCA_average$pop[i], "x"])
-  PCA_average$average_y[i] <- mean(PCA_df[PCA_df$pop == PCA_average$pop[i], "y"])
+  PCA_average$average_x[i] <-
+    mean(PCA_df[PCA_df$pop == PCA_average$pop[i], "x"])
+  PCA_average$average_y[i] <-
+    mean(PCA_df[PCA_df$pop == PCA_average$pop[i], "y"])
 }
 PCA_average$pop <- c( # Rename populations with human readable syntax
   "Cardon",
@@ -420,14 +515,26 @@ PCA_average$pop <- c( # Rename populations with human readable syntax
 )
 # Add ofsets
 PCA_average$average_x <- PCA_average$average_x + c(0, -.02, .015, 0, 0, 0, 0, 0)
-PCA_average$average_y <- PCA_average$average_y - c(.04, .01, -.01, .06, .06, .06, .055, .045)
+PCA_average$average_y <-
+  PCA_average$average_y - c(.04, .01, -.01, .06, .06, .06, .055, .045)
 
 PCA_percentages <- pcadapt_all_loci$singular.values^2
+```
 
-# Generate plot
+#### Generate plot
+
+```{r}
 PCA <- ggplot() +
-  geom_point(data = PCA_df, mapping = aes(x = y, y = x, fill = pop), size = 3, shape = 21) +
-  geom_text(data = PCA_average, mapping = aes(x = average_y, y = average_x, label = pop)) +
+  geom_point(
+    PCA_df,
+    mapping = aes(x = y, y = x, fill = pop),
+    size = 3,
+    shape = 21
+  ) +
+  geom_text(
+    PCA_average,
+    mapping = aes(x = average_y, y = average_x, label = pop)
+  ) +
   labs(
     x = paste0("-PC2: ", as.character(round(PCA_percentages[2]*100, 2)), "%"),
     y = paste0("-PC1: ", as.character(round(PCA_percentages[1]*100, 2)), "%")
@@ -436,66 +543,119 @@ PCA <- ggplot() +
   theme(
     legend.position  = "none",
     panel.background = element_rect(fill = "white", color = "black"),
-    panel.grid.major = element_line(color = "black", linetype = "dashed", linewidth = .12)
+    panel.grid.major = element_line(
+      color = "black",
+      linetype = "dashed",
+      linewidth = .12
+    )
   )
 ```
 
 ### Surface temperature and current map
 
+#### Getting data
+
 ```{r}
-#Extracting ocean surface temperature and current from BRAN2020 (https://dapds00.nci.org.au/thredds/catalog/gb6/BRAN/BRAN2020/month/catalog.html). See https://towardsdatascience.com/how-to-crack-open-netcdf-files-in-r-and-extract-data-as-time-series-24107b70dcd for tutorial on NetCDF4 files
-nc_temp <- nc_open(here("data","ocean_temp_ann_2022.nc")) #Longitude"s 0 is at Greenwich and -180 become 3600. Latitudes start at -75 and end at +75. To convert add +360 to lon and +75 to lat
+# Extracting ocean surface temperature and current from BRAN2020
+# (https://dapds00.nci.org.au/thredds/catalog/gb6/BRAN/BRAN2020/month/catalog.html)
+# See https://towardsdatascience.com/how-to-crack-open-netcdf-files-in-r-and-extract-data-as-time-series-24107b70dcd for tutorial on NetCDF4 files
+nc_temp <- nc_open(here("data","ocean_temp_ann_2022.nc"))
+# Longitude's 0 is at Greenwich and -180 become 3600
+# Latitudes start at -75 and end at +75
+# To convert add +360 to longitude and +75 to latitude
 nc_u   <- nc_open(here("data", "ocean_u_ann_2022.nc"))
 nc_v   <- nc_open(here("data", "ocean_v_ann_2022.nc"))
+```
 
-#Converting arrays to ata frame
+#### Formatting data
+
+##### BRAN2020 data
+
+```{r}
 lon <- ncvar_get(nc_temp, "xt_ocean")
-lon[1801:3600] <- seq(-179.95,-0.05,.1)#Converting longitude format to sample and lanmass coordiantes
+lon[1801:3600] <- seq(-179.95,-0.05,.1)
 lat <- ncvar_get(nc_temp, "yt_ocean") 
-lonlat <- as.matrix(expand.grid(lon,lat))
+lonlat <- expand.grid("lon" = lon, "lat" = lat) |> as.matrix()
+temp_matrix <- nc_temp |> ncvar_get("temp") |>  _[, , 1] |> as.matrix()
+u_matrix <- nc_u |> ncvar_get("u") |> _[, , 1] |> as.matrix()
+v_matrix <- nc_v |> ncvar_get("v") |> _[, , 1] |> as.matrix()
 
-temp_array  <- ncvar_get(nc_temp, "temp")
-temp_matrix <- as.matrix(temp_array[,,1])
-temp_vector <- as.vector(temp_matrix)
+world_map_data_df <- data.frame(# Final data frame for whole world
+  lonlat,
+  "temp" = as.vector(temp_matrix),
+  "u"    = as.vector(u_matrix),
+  "v"    = as.vector(v_matrix)
+)
 
-u_array  <- ncvar_get(nc_u, "u")
-u_matrix <- as.matrix(u_array[,,1])
-u_vector <- as.vector(u_matrix)
+# Crop to smaller size for diminished render time
+crop_lonlat <- expand.grid(
+  "lon" = lon[(3600 - 1300):(3600 - 1100)],
+  "lat" = lat[(200 + 750):(400 + 750)]
+) |> as.matrix()
+crop_temp   <- temp_matrix[(3600-1300):(3600-1100), (200+750):(400+750)] |>
+  as.vector()
+crop_u      <- u_matrix[(3600 - 1300):(3600 - 1100), (200 + 750):(400 + 750)] |>
+  as.vector()
+crop_v      <- v_matrix[(3600 - 1300):(3600 - 1100), (200 + 750):(400 + 750)] |>
+  as.vector()
+#Reduce current speed vector density
+crop_u_lowres <- replace(crop_u, list = 2 * 1:(length(crop_u)/2), values = NA)
+crop_v_lowres <- replace(crop_v, list = 2 * 1:(length(crop_v)/2), values = NA)
 
-v_array  <- ncvar_get(nc_v, "v")
-v_matrix <- as.matrix(v_array[,,1])
-v_vector <- as.vector(v_matrix)
+map_data_lowres_df <- data.frame(
+  crop_lonlat,
+  "temp" = crop_temp,
+  "u"    = crop_u_lowres,
+  "v"    = crop_v_lowres
+)
 
-#Final data frame for whold world
-world_map_data_df <- data.frame(cbind(lonlat, temp_vector, u_vector, v_vector))
-colnames(world_map_data_df) <- c("lon", "lat", "temp", "u", "v")
+current_uv_scalar <- 2 # Set scalar for better vector visibility, don"t forget when setting scale in final graph
+```
 
-#Crop to smaller size for diminished render time
-sub_lonlat <- as.matrix(expand.grid(lon[(3600-1300):(3600-1100)], lat[(200+750):(400+750)]))
-sub_temp   <- as.vector(temp_matrix[(3600-1300):(3600-1100),(200+750):(400+750)])
-sub_u      <- as.vector(u_matrix[(3600-1300):(3600-1100),(200+750):(400+750)])
-sub_v      <- as.vector(v_matrix[(3600-1300):(3600-1100),(200+750):(400+750)])
+##### Landmass
 
-#Reduce current speed vecotr density
-sub_u_lowres <- replace(sub_u, 2*c(1:(length(sub_u)/2)), NA)
-sub_v_lowres <- replace(sub_v, 2*c(1:(length(sub_u)/2)), NA)
+```{r}
+# Setting up landmass map from naturalearth
+world  <- ne_countries(
+  scale       = "large",
+  country     = c("united states of america", "mexico"),
+  returnclass = "sf"
+)
+states <- ne_states(
+  country     = c("united states of america", "mexico"),
+  returnclass = "sf"
+)
 
-map_data_lowres_df <- data.frame(cbind(sub_lonlat, sub_temp, sub_u_lowres, sub_v_lowres))
-colnames(map_data_lowres_df) <- c("lon", "lat", "temp", "u", "v")
-
-current_uv_scalar <- 2 #Set scalar for better vector vivisbility, don"t forget when setting scale in final graph
-
-#Setting up landmass map from naturalearth
-world  <- ne_countries(scale = "large", country = c("united states of america", "mexico"), returnclass = "sf")
-states <- ne_states(country = c("united states of america", "mexico"), returnclass = "sf")
-
-#Sampling site coordinates and misc info on map
-sample_coords <- read.csv(here("data","EJA_RAD_Samples.csv"), stringsAsFactors = FALSE)
+# Sampling site coordinates and misc info on map
+sample_coords <- read.csv(
+  here("data","EJA_RAD_Samples.csv"),
+  stringsAsFactors = FALSE
+)
 sample_sites  <- sample_coords[!duplicated(sample_coords$Sampling.location), ]
-sample_sites$lab_lon <- c(-121.9170, -121.9348, -118.4126, -117.7821, -117.2420, -116.7030, -114.4550, -118.4163) +
+sample_sites$lab_lon <-
+  c(
+    -121.9170,
+    -121.9348,
+    -118.4126,
+    -117.7821,
+    -117.2420,
+    -116.7030,
+    -114.4550,
+    -118.4163
+  ) +
   .15 +
   c(0, 0, 0, .1, 0, 0, 0, -.1 -2)
-sample_sites$lab_lat <- c(36.63045, 36.53834, 33.74077, 33.53716, 32.76270, 31.71139, 28.90742, 33.38790) +
+sample_sites$lab_lat <-
+  c(
+    36.63045,
+    36.53834,
+    33.74077,
+    33.53716,
+    32.76270,
+    31.71139,
+    28.90742,
+    33.38790
+  ) +
   .25 +
   c(0, -.5, 0, -.2, 0, 0, 0, -.1 -1)
 states_labels <- data.frame(
@@ -515,41 +675,81 @@ ocean_labels <- data.frame(
   "lat"  = c(31,30.7),
   "lab"  = c("Pacific Ocean","Gulf\nof\nCalifornia")
 )
+```
 
+#### Generate plot
 
+```{r}
 map <- ggplot() +
   #Temperature map (https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
-  geom_tile(data = map_data_lowres_df, aes(x = lon, y = lat, fill = temp)) +
+  geom_tile(map_data_lowres_df, aes(x = lon, y = lat, fill = temp)) +
   scale_fill_viridis(name = "Temp.\n(°C)", option = "turbo") +
   #Current vectors (https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
   geom_segment(
     data    = map_data_lowres_df,
-    mapping = aes(x = lon, y = lat, xend = lon + u * current_uv_scalar, yend = lat + v * current_uv_scalar),
+    mapping = aes(
+      x    = lon,
+      y    = lat,
+      xend = lon + current_uv_scalar * u,
+      yend = lat + current_uv_scalar * v
+    ),
     arrow   = arrow(angle = 15, length = unit(0.04, "inches"), type = "closed"),
     na.rm   = TRUE,
     alpha   = 0.3
   ) +
   #Landmass
-  geom_sf(data = states) +
+  geom_sf(states) +
   #Sampling sites points and labels
   new_scale("fill") +
   geom_path(
-    data    = data.frame("x" = c(-118.4163, -118.4163 -.85), "y" = c(33.38790, 33.38790 -.73)),
+    data.frame(
+      "x" = c(-118.4163, -118.4163 -.85),
+      "y" = c(33.38790, 33.38790 -.73)
+    ),
     mapping = aes(x, y)
   ) +
   geom_point(
     sample_sites,
-    mapping     = aes(x = Longitude, y = Latitude, fill = Sampling.location, size = 1.3),
+    mapping     = aes(
+      x = Longitude,
+      y = Latitude,
+      fill = Sampling.location,
+      size = 1.3
+    ),
     shape       = 21,
     show.legend = FALSE
   ) +
-  geom_label(sample_sites, mapping = aes(x = lab_lon, y = lab_lat, label = Sampling.location), hjust = 0) +
+  geom_label(
+    sample_sites,
+    mapping = aes(x = lab_lon, y = lab_lat, label = Sampling.location),
+    hjust   = 0
+  ) +
   #Extra cities points and labels
-  geom_point(city_labels, mapping = aes(x = long, y = lat), size = 4, shape = 20, show.legend = FALSE) +
-  geom_text(city_labels, mapping = aes(x = long_lab, y = lat_lab, label = lab), lineheight = .7, hjust = 0) +
+  geom_point(
+    city_labels,
+    mapping     = aes(x = long, y = lat),
+    size        = 4,
+    shape       = 20,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    city_labels,
+    mapping    = aes(x = long_lab, y = lat_lab, label = lab),
+    lineheight = .7,
+    hjust      = 0
+  ) +
   #Ocean and state names
-  geom_text(states_labels, mapping = aes(x = long, y = lat, label = lab), size = 5.5) +
-  geom_text(ocean_labels[2,], mapping = aes(x = long, y = lat, label = lab), colour = "ivory", size = 5) +
+  geom_text(
+    states_labels,
+    mapping = aes(x = long, y = lat, label = lab),
+    size = 5.5
+  ) +
+  geom_text(
+    ocean_labels[2,],
+    mapping = aes(x = long, y = lat, label = lab),
+    colour  = "ivory",
+    size    = 5
+  ) +
   geom_label(
     ocean_labels[1,],
     mapping       = aes(x = long, y = lat, label = lab),
@@ -560,25 +760,42 @@ map <- ggplot() +
   #Crop map 
   coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
   #Vector, temperature and distance scale + orientation
-  geom_label(aes(x = -122, y = 29.5, label = "1.0 m/s\n"), size = 4.5, label.padding = unit(0.5, "lines")) +
+  geom_label(
+    aes(x = -122, y = 29.5, label = "1.0 m/s\n"),
+    size          = 4.5,
+    label.padding = unit(0.5, "lines")
+  ) +
   geom_segment(
     aes(x = -122.5, y = 29.25, xend = -121.5, yend = 29.25),
     arrow = arrow(angle = 15, length = unit(0.04, "inches"), type = "closed")
   ) +
   geom_label(aes(x = -119.1, y = 28.71, label = "        ")) +
-  annotation_scale(location = "bl", width_hint = 0.4) + #Scale bar is not perfectly accurate because of surface covered
-  annotation_north_arrow(location = "tr", style = north_arrow_fancy_orienteering()) +
-  #Set text around map and coordinates display
+  annotation_scale(location = "bl", width_hint = 0.4) +
+  annotation_north_arrow( # Set text around map and coordinates display
+    location = "tr",
+    style = north_arrow_fancy_orienteering()
+  ) +
   labs(x = "Longitude", y = "Latitude") +
-  scale_x_continuous(breaks = c(-120, -115), labels = c("120°W","115°W")) +
-  scale_y_continuous(breaks = c(30, 35), labels = unit_format(suffix = "°N", sep = ""))
+  scale_x_continuous(
+    breaks = c(-120, -115),
+    labels = c("120°W","115°W")
+  ) +
+  scale_y_continuous(
+    breaks = c(30, 35),
+    labels = unit_format(suffix = "°N", sep = "")
+  )
 
 ggsave(
   here("output", "graphs", "temp_current_map.pdf"),
   plot   = map,
   width  = 9,
   height = 9
-); system2("open", args = c("-a Preview.app", here("output", "graphs", "temp_current_map.pdf")), wait = FALSE)
+)
+system2(
+  "open",
+  args = c("-a Preview.app", here("output", "graphs", "temp_current_map.pdf")),
+  wait = FALSE
+)
 ```
 
 ### PCA plot and map figure
@@ -591,7 +808,12 @@ ggsave(
   plot   = PCA_map,
   width  = 14,
   height = 9
-); system2("open", args = c("-a Preview.app", here("output", "graphs", "pca_map.pdf")), wait = FALSE)
+)
+system2(
+  "open",
+  args = c("-a Preview.app", here("output", "graphs", "pca_map.pdf")),
+  wait = FALSE
+)
 ```
 
 ## Figure 2?
