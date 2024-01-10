@@ -193,7 +193,7 @@ plot(pcadapt_all_loci_catalina, option = "scores", pop = poplist.names, i = 1, j
 ## Outliers without Catalina
 
 ```{r}
-EJA_catalina_outliers_catalog_ranks_test <- Get_outliers(
+EJA_catalina_outliers_catalog_ranks <- Get_outliers(
   vcf_path = here("ustacks_populations_output", "EJA_all_loci-catalian"),
   pcadapt  = pcadapt_all_loci_catalina,
   filename = "EJA_catalina"
@@ -269,7 +269,7 @@ query_df$bit_score <- as.numeric(query_df$bit_score)
 # query_df <- readRDS(here("output", "Blast_results_as_data_frame.RDS")) #If you don"t want to rerun the search...
 ```
 
-## Filter the BLAST results
+## Filtering BLAST results
 
 ```{r}
 query_df_80 <- query_df[query_df$bit_score >= 80, ] #Keep only significant matches
@@ -329,12 +329,15 @@ write.csv(x = Table_2, file = here("output", "Table_2.csv"), row.names = FALSE)
 
 ```{r}
 #Getting chromosome map for manhatan plot
-chromosome.names.raw <- getFIX(EJA_all_loci_vcf)[,"CHROM"] #Get chromosome for each vcf locus
-chromosome.names     <- as.integer(lapply(X = chromosome.names.raw, FUN = gsub, pattern = "SCAF_", replacement = "")) #Extract chromosome number from vcf info
+chromosome.names <- getFIX(EJA_all_loci_vcf)[,"CHROM"] |>#Get chromosome for each vcf locus
+  lapply(FUN = gsub, pattern = "SCAF_", replacement = "") |>
+  as.integer()
+
+#Extract chromosome number from vcf info
 
 #Getting x axis coordinates for chromosome id positions
 mid_pos <- rep(NA, 24) #Initialise midrank vector
-count_pos = as.data.frame(table(chromosome.names)) #Number of locus per chromosome
+count_pos <- as.data.frame(table(chromosome.names)) #Number of locus per chromosome
 
 for (i in 1:24){
   mid_pos[i] <- Position(function(x) x == i, chromosome.names) + count_pos$Freq[i]/2
@@ -398,28 +401,33 @@ ggsave(
 ### PCA plot
 
 ```{r}
-PCA_df <- data.frame("x" = -pcadapt_all_loci$scores[,1], "y" = -pcadapt_all_loci$scores[,2], "pop" = poplist.names)
+PCA_df <- data.frame("x" = -pcadapt_all_loci$scores[, 1], "y" = -pcadapt_all_loci$scores[, 2], "pop" = poplist.names)
 
-PCA_percentages <- pcadapt_all_loci$singular.values^2
-PCA_average_scores <- data.frame(
-  "pop" = poplist.names,
-  "1" = -pcadapt_all_loci$scores[, 1],
-  "2" = -pcadapt_all_loci$scores[, 2]
-)
 PCA_average <- data.frame("pop" = levels(as.factor(poplist.names)))
 for (i in 1:length(PCA_average$pop)){
-  PCA_average$average_1[i] <- mean(PCA_average_scores[PCA_average_scores[, 1] == PCA_average$pop[i], "X1"])
+  PCA_average$average_x[i] <- mean(PCA_df[PCA_df$pop == PCA_average$pop[i], "x"])
+  PCA_average$average_y[i] <- mean(PCA_df[PCA_df$pop == PCA_average$pop[i], "y"])
 }
-for (i in 1:length(PCA_average$pop)){
-  PCA_average$average_2[i] <- mean(PCA_average_scores[PCA_average_scores[, 1] == PCA_average$pop[i], "X2"])
-}
-PCA_average$pop <- c("Cardon", "Carmel", "Catalina", "Laguna Beach", "Monterey Bay", "Palos Verdes", "Punta Banda", "San Diego")
-PCA_average$average_1 <- PCA_average$average_1 + c(0, -.02, .015, 0, 0, 0, 0, 0)
-PCA_average$average_2 <- PCA_average$average_2 - c(.04, .01, -.01, .06, .06, .06, .055, .045)
+PCA_average$pop <- c( # Rename populations with human readable syntax
+  "Cardon",
+  "Carmel",
+  "Catalina",
+  "Laguna Beach",
+  "Monterey Bay",
+  "Palos Verdes",
+  "Punta Banda",
+  "San Diego"
+)
+# Add ofsets
+PCA_average$average_x <- PCA_average$average_x + c(0, -.02, .015, 0, 0, 0, 0, 0)
+PCA_average$average_y <- PCA_average$average_y - c(.04, .01, -.01, .06, .06, .06, .055, .045)
 
-PCA <- ggplot(PCA_df) +
-  geom_point(mapping = aes(x = y, y = x, fill = pop), size = 3, shape = 21) +
-  geom_text(data = PCA_average, mapping = aes(x = average_2, y = average_1, label = pop)) +
+PCA_percentages <- pcadapt_all_loci$singular.values^2
+
+# Generate plot
+PCA <- ggplot() +
+  geom_point(data = PCA_df, mapping = aes(x = y, y = x, fill = pop), size = 3, shape = 21) +
+  geom_text(data = PCA_average, mapping = aes(x = average_y, y = average_x, label = pop)) +
   labs(
     x = paste0("-PC2: ", as.character(round(PCA_percentages[2]*100, 2)), "%"),
     y = paste0("-PC1: ", as.character(round(PCA_percentages[1]*100, 2)), "%")
@@ -429,7 +437,7 @@ PCA <- ggplot(PCA_df) +
     legend.position  = "none",
     panel.background = element_rect(fill = "white", color = "black"),
     panel.grid.major = element_line(color = "black", linetype = "dashed", linewidth = .12)
-  ); PCA_map <- ggarrange(PCA, map, widths = c(1, 1.3))
+  )
 ```
 
 ### Surface temperature and current map
