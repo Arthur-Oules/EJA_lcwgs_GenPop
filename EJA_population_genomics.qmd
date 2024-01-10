@@ -927,45 +927,93 @@ map_blank <- ggplot() +
   #Sampling sites points and labels
   new_scale("fill") +
   geom_path(
-    data = data.frame("x" = c(-118.4163, -118.4163 -.85), "y" = c(33.38790, 33.38790 -.73)),
-    mapping = aes(x, y)
+    mapping = aes(x, y),
+    data    = data.frame(
+      "x" = c(-118.4163, -118.4163 -.85),
+      "y" = c(33.38790, 33.38790 -.73)
+    )
   ) +
   geom_point(
     sample_sites,
-    mapping = aes(x = Longitude, y = Latitude, fill = Sampling_location, size = 1.3),
-    shape = 21,
+    mapping     = aes(
+      x    = Longitude,
+      y    = Latitude,
+      fill = Sampling_location,
+      size = 1.3
+    ),
+    shape       = 21,
     show.legend = FALSE
   ) +
-  geom_label(sample_sites, mapping = aes(x = lab_lon, y = lab_lat, label = Sampling_location), hjust = 0) +
-  geom_point(city_labels, mapping = aes(x = long, y = lat), size = 4, shape = 20, show.legend = FALSE) +
-  geom_text(city_labels, mapping = aes(x = long_lab, y = lat_lab, label = lab), lineheight = .7, hjust = 0) +
+  geom_label(
+    sample_sites,
+    mapping = aes(x = lab_lon, y = lab_lat, label = Sampling_location),
+    hjust   = 0
+  ) +
+  geom_point(
+    city_labels,
+    mapping     = aes(x = long, y = lat),
+    size        = 4,
+    shape       = 20,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    city_labels,
+    mapping    = aes(x = long_lab, y = lat_lab, label = lab),
+    lineheight = .7,
+    hjust      = 0
+  ) +
   #Ocean and state names
-  geom_text(states_labels, mapping = aes(x = long, y = lat, label = lab), size = 5.5) +
-  geom_text(ocean_labels[2,], mapping = aes(x = long, y = lat, label = lab), colour = "ivory", size = 5) +
+  geom_text(
+    states_labels,
+    mapping = aes(x = long, y = lat, label = lab),
+    size    = 5.5
+  ) +
+  geom_text(
+    ocean_labels[2,],
+    mapping = aes(x = long, y = lat, label = lab),
+    colour  = "ivory",
+    size    = 5
+  ) +
   geom_label(
     ocean_labels[1,],
-    mapping = aes(x = long, y = lat, label = lab),
-    colour = "black",
-    size = 5,
+    mapping       = aes(x = long, y = lat, label = lab),
+    colour        = "black",
+    size          = 5,
     label.padding = unit(0.5, "lines")
   ) +
   #Crop map 
   coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
   #Vector, temperature and distance scale + orientation
   geom_label(aes(x = -119.1, y = 28.71, label = "        ")) +
-  annotation_scale(location = "bl", width_hint = 0.4) + #Scale bar is not perfectly accurate because of surface covered
-  annotation_north_arrow(location = "tr", style = north_arrow_fancy_orienteering()) +
+  annotation_scale(location = "bl", width_hint = 0.4) +
+  annotation_north_arrow(
+    location = "tr",
+    style = north_arrow_fancy_orienteering()
+  ) +
   #Set text around map and coordinates display
   labs(x = "Longitude", y = "Latitude") +
-  scale_x_continuous(breaks = c(-120, -115), labels = c("120°W","115°W")) +
-  scale_y_continuous(breaks = c(30, 35), labels = unit_format(suffix = "°N", sep = "")) +
+  scale_x_continuous(
+    breaks = c(-120, -115),
+    labels = c("120°W","115°W")
+  ) +
+  scale_y_continuous(
+    breaks = c(30, 35),
+    labels = unit_format(suffix = "°N", sep = "")
+  ) +
   theme(panel.background = element_rect("lightblue"))
+
 ggsave(
   here("output", "plots", "map_blank.pdf"),
   plot = map_blank,
   width = 7.5,
   height = 7.5
-); system2("open", args = c("-a Preview.app", here("output", "plots", "map_blank.pdf")), wait = FALSE)
+)
+
+system2(
+  "open",
+  args = c("-a Preview.app", here("output", "plots", "map_blank.pdf")),
+  wait = FALSE
+)
 ```
 
 ## Figure 3?
@@ -973,35 +1021,58 @@ ggsave(
 ### Convert blast KOALA pie piechart in barplot
 
 ```{r}
-koala_results <- read.csv(here("external_results", "Blast_koala_results.csv"), stringsAsFactors = FALSE)
-koala_results$Functional.category <- factor(koala_results$Functional.category, koala_results$Functional.category)
-koala_ggplot <- ggplot(
-  data = koala_results,
-  mapping = aes(x = Functional.category, y = Counts, fill = Functional.category)
+koala_results <- read.csv(
+  here("external_results", "Blast_koala_results.csv"),
+  stringsAsFactors = FALSE
+) |>
+  mutate(
+    Functional.category = factor(Functional.category, Functional.category)
+  )
+
+koala_barplot <- ggplot(
+    koala_results,
+    mapping = aes(
+      x = Functional.category,
+      y = Counts,
+      fill = Functional.category
+    )
   ) +
   geom_col() +
   # scale_fill_discrete(name = "Functional category") +
   scale_fill_manual(
-    name = "Functional category",
+    name   = "Functional category",
     labels = koala_results$Functional.category,
-    breaks = koala_results$Functional.category,
-    values = koala_results$colour
+    values = koala_results$colour,
+    breaks = koala_results$Functional.category
   ) +
   theme(
-    panel.background = element_rect(fill = "white", colour = "black"),
+    panel.background   = element_rect(fill = "white", colour = "black"),
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank(),
-    panel.grid.major.y = element_line(colour = "black", linetype = "solid", linewidth = .12),
-    panel.grid.minor.y = element_line(colour = "black", linetype = "dashed", linewidth = .08),
-    axis.ticks.x = element_blank(),
-    axis.text.x = element_blank(),
-    axis.title.x = element_blank()
+    panel.grid.major.y = element_line(
+      colour = "black",
+      linetype = "solid",
+      linewidth = .12
+    ),
+    panel.grid.minor.y = element_line(
+      colour = "black",
+      linetype = "dashed",
+      linewidth = .08
+    ),
+    axis.ticks.x      = element_blank(),
+    axis.text.x       = element_blank(),
+    axis.title.x      = element_blank()
   )
 ggsave(
   filename = here("external_results", "blast_koala_bar_plot.pdf"),
-  plot = koala_ggplot,
+  plot = koala_barplot,
   width = 21,
   height = 10,
   units = "cm"
+)
+system2(
+  "open",
+  args = c("-a Preview.app", here("external_results", "blast_koala_bar_plot.pdf")),
+  wait = FALSE
 )
 ```
