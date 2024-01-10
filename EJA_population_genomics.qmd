@@ -2,7 +2,8 @@
 title: "EJA population genomics"
 author: "Arthur Oulès"
 date: "2/1/2023"
-output: html_document
+format: html
+editor: source
 ---
 
 # Load packages
@@ -40,9 +41,61 @@ library(scales)
 library(ggnewscale)
 ```
 
+# Functions
+```{r}
+reduce_all_numeric <- function(list) {
+  for (i in 1:length(list)) {
+    list[i] <- as.numeric(list[[i]][1])
+  }
+  return(list)
+}
+
+Get_outliers <- function(vcf_path, pcadapt, filename){
+  vcf <- read.vcfR(paste0(vcf_path, '/populations.snps.vcf'))
+
+  vcf_to_catalog_ranks <- vcf |> getID() |> strsplit(split = ':') |> reduce_all_numeric()
+  
+  #Outliers selection by pcadapt pvalues
+  padj <- p.adjust(pcadapt$pvalues, method = 'bonferroni')
+  outliers_vcf_ranks <- which(padj < .1) #alpha = .1 chosen following https://bcm-uga.github.io/pcadapt/articles/pcadapt.html recommendations
+  
+  #Getting phi_st from population analysis
+  phi_st <- read.table(
+    file             = paste0(vcf_path, '/populations.phistats.tsv'),
+    header           = FALSE,
+    sep              = '\t',
+    skip             = 9,
+    stringsAsFactors = FALSE
+  )[, c(1, 4)]
+  colnames(phi_st) <- c('catalog_rank', 'phi_st')
+  
+  #Getting outliers catalog ranks
+  outliers_catalog_ranks <- vcf_to_catalog_ranks[outliers_vcf_ranks]
+  
+  #Separating balancing selection from local adaptation (sorting outliers by phi_st)
+  outliers_phi_st <- phi_st[phi_st$catalog_rank %in% outliers_catalog_ranks, ]
+  print(paste0('There are ', dim(outliers_phi_st)[1], ' outliers with an associated phi_st.'))
+  outliers_phi_st_filtered <- outliers_phi_st[outliers_phi_st$phi_st > .1, ]
+  print(paste0('There are ', dim(outliers_phi_st_filtered)[1], ' outliers with a phi_st > 0.1.'))
+  
+  
+  #Saving outliers list as txt file for stacks2 whitelist analysis
+  sink(here('output', paste0(filename, '_outliers_catalog_ranks.txt')))
+  for (outlier in outliers_catalog_ranks){
+    cat(paste0(outlier, '\n'), append = TRUE)
+  }
+  sink()
+  print(paste0('Outliers list saved as ', here('output', paste0(filename, '_outliers_catalog_ranks.txt'))))
+  return(outliers_catalog_ranks)
+}
+```
+
+
 # pcadapt analysis
 
-```{r pcadapt pre-analysis to chose K value for outliers selection}
+## pcadapt pre-analysis to chose K value for outliers selection
+
+```{r }
 EJA_all_loci <- read.pcadapt(here("ustacks_populations_output", "all_loci", "populations.snps.vcf"), type = "vcf") #Read vcf file for every loci
 
 pcadapt_all_loci_raw <- pcadapt(input = EJA_all_loci, K = 20) #pcadapt analysis with high value of K
@@ -51,7 +104,9 @@ plot(pcadapt_all_loci_raw, option = "screeplot") #screeplot to visually chose pc
 ##K = 3 seems to be the most optimal for this data set
 ```
 
-```{r Analysis with optimal value of K}
+## Analysis with optimal value of K
+
+```{r }
 pcadapt_all_loci <- pcadapt(input = EJA_all_loci, K = 3)
 
 poplist.names <- c(
@@ -73,51 +128,19 @@ plot(pcadapt_all_loci, option = "qqplot")
 hist(pcadapt_all_loci$pvalues, xlab = "p-values", main = NULL, breaks = 50, col = "orange")
 ```
 
-```{r Getting outliers}
-#Getting catalog rank to vcf correspondence
-EJA_all_loci_vcf <- read.vcfR(here("ustacks_populations_output", "all_loci", "populations.snps.vcf"))
-vcf_to_catalog_ranks.raw <- getID(EJA_all_loci_vcf) #get vcf catalog ranks
-vcf_to_catalog_ranks.raw <- strsplit(x = vcf_to_catalog_ranks.raw, split = ':') #extract catalog ranks from other info
+## Getting outliers
 
-vcf_to_catalog_ranks <- rep(NA, length(vcf_to_catalog_ranks.raw))
-for (i in 1:length(vcf_to_catalog_ranks)) vcf_to_catalog_ranks[i] <- vcf_to_catalog_ranks.raw[[i]][1]
-vcf_to_catalog_ranks <- as.numeric(vcf_to_catalog_ranks)
-
-
-#Outliers selection by pcadapt pvalues
-EJA_all_loci_padj <- p.adjust(pcadapt_all_loci$pvalues, method = "bonferroni")
-alpha <- 0.1 #alpha chosen following https://bcm-uga.github.io/pcadapt/articles/pcadapt.html recommendations
-EJA_outliers_vcf_ranks <- which(EJA_all_loci_padj < alpha)
-
-#Getting phi_st from population analysis
-phi_st <- read.table(
-  file             = here('ustacks_populations_output', 'all_loci', 'populations.phistats.tsv'),
-  header           = FALSE,
-  sep              = '\t',
-  skip             = 9,
-  stringsAsFactors = FALSE
-)[,c(1,4)]
-colnames(phi_st) <- c('catalog_rank', 'phi_st')
-
-#Getting outliers catalog ranks
-EJA_outliers_catalog_ranks <- vcf_to_catalog_ranks[EJA_outliers_vcf_ranks]
-
-#Separating balancing selection from local adaptation (sorting outliers by phi_st)
-EJA_outliers_phi_st <- phi_st[phi_st$catalog_rank %in% EJA_outliers_catalog_ranks, ]
-dim(EJA_outliers_phi_st)[1]
-EJA_outliers_phi_st_filtered <- EJA_outliers_phi_st[EJA_outliers_phi_st$phi_st > .1, ]
-dim(EJA_outliers_phi_st_filtered)[1]
-
-
-#Saving outliers list as txt file for stacks2 whitelist analysis
-sink(here('output', 'EJA_outliers_catalog_ranks.txt'))
-for (outlier in EJA_outliers_catalog_ranks){
-  cat(paste0(outlier, '\n'), append = TRUE)
-}
-sink()
+```{r}
+EJA_outliers_catalog_ranks <- Get_outliers(
+  here('ustacks_populations_output', 'all_loci'),
+  pcadapt  = pcadapt_all_loci,
+  filename = 'EJA'
+)
 ```
 
-```{r pcadapt analysis with blacklist (neutral loci)}
+## pcadapt analysis with blacklist (neutral loci)
+
+```{r}
 EJA_blacklist <- read.pcadapt(
   here("ustacks_populations_output", "EJA_blacklist", "populations.snps.vcf"),
   type = "vcf"
@@ -128,7 +151,9 @@ plot(pcadapt_blacklist_raw, option = "screeplot")
 plot(pcadapt_blacklist_raw, option = "scores", pop = poplist.names, i = 1, j = 2)
 ```
 
-```{r pcadapt analysis with whitelist (outliers loci)}
+## pcadapt analysis with whitelist (outliers loci)
+
+```{r}
 EJA_whitelist <- read.pcadapt(
   here("ustacks_populations_output", "EJA_whitelist_outliers", "populations.snps.vcf"),
   type = "vcf"
@@ -139,7 +164,9 @@ plot(pcadapt_whitelist, option = "screeplot")
 plot(pcadapt_whitelist, option = "scores", pop = poplist.names, i = 1, j = 2)
 ```
 
-```{r pcadapt without Catalina}
+## pcadapt without Catalina
+
+```{r}
 EJA_all_loci_catalina <- read.pcadapt(here("ustacks_populations_output", "EJA_all_loci-catalian", "populations.snps.vcf"), type = "vcf") #Read vcf file for every loci
 
 pcadapt_all_loci_catalina_raw <- pcadapt(input = EJA_all_loci_catalina, K = 20) #pcadapt analysis with high value of K
@@ -160,56 +187,24 @@ poplist.names <- c(
 ) #map individuals to populations
 
 plot(pcadapt_all_loci_catalina, option = "scores", pop = poplist.names, i = 1, j = 2)
-100*pcadapt_all_loci_catalina $singular.values**2
-plot(pcadapt_all_loci_catalina, option = "scores", pop = poplist.names, i = 2, j = 3)
-plot(pcadapt_all_loci_catalina, option = "scores", pop = poplist.names, i = 1, j = 3)
+100*pcadapt_all_loci_catalina$singular.values**2
 ```
 
-```{r Outliers without Catalina}
-#Getting catalog rank to vcf correspondence
-EJA_all_loci_catalina_vcf <- read.vcfR(
-  here("ustacks_populations_output", "EJA_all_loci-catalian", "populations.snps.vcf")
+## Outliers without Catalina
+
+```{r}
+EJA_catalina_outliers_catalog_ranks_test <- Get_outliers(
+  vcf_path = here('ustacks_populations_output', 'EJA_all_loci-catalian'),
+  pcadapt  = pcadapt_all_loci_catalina,
+  filename = 'EJA_catalina'
 )
-vcf_to_catalog_ranks_catalina.raw <- getID(EJA_all_loci_catalina_vcf) #get vcf catalog ranks
-vcf_to_catalog_ranks_catalina.raw <- strsplit(x = vcf_to_catalog_ranks_catalina.raw, split = ':') #extract catalog ranks from other info
-
-vcf_to_catalog_ranks_catalina <- rep(NA, length(vcf_to_catalog_ranks_catalina.raw))
-for (i in 1:length(vcf_to_catalog_ranks_catalina)) {
-  vcf_to_catalog_ranks_catalina[i] <- vcf_to_catalog_ranks_catalina.raw[[i]][1]
-}
-vcf_to_catalog_ranks_catalina <- as.numeric(vcf_to_catalog_ranks_catalina)
-
-
-#Outliers selection by pcadapt pvalues
-EJA_all_loci_catalina_padj <- p.adjust(pcadapt_all_loci_catalina$pvalues, method = "bonferroni")
-alpha <- 0.1 #alpha chosen following https://bcm-uga.github.io/pcadapt/articles/pcadapt.html recommendations
-EJA_catalina_outliers_vcf_ranks <- which(EJA_all_loci_catalina_padj < alpha)
-
-#Getting phi_st from population analysis
-phi_st_catalina <- read.table(file = here('ustacks_populations_output', 'EJA_all_loci-catalian', 'populations.phistats.tsv'), header = FALSE, sep = '\t', skip = 9, stringsAsFactors = FALSE)[,c(1,4)]
-colnames(phi_st_catalina) <- c('catalog_rank', 'phi_st')
-
-#Getting outliers catalog ranks
-EJA_catalina_outliers_catalog_ranks <- vcf_to_catalog_ranks_catalina[EJA_catalina_outliers_vcf_ranks]
-
-#Separating balancing selection from local adaptation (sorting outliers by phi_st)
-EJA_catalina_outliers_phi_st <- phi_st_catalina[phi_st_catalina$catalog_rank %in% EJA_catalina_outliers_catalog_ranks, ]
-dim(EJA_catalina_outliers_phi_st)[1]
-EJA_catalina_outliers_phi_st_filtered <- EJA_catalina_outliers_phi_st[EJA_catalina_outliers_phi_st$phi_st > .1, ]
-dim(EJA_catalina_outliers_phi_st_filtered)[1]
-
-
-#Saving outliers list as txt file for stacks2 whitelist analysis
-sink(here('output', 'EJA_catalina_outliers_catalog_ranks.txt'))
-for (outlier in EJA_catalina_outliers_phi_st_filtered$catalog_rank){
-  cat(paste0(outlier, '\n'), append = TRUE)
-}
-sink()
 ```
 
 # Getting protein sequences for outliers
 
-```{r Read the catalog and keep outliers sequences as fasta file}
+##Read the catalog and save outliers sequences as fasta file
+
+```{r}
 #Read and prepare catalog fasta file
 catalog_fa <- read.csv(file = here('data', 'catalog.fa'), stringsAsFactors = FALSE)
 colnames(catalog_fa) <- c('Sequences')
@@ -233,7 +228,9 @@ sink()
 
 Please use the generated fasta file for NCBI BLAST analysis and download the result as Single-file XML2
 
-```{r Read and extract relevant info from the BLAST results}
+## Read and extract relevant info from the BLAST results
+
+```{r}
 #Read BLAST results from xml file
 hit.query <- read_xml(here('data', '8R1WY2TK01N-Alignment.xml')) #Replace second line of XML file by "<BlastXML2>" <=> Remove metadata from first xml tag.
 end <- length(xml_find_all(hit.query, ".//BlastOutput2"))
@@ -272,7 +269,9 @@ query_df$bit_score <- as.numeric(query_df$bit_score)
 # query_df <- readRDS(here('output', 'Blast_results_as_data_frame.RDS')) #If you don't want to rerun the search...
 ```
 
-```{r Filter the BLAST results}
+## Filter the BLAST results
+
+```{r}
 query_df_80 <- query_df[query_df$bit_score >= 80, ] #Keep only significant matches
 dim(query_df_80)[1]
 query_df_80_PREDICTED <- query_df_80[grepl("PREDICTED", query_df_80$title), ] #keep only PREDICTED proteins. Removes non coding sequences and whole chromosome matches (causes problem when searching GeneBank)
@@ -285,7 +284,9 @@ dim(query_df_80_PREDICTED_unique_unique)[1]
 # write.csv(query_df_80_PREDICTED_unique_unique, file = here('output', 'query_df_80_PREDICTED_unique_unique.csv'))
 ```
 
-```{r Get protein sequences from GenBank}
+## Get protein sequences from GenBank
+
+```{r}
 prot_sequences = data.frame(
   'protein_sequence' = rep(NA, length(query_df_80_PREDICTED_unique_unique$accession_number)),
   row.names          = query_df_80_PREDICTED_unique_unique$accession_number
@@ -314,7 +315,9 @@ for (i in 1:dim(prot_sequences)[1]){
 sink()
 ```
 
-```{r Outliers protein match table}
+## Outliers protein match table
+
+```{r}
 Table_2 <- query_df_80_PREDICTED_unique_unique[, c('query_number', 'accession_number', 'title')]
 colnames(Table_2)[1] <- 'Locus_ID'
 write.csv(x = Table_2, file = here('output', 'Table_2.csv'), row.names = FALSE)
@@ -322,7 +325,9 @@ write.csv(x = Table_2, file = here('output', 'Table_2.csv'), row.names = FALSE)
 
 # Figures plotting
 
-```{r Manhattan plot homemade}
+## Manhattan plot homemade
+
+```{r}
 #Getting chromosome map for manhatan plot
 chromosome.names.raw <- getFIX(EJA_all_loci_vcf)[,"CHROM"] #Get chromosome for each vcf locus
 chromosome.names     <- as.integer(lapply(X = chromosome.names.raw, FUN = gsub, pattern = 'SCAF_', replacement = '')) #Extract chromosome number from vcf info
@@ -388,7 +393,11 @@ ggsave(
 ); system2('open', args = c('-a Preview.app', here('output', 'graphs', 'manhattan_plot_labels.pdf')), wait = FALSE)
 ```
 
-```{r Figure PCA}
+## Figure 1
+
+### PCA plot
+
+```{r}
 PCA_df <- data.frame('x' = -pcadapt_all_loci$scores[,1], 'y' = -pcadapt_all_loci$scores[,2], 'pop' = poplist.names)
 
 PCA_percentages <- pcadapt_all_loci$singular.values^2
@@ -423,7 +432,9 @@ PCA <- ggplot(PCA_df) +
   ); PCA_map <- ggarrange(PCA, map, widths = c(1, 1.3))
 ```
 
-```{r Figure PCA + Map}
+### Surface temperature and current map
+
+```{r}
 #Extracting ocean surface temperature and current from BRAN2020 (https://dapds00.nci.org.au/thredds/catalog/gb6/BRAN/BRAN2020/month/catalog.html). See https://towardsdatascience.com/how-to-crack-open-netcdf-files-in-r-and-extract-data-as-time-series-24107b70dcd for tutorial on NetCDF4 files
 nc_temp <- nc_open(here('data','ocean_temp_ann_2022.nc')) #Longitude's 0 is at Greenwich and -180 become 3600. Latitudes start at -75 and end at +75. To convert add +360 to lon and +75 to lat
 nc_u   <- nc_open(here('data', 'ocean_u_ann_2022.nc'))
@@ -560,7 +571,11 @@ ggsave(
   width  = 9,
   height = 9
 ); system2('open', args = c('-a Preview.app', here('output', 'graphs', 'temp_current_map.pdf')), wait = FALSE)
+```
 
+### PCA plot and map figure
+
+```{r}
 PCA_map <- ggarrange(PCA, map, widths = c(1, 1.3))
 
 ggsave(
@@ -571,7 +586,11 @@ ggsave(
 ); system2('open', args = c('-a Preview.app', here('output', 'graphs', 'pca_map.pdf')), wait = FALSE)
 ```
 
-```{r Generating bathymetry map}
+## Figure 2?
+
+### Generating bathymetry map
+
+```{r}
 catalina <- getNOAA.bathy(lon1 = -121, lon2 = -116, lat1 = 32, lat2 = 35, resolution = .5) #Get bathymetry data
 catalina_df <- fortify.bathy(catalina)
 catalina_df$z[catalina_df$z>0] <- NA #Remove land data
@@ -640,7 +659,9 @@ ggsave(
 ); system2('open', args = c('-a Preview.app', here('output', 'graphs', 'bathy.pdf')), wait = FALSE)
 ```
 
-```{r Generating map without specific background}
+### Generating map without specific background
+
+```{r}
 map_blank <- ggplot() +
   #Landmass
   geom_sf(data = states) +
@@ -688,7 +709,11 @@ ggsave(
 ); system2('open', args = c('-a Preview.app', here('output', 'graphs', 'map_blank.pdf')), wait = FALSE)
 ```
 
-```{r Convert blast KOALA pie piechart in barplot}
+## Figure 3?
+
+### Convert blast KOALA pie piechart in barplot
+
+```{r}
 koala_results <- read.csv(here('external_results', 'Blast_koala_results.csv'), stringsAsFactors = FALSE)
 koala_results$Functional.category <- factor(koala_results$Functional.category, koala_results$Functional.category)
 koala_ggplot <- ggplot(
@@ -720,84 +745,4 @@ ggsave(
   height = 10,
   units = 'cm'
 )
-```
-
-# FST tree stuff
-
-```{r Functions}
-read.tsv.genes <- function(path, names) {#Allows to read tsv files from structures and add populations names
-  tsv              <- read.csv(path, sep = '\t')
-  tsv_t            <- t(rbind(tsv[,-1], rep(NA, 8)))
-  row.names(tsv_t) <- names
-  colnames(tsv_t)  <- names
-  return(tsv_t)
-}
-
-fix_negative_edge_length <- function(nj.tree) {
-  edge_infos           <- cbind(nj.tree$edge, nj.tree$edge.length) %>% as.data.table
-  colnames(edge_infos) <- c('from', 'to', 'length')
-  nega_froms           <- edge_infos[length < 0, sort(unique(from))]
-  nega_froms
-  for (nega_from in nega_froms) {
-    minus_length <- edge_infos[from == nega_from, ][order(length)][1, length]
-    edge_infos[from == nega_from, length := length - minus_length]
-    edge_infos[to == nega_from, length := length + minus_length]
-  }
-  nj.tree$edge.length <- edge_infos$length
-  nj.tree
-}
-
-# fix_negative_edge_length <- function(nj.tree) {#Fix negative length for NJ tree branches length
-#   edge_infos <- data.frame(cbind(nj.tree$edge, nj.tree$edge.length))
-#   # %>% as.data.table
-#   colnames(edge_infos) <- c('from', 'to', 'length')
-#   nega_froms <- sort(unique(edge_infos[edge_infos$length < 0,]$from))
-#   nega_froms
-#   for (nega_from in nega_froms) {
-#     minus_length <- edge_infos[from == nega_from, ][order(length)][1, length]
-#     edge_infos[from == nega_from, length := length - minus_length]
-#     edge_infos[to == nega_from, length := length + minus_length]
-#   }
-#   nj.tree$edge.length <- edge_infos$length
-#   nj.tree
-# }
-
-```
-
-```{r FST tree projection on map}
-FST_df <- read.csv(here('data', 'FST_blacklist.csv'))
-FST_matrix <- as.matrix(read.csv(here('data', 'FST_blacklist.csv'), row.names = 'Name'))
-FST_melted <- melt(FST_matrix)
-
-ggplot(FST_melted, aes(x = Var1, y = Var2, fill = value )) + geom_tile()
-
-FST_matrix_tree <- nj(FST_matrix)
-
-FST_matrix_lt <- as.matrix(read.csv(here('data', 'FST_blacklist_lt.csv'), row.names = 'Name'))
-FST_matrix_lt_tree <- nj(as.dist(FST_matrix_lt))
-
-FST_matrix_small <- as.matrix(read.csv(here('data', 'FST_blacklist_small.csv'), row.names = 'Name'))
-FST_matrix_small_tree <- nj(as.dist(FST_matrix_small))
-
-names = c("Carmel", "Monterey", "Palos_Verdes", "Laguna_beach", "Catalina", "San_Diego", "Punta_banda", "Cardon")
-
-POP_FST_tree <- nj(as.dist(read.tsv.genes(here('all_loci','EJA_blacklist','populations.fst_summary.tsv'), names)))
-
-POP_Phi_tree <- nj(as.dist(read.tsv.genes(here('data', 'Phi_st_Means.tsv'), names)))
-
-POP_FST_prime <- nj(as.dist(read.tsv.genes(here('data', 'Fst_prime_Means.tsv'), names)))
-
-## plot(FST_matrix_tree)
-plot(FST_matrix_lt_tree)
-plot(FST_matrix_small_tree)
-plot(POP_FST_tree)
-plot(POP_Phi_tree)
-plot(POP_FST_prime)
-
-# plot(FST_matrix_lt_tree)
-plot(fix_negative_edge_length(FST_matrix_lt_tree))
-# plot(FST_matrix_small_tree)
-plot(fix_negative_edge_length(POP_FST_tree))
-plot(fix_negative_edge_length(POP_Phi_tree))
-plot(fix_negative_edge_length(POP_FST_prime))
 ```
