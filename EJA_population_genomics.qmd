@@ -50,7 +50,7 @@ reduce_all_numeric <- function(liste) {
   liste
 }
 
-Get_outliers <- function(vcf_path, pcadapt, filename, save = FALSE){
+Get_outliers <- function(vcf_path, pcadapt, filename, save = FALSE) {
   vcf_to_catalog_ranks <- paste0(vcf_path, "/populations.snps.vcf") |> 
     read.vcfR() |>
     getID() |>
@@ -100,7 +100,7 @@ Get_outliers <- function(vcf_path, pcadapt, filename, save = FALSE){
   outliers_catalog_ranks
 }
 
-XML_to_DF <- function(XML){
+XML_to_DF <- function(XML) {
   # Initialisation
   end <- length(xml_find_all(XML, ".//BlastOutput2"))
   counter <- 0
@@ -158,16 +158,16 @@ EJA_all_loci <- read.pcadapt(# Read vcf file for every loci
 
 pcadapt_all_loci_raw <- pcadapt(input = EJA_all_loci, K = 20)
 plot(pcadapt_all_loci_raw, option = "screeplot") #screeplot to visually chose pca component to keep
-
-# K = 3 seems to be the most optimal for this data set
 ```
+
+K = 3 seems to be the most optimal for this data set
 
 ## Analysis with optimal value of K
 
 ```{r }
 pcadapt_all_loci <- pcadapt(input = EJA_all_loci, K = 3)
 
-poplist.names <- c(
+poplist_names <- c(
   rep("carmel", 6),
   rep("monterey", 18),
   rep("palos_verdes", 9),
@@ -178,9 +178,9 @@ poplist.names <- c(
   rep("cardon", 3)
 ) #map individuals to populations
 
-plot(pcadapt_all_loci, option = "scores", pop = poplist.names, i = 1, j = 2)
-plot(pcadapt_all_loci, option = "scores", pop = poplist.names, i = 2, j = 3)
-plot(pcadapt_all_loci, option = "scores", pop = poplist.names, i = 1, j = 3)
+plot(pcadapt_all_loci, option = "scores", pop = poplist_names, i = 1, j = 2)
+plot(pcadapt_all_loci, option = "scores", pop = poplist_names, i = 2, j = 3)
+plot(pcadapt_all_loci, option = "scores", pop = poplist_names, i = 1, j = 3)
 
 plot(pcadapt_all_loci, option = "qqplot")
 hist(
@@ -199,24 +199,23 @@ EJA_outliers_catalog_ranks <- Get_outliers(
   here("ustacks_populations_output", "all_loci"),
   pcadapt  = pcadapt_all_loci,
   filename = "EJA",
-  save = FALSE
+  save     = TRUE
 )
 ```
 
 ## pcadapt analysis with blacklist (neutral loci)
 
 ```{r}
-EJA_blacklist <- read.pcadapt(
+pcadapt_blacklist_raw <- read.pcadapt(
   here("ustacks_populations_output", "EJA_blacklist", "populations.snps.vcf"),
   type = "vcf"
-)
-pcadapt_blacklist_raw <- pcadapt(input = EJA_blacklist, K = 20)
+) |> pcadapt(K = 20)
 
 plot(pcadapt_blacklist_raw, option = "screeplot")
 plot(
   pcadapt_blacklist_raw,
   option = "scores",
-  pop = poplist.names,
+  pop = poplist_names,
   i = 1, j = 2
 )
 ```
@@ -235,7 +234,7 @@ EJA_whitelist <- read.pcadapt(
 pcadapt_whitelist <- pcadapt(input = EJA_whitelist, K = 20)
 
 plot(pcadapt_whitelist, option = "screeplot")
-plot(pcadapt_whitelist, option = "scores", pop = poplist.names, i = 1, j = 2)
+plot(pcadapt_whitelist, option = "scores", pop = poplist_names, i = 1, j = 2)
 ```
 
 ## pcadapt without Catalina
@@ -257,7 +256,7 @@ plot(pcadapt_all_loci_catalina_raw, option = "screeplot") #screeplot to visually
 
 pcadapt_all_loci_catalina <- pcadapt(input = EJA_all_loci_catalina, K = 2)
 
-poplist.names <- c(
+poplist_names <- c(
   rep("carmel", 6),
   rep("monterey", 18),
   rep("palos_verdes", 9),
@@ -270,7 +269,7 @@ poplist.names <- c(
 plot(
   pcadapt_all_loci_catalina,
   option = "scores",
-  pop = poplist.names,
+  pop = poplist_names,
   i = 1, j = 2
 )
 100*pcadapt_all_loci_catalina$singular.values**2
@@ -282,7 +281,8 @@ plot(
 EJA_catalina_outliers_catalog_ranks <- Get_outliers(
   vcf_path = here("ustacks_populations_output", "EJA_all_loci-catalian"),
   pcadapt  = pcadapt_all_loci_catalina,
-  filename = "EJA_catalina"
+  filename = "EJA_catalina",
+  save     = FALSE
 )
 ```
 
@@ -306,10 +306,6 @@ print(length(EJA_outliers_catalog_ranks)) # Plot number of outliers
 outliers_sequences <- catalog_sequences |>
   filter(row_number() %in% EJA_outliers_catalog_ranks)
 
-# outliers_sequences <- subset(
-#   catalog_sequences,
-#   rownames(catalog_sequences) %in% EJA_outliers_catalog_ranks
-# ) # Extracting sequences of outliers
 head(outliers_sequences)
 write.csv(outliers_sequences, file = here("output", "outliers_sequences.csv"))
 ```
@@ -341,7 +337,7 @@ query_df |> saveRDS(file = here("output", "Blast_results_as_data_frame.RDS"))
 
 ```{r}
 query_df_80_test <- query_df |> filter(bit_score >= 80)
-query_df_80 <-query_df[query_df$bit_score >= 80, ] #Keep only significant matches
+query_df_80 <- query_df[query_df$bit_score >= 80, ] #Keep only significant matches
 dim(query_df_80)[1]
 query_df_80_PREDICTED <- query_df_80[grepl("PREDICTED", query_df_80$title), ] #keep only PREDICTED proteins. Removes non coding sequences and whole chromosome matches (causes problem when searching GeneBank)
 dim(query_df_80_PREDICTED)[1]
@@ -525,10 +521,10 @@ ggsave(
 PCA_df <- data.frame(
   "x" = -pcadapt_all_loci$scores[, 1],
   "y" = -pcadapt_all_loci$scores[, 2],
-  "pop" = poplist.names
+  "pop" = poplist_names
 )
 
-PCA_average <- data.frame("pop" = levels(as.factor(poplist.names)))
+PCA_average <- data.frame("pop" = levels(as.factor(poplist_names)))
 for (i in 1:length(PCA_average$pop)){
   PCA_average$average_x[i] <-
     mean(PCA_df[PCA_df$pop == PCA_average$pop[i], "x"])
