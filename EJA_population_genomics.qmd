@@ -107,6 +107,50 @@ Get_outliers <- function(vcf_path, pcadapt, filename){
   )
   return(outliers_catalog_ranks)
 }
+
+XML_to_DF <- function(XML){
+  # Initialisation
+  end <- length(xml_find_all(XML, ".//BlastOutput2"))
+  counter <- 0
+  query_df_short <- data.frame()
+  # Main loop
+  for (query in xml_find_all(XML, ".//BlastOutput2")) { # Reads XML BLAST results as data frame
+    counter <- counter + 1
+    # query_id <- 
+    print(paste0("Extracting query ", counter, "/", end))
+    print("Parsing hits")
+    for (Hit in xml_find_all(query, ".//Hit")) { # For each locus get all hits
+      match_1 <- xml_find_all(Hit, ".//Hsp") |> _[1] # Keep best match
+      new_row <- data.frame(
+        "query_number"     = xml_find_all(query, ".//query-title") |>
+          xml_text() |> 
+          as.numeric(),
+        "hit_number"       = xml_find_all(Hit, ".//num") |>
+          xml_text() |>
+          _[1] |> 
+          as.numeric(),
+        "accession_number" = xml_find_all(Hit, ".//accession") |>
+          xml_text() |>
+          _[1],
+        "title"            = xml_find_all(Hit, ".//title") |>
+          xml_text() |>
+          _[1],
+        "organism"         = xml_find_all(Hit, ".//sciname") |>
+          xml_text() |>
+          _[1],
+        "bit_score"        = xml_find_all(match_1, ".//bit-score") |>
+          xml_text() |>
+          as.numeric(),
+        "eval_number"      = xml_find_all(match_1, ".//evalue") |>
+          xml_text() |>
+          as.numeric()
+      )
+      query_df_short <- query_df_short |>
+        bind_rows(new_row)
+    }
+    print("End of parsing")
+  }
+}
 ```
 
 
@@ -251,34 +295,38 @@ EJA_catalina_outliers_catalog_ranks <- Get_outliers(
 
 # Getting protein sequences for outliers
 
-##Read the catalog and save outliers sequences as fasta file
+##Import and format the catalog
 
 ```{r}
 #Read and prepare catalog fasta file
-catalog_fa <- read.csv(
+catalog_sequences <- read.csv(
   here("data", "catalog.fa"),
+  col.names = c("Sequences"),
   stringsAsFactors = FALSE
-)
-colnames(catalog_fa) <- c("Sequences")
-catalog_sequences <- subset(
-  catalog_fa,
-  rownames(catalog.fa) %in% seq(1, dim(catalog_fa)[1], 2)
-)
-rownames(catalog_sequences) <- c(1:dim(catalog_sequences)[1])
+) |> 
+  filter(row_number() %% 2 != 0) |> 
+  mutate("catalog_rank" = row_number()) |> 
+  select(catalog_rank, Sequences)
 
-length(EJA_outliers_catalog_ranks) # Plot number of outliers
+print(length(EJA_outliers_catalog_ranks)) # Plot number of outliers
 
-outliers_sequences <- subset(
-  catalog_sequences,
-  rownames(catalog_sequences) %in% EJA_outliers_catalog_ranks
-) # Extracting sequences of outliers
+outliers_sequences <- catalog_sequences |>
+  filter(row_number() %in% EJA_outliers_catalog_ranks)
+
+# outliers_sequences <- subset(
+#   catalog_sequences,
+#   rownames(catalog_sequences) %in% EJA_outliers_catalog_ranks
+# ) # Extracting sequences of outliers
 head(outliers_sequences)
-# write.csv(outliers_sequences, file = here("output", "outliers_sequences.csv")) #If you want to save the outliers sequences as csv
+write.csv(outliers_sequences, file = here("output", "outliers_sequences.csv"))
+```
 
-# Writing results as .fa file for BLAST
+## Saving results as .fa fasta file for NCBI BLAST
+
+```{r}
 sink(here("output", "outliers_sequences.fa"))
 for (i in 1:dim(outliers_sequences)[1]){
-  cat(paste0(">", rownames(outliers_sequences)[i], "\n"), append = TRUE)
+  cat(paste0(">", outliers_sequences$catalog_rank[i], "\n"), append = TRUE)
   cat(paste0(outliers_sequences$Sequences[i], "\n"), append = TRUE)
 }
 sink()
@@ -286,49 +334,15 @@ sink()
 
 Please use the generated fasta file for NCBI BLAST analysis and download the result as Single-file XML2
 
-## Read and extract relevant info from the BLAST results
+## Import BLAST results saved as xml file and extract results
+
+Please replace the second line of the XML file by "<BlastXML2>" which effectively removes the metadata from the first xml tag.
 
 ```{r}
-#Read BLAST results from xml file
-hit.query <- read_xml(here("data", "8R1WY2TK01N-Alignment.xml")) #Replace second line of XML file by "<BlastXML2>" <=> Remove metadata from first xml tag.
-end <- length(xml_find_all(hit.query, ".//BlastOutput2"))
-counter <- 0
-query_df <- data.frame(
-  "query_number"     = NA,
-  "hit_number"       = NA,
-  "accession_number" = NA,
-  "title"            = NA,
-  "organism"         = NA,
-  "bit_score"        = NA,
-  "eval_number"      = NA
-) #Data frame Initialisation
-for (query in xml_find_all(hit.query, ".//BlastOutput2")){ #Reads XML BLAST results as data frame
-  counter <- counter + 1
-  query_id <- xml_text(xml_find_all(query, ".//query-title")) #Catalog rank
-  print(paste0(counter, "/", end))
-  for (Hit in xml_find_all(query, ".//Hit")){ #For each locus gets all hits
-    num       <- xml_text(xml_find_all(Hit, ".//num"))[1] #Rank of hit
-    accession <- xml_text(xml_find_all(Hit, ".//accession"))[1] #Accession number of the hit
-    title     <- xml_text(xml_find_all(Hit, ".//title"))[1] #Name of the hit
-    organism  <- xml_text(xml_find_all(Hit, ".//sciname"))[1] #Organism of the hit
-    
-    match_1   <- xml_find_all(Hit, ".//Hsp")[1] #Sometime multiple match for one hit, keeps the best
-    
-    bit_score <- as.numeric(xml_text(xml_find_all(match_1, ".//bit-score"))) #Get bit score
-    evalue    <- as.numeric(xml_text(xml_find_all(match_1, ".//evalue"))) #Get e-value
-    
-    query_df  <- rbind(
-      query_df,
-      c(query_id, num, accession, title, organism, bit_score, evalue)
-    )
-  }
-}
-counter <- 0
-query_df <- query_df[-1,] #Remove initialisation line
-query_df$bit_score <- as.numeric(query_df$bit_score)
-# saveRDS(query_df, file = here("output", "Blast_results_as_data_frame.RDS"))
-# query_df <- readRDS(here("output", "Blast_results_as_data_frame.RDS")) #If you don"t want to rerun the search...
+query_df <- read_xml(here("data", "8R1WY2TK01N-Alignment.xml")) |> XML_to_DF()
+query_df |> saveRDS(file = here("output", "Blast_results_as_data_frame.RDS"))
 ```
+
 
 ## Filtering BLAST results
 
@@ -399,6 +413,8 @@ write.csv(x = Table_2, file = here("output", "Table_2.csv"), row.names = FALSE)
 
 ## Manhattan plot homemade
 
+### Formatting data
+
 ```{r}
 #Getting chromosome map for manhatan plot
 chromosome.names <- getFIX(EJA_all_loci_vcf)[,"CHROM"] |>#Get chromosome for each vcf locus
@@ -430,8 +446,12 @@ manhattan_df <- data.frame(
     )/log(10)
   ), #Gets non adjusted -log10(pvalues) without infinite values
   chr = chr.int[notNA.idx] #Chromosome colour mapping
-) 
+)
+```
 
+### Generate plot without points labels
+
+```{r}
 manhattan_plot <- ggplot(manhattan_df, aes(x = x, y = y)) +
   geom_point(aes(colour = factor(manhattan_df$chr))) +
   guides(colour = FALSE) +
@@ -449,16 +469,23 @@ ggsave(
   plot = manhattan_plot,
   width = 16,
   height = 7
-); system2(
+)
+system2(
   "open",
   args = c("-a Preview.app", here("output", "plots", "manhattan_plot.pdf")),
   wait = FALSE
 )
+```
 
+### Generate plot with points labels
+
+```{r}
 EJA_outliers_pvalues_rank <- data.frame(
   "vcf_rank"                 = EJA_outliers_vcf_ranks,
   "catalog_rank"             = as.character(EJA_outliers_catalog_ranks),
-  "outliers_-log10(pvalues)" = -log10(pcadapt_all_loci$pvalues[EJA_outliers_vcf_ranks]),
+  "outliers_-log10(pvalues)" = -log10(
+    pcadapt_all_loci$pvalues[EJA_outliers_vcf_ranks]
+  ),
   "outliers_pvalue_plot"     = manhattan_df$y[manhattan_df$x %in% EJA_outliers_vcf_ranks]
 )
 
