@@ -1,0 +1,129 @@
+#!/bin/bash
+#SBATCH --output=eja_sam.out
+#SBATCH --error=eja_sam.err
+#SBATCH --partition=128x24
+#SBATCH --nodes=1
+#SBATCH --job-name=mdo_sam
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=aoules@ucsc.edu  #!!change this to your own email
+#SBATCH --mem=22GB
+#SBATCH --ntasks-per-node=24
+
+# Above are all the specifics SLURM needs to run your specific job. 
+
+# --ntasks-per-node will be used in doParallel.R to specify the number
+# of cores to use on the machine. Using 24
+
+# now load programs needed
+
+module load bowtie
+module load samtools
+
+
+#Create a variable called "files" with a list of samples for bowtie to convert into SAM files.
+
+files="EJA_CAR_16
+EJA_CRD_121102
+EJA_LHN_591315
+EJA_MBA_030710
+EJA_MBA_060703
+EJA_MIB_081204
+EJA_MIB_081212
+EJA_MIB_081220
+EJA_PBA_030006
+EJA_PBA_099608
+EJA_PV_262915
+EJA_TAC_24
+EJA_WP_418121115
+EJA_CAR_17
+EJA_CRD_121103
+EJA_MBA_030703
+EJA_MBA_030711
+EJA_MBA_060704
+EJA_MIB_081205
+EJA_MIB_081213
+EJA_MIB_081221
+EJA_PBA_099601
+EJA_PBA_099609
+EJA_TAC_11102815
+EJA_TAC_4102815
+ELA_PBA_090104
+EJA_CAR_18
+EJA_LH_3072315
+EJA_MBA_030704
+EJA_MBA_060705
+EJA_MIB_081206
+EJA_MIB_081214
+EJA_MIB_081224
+EJA_PBA_099602
+EJA_PBA_099610
+EJA_TAC_15102815
+EJA_WP_14
+EJA_CAR_22
+EJA_LH_372315
+EJA_MBA_030705
+EJA_MBA_060706
+EJA_MIB_081207
+EJA_MIB_081215
+EJA_PBA_030001
+EJA_PBA_099603
+EJA_PBA_099611
+EJA_TAC_18102815
+EJA_WP_173015
+EJA_CAR_23
+EJA_LH_472315
+EJA_MBA_030706
+EJA_MBA_040701
+EJA_MBA_060707
+EJA_MIB_081208
+EJA_MIB_081216
+EJA_PBA_030002
+EJA_PBA_099604
+EJA_PBA_099612
+EJA_TAC_2102815
+EJA_WP_2101615
+EJA_CAR_29
+EJA_LH_5072315
+EJA_MBA_030707
+EJA_MBA_040702
+EJA_MIB_081201
+EJA_MIB_081209
+EJA_MIB_081217
+EJA_PBA_030003
+EJA_PBA_099605
+EJA_PBA_099613
+EJA_TAC_21102815
+EJA_WP_22
+EJA_CCI_91215
+EJA_LHN_2091315
+EJA_MBA_030708
+EJA_MBA_040703
+EJA_MIB_081202
+EJA_MIB_081210
+EJA_MIB_081218
+EJA_PBA_030004
+EJA_PBA_099606
+EJA_PBA_099614
+EJA_TAC_22
+EJA_WP_35
+EJA_CRD_121101
+EJA_LHN_39113115
+EJA_MBA_030709
+EJA_MIB_081203
+EJA_MIB_081211
+EJA_MIB_081219
+EJA_PBA_030005
+EJA_PBA_099607
+EJA_PV_162915
+EJA_TAC_23102815
+EJA_WP_36"
+
+#for loop to execute the bowtie2 command for each sample in "files"
+for sample in $files
+do
+   bowtie2 -q -p 24 --phred33 --very-sensitive -x index -U /hb/home/aoules/EJA/samples/$sample.fq -S /hb/home/aoules/EJA/sam_files/$sample.sam
+#sort and convert SAM files to BAM files using samtools   
+   samtools view -b /hb/home/aoules/EJA/sam_files/$sample.sam | samtools sort > /hb/home/aoules/EJA/bam_files/$sample.bam
+#remove the large .sam file
+rm $sample.sam
+done

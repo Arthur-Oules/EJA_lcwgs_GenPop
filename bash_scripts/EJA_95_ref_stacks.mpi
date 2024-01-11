@@ -1,0 +1,14 @@
+#!/bin/bash
+#SBATCH --output=eja_ref_stacks.out
+#SBATCH --error=eja_ref_stacks.err
+#SBATCH --partition=128x24
+#SBATCH --nodes=1
+#SBATCH --job-name=eja_ref_stacks
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=aoules@ucsc.edu  #!!change this to your own email
+#SBATCH --mem=22GB
+#SBATCH --ntasks-per-node=24
+
+module load stacks2
+
+ref_map.pl -T 24 --samples /hb/home/aoules/EJA/bam_files --popmap /hb/home/aoules/EJA/Files/popmap_EJA_95.txt -o /hb/home/aoules/EJA/ref_stacks/
