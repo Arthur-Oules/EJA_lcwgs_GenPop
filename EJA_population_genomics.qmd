@@ -673,6 +673,7 @@ current_uv_scalar <- 2 # Set scalar for better vector visibility, don"t forget w
 ```{r}
 rm(
   nc_temp, nc_u, nc_v,
+  lon, lat,
   crop_lonlat, crop_temp, crop_u_lowres, crop_v_lowres
 ) # Clear unused big variables
 gc()
@@ -688,8 +689,7 @@ states <- ne_states(
 )
 
 # Sampling site coordinates and misc info on map
-sample_sites <-
-  read.csv(
+sample_sites <- read.csv(
     here("data","EJA_RAD_Samples.csv"),
     stringsAsFactors = FALSE
   ) |>
@@ -725,7 +725,7 @@ map <- ggplot() +
   # Temperature map (https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
   geom_tile(
     mapping = aes(x = lon, y = lat, fill = temp),
-    data =  map_data_lowres_df
+    data    =  map_data_lowres_df
   ) +
   scale_fill_viridis(name = "Temp.\n(°C)", option = "turbo") +
   # Current vectors (https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
@@ -745,7 +745,7 @@ map <- ggplot() +
   geom_sf(data = states) +
   # Sampling sites points and labels
   new_scale("fill") +
-  geom_path(
+  geom_path( # Path from Catalina label to Catalina island
     data.frame(
       "x" = c(-118.4163, -118.4163 -.85),
       "y" = c(33.38790, 33.38790 -.73)
@@ -899,16 +899,20 @@ map_data_df <- data.frame( # Get surface current vectors
 
 ```{r}
 bathy <- ggplot() +
-  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) + # Plot bathymetry
-  geom_sf(data = states) + # Plot landmass
-  geom_segment( # Plot surface current speed
+  # Plot bathymetry
+  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
+  # Plot landmass
+  geom_sf(data = states) +
+  # Plot surface current speed
+  geom_segment(
     data    = map_data_df,
     mapping = aes(x = lon, y = lat, xend = lon + u * 1, yend = lat + v * 1),
     arrow   = arrow(angle = 15, length = unit(0.04, "inches"), type = "closed"),
     na.rm   = TRUE,
     alpha   = 0.3
   ) +
-  geom_point( # Plot sampling sites
+  # Plot sampling sites
+  geom_point(
     sample_sites[c(3,4,5,8),],
     mapping     = aes(x = Longitude, y = Latitude, size = 1.3),
     show.legend = FALSE
@@ -920,7 +924,8 @@ bathy <- ggplot() +
     nudge_x = .05,
     nudge_y = .1
   ) +
-  geom_point( # Plot extra landmark
+  # Plot extra landmark
+  geom_point(
     city_labels[2, ],
     mapping     = aes(x = long, y = lat),
     size        = 4,
@@ -935,7 +940,8 @@ bathy <- ggplot() +
     nudge_x = .05,
     nudge_y = .1
   ) +
-  scale_fill_gradient(# Plot scales
+  # Plot scales
+  scale_fill_gradient(
     name = "Depth (m)",
     low = "dodgerblue4",
     high="gainsboro"
@@ -955,9 +961,11 @@ bathy <- ggplot() +
     location = "tr",
     style    = north_arrow_fancy_orienteering()
   ) +
-  coord_sf(xlim = c(-121, -116), ylim = c(32, 35), expand = FALSE) + # Crop map
+  # Crop map
+  coord_sf(xlim = c(-121, -116), ylim = c(32, 35), expand = FALSE) +
+  # Axis labels and theme
   labs(x = "Longitude", y = "Latitude") +
-  scale_y_continuous( # Axis labels and theme
+  scale_y_continuous(
     breaks = seq(32, 35, 1),
     labels = unit_format(suffix = "°N", sep = "")
   ) +
@@ -983,9 +991,9 @@ system2(
 
 ```{r}
 map_blank <- ggplot() +
-  #Landmass
+  # Landmass
   geom_sf(data = states) +
-  #Sampling sites points and labels
+  # Sampling sites points and labels
   new_scale("fill") +
   geom_path(
     mapping = aes(x, y),
@@ -1023,7 +1031,7 @@ map_blank <- ggplot() +
     lineheight = .7,
     hjust      = 0
   ) +
-  #Ocean and state names
+  # Ocean and state names
   geom_text(
     states_labels,
     mapping = aes(x = long, y = lat, label = lab),
@@ -1042,16 +1050,16 @@ map_blank <- ggplot() +
     size          = 5,
     label.padding = unit(0.5, "lines")
   ) +
-  #Crop map 
+  # Crop map 
   coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
-  #Vector, temperature and distance scale + orientation
+  # Vector, temperature and distance scale + orientation
   geom_label(aes(x = -119.1, y = 28.71, label = "        ")) +
   annotation_scale(location = "bl", width_hint = 0.4) +
   annotation_north_arrow(
     location = "tr",
     style = north_arrow_fancy_orienteering()
   ) +
-  #Set text around map and coordinates display
+  # Set text around map and coordinates display
   labs(x = "Longitude", y = "Latitude") +
   scale_x_continuous(
     breaks = c(-120, -115),
@@ -1093,8 +1101,8 @@ koala_results <- read.csv(
 koala_barplot <- ggplot(
     koala_results,
     mapping = aes(
-      x = Functional.category,
-      y = Counts,
+      x    = Functional.category,
+      y    = Counts,
       fill = Functional.category
     )
   ) +
