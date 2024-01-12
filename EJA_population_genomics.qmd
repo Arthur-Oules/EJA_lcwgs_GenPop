@@ -9,27 +9,27 @@ editor: source
 # Load packages
 
 ```{r include=FALSE}
-#Mandatory
+# Mandatory
 library(here)
 
-#Data analysis
+# Data analysis
 library(pcadapt)
 library(vcfR)
 library(adegenet)
 library(ape)
 
-#External data acquisition for maps
+# External data acquisition for maps
 library(ncdf4)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(rnaturalearthhires)
 library(marmap)
 
-#External data acquisition for outliers BLAST
+# External data acquisition for outliers BLAST
 library(rentrez) #Allows to navigate NCBI database
 library(xml2) #Allows xml file manipulation
 
-#Making graph
+# Making graph
 library(tidyverse)
 library(sf)
 library(ggrepel)
@@ -137,7 +137,7 @@ XML_to_DF <- function(XML) {
           xml_text() |>
           as.numeric()
       )
-      query_df_short <- query_df |>
+      query_df <- query_df |>
         bind_rows(new_row)
     }
     print("End of parsing")
@@ -585,6 +585,38 @@ PCA <- ggplot() +
 
 ### Surface temperature and current map
 
+#### Functions
+
+```{r}
+nc_crop <- function(var, lon_min, lon_max, lat_min, lat_max) {
+  lon_min <- lon_min * 10
+  lon_max <- lon_max * 10
+  if (lon_min < 0) {
+    lon_min <- 3600 + lon_min
+  }
+  if (lon_max < 0) {
+    lon_max <- 3600 + lon_max
+  }
+  lat_min <- lat_min * 10 + 750
+  lat_max <- lat_max * 10 + 750
+  
+  var_crop <- ncvar_get(var) |>
+  _[, , 1] |>
+  as.matrix() |>
+  _[(lon_min):(lon_max), (lat_min):(lat_max)] |> # Crop to region of interest
+  as.vector()
+  
+  var_crop
+}
+
+reduce_density <- function(high_density_vector, factor) {
+  high_density_vector |>
+    data.frame("value" = _) |>
+    mutate(value = ifelse(row_number() %% factor == 1, value, NA)) |> # Reduce vector density
+    pull(value)
+}
+```
+
 #### Getting data
 
 ```{r}
@@ -604,63 +636,52 @@ nc_v   <- nc_open(here("data", "ocean_v_ann_2022.nc"))
 ##### BRAN2020 data
 
 ```{r}
-lon <- ncvar_get(nc_temp, "xt_ocean")
-lon[1801:3600] <- seq(-179.95,-0.05,.1)
-lat <- ncvar_get(nc_temp, "yt_ocean") 
-lonlat      <- expand.grid("lon" = lon, "lat" = lat) |> as.matrix()
-temp_matrix <- nc_temp |> ncvar_get("temp") |>  _[, , 1] |> as.matrix()
-u_matrix    <- nc_u |> ncvar_get("u") |> _[, , 1] |> as.matrix()
-v_matrix    <- nc_v |> ncvar_get("v") |> _[, , 1] |> as.matrix()
+# Convert coordinate system
+lon <- nc_temp |> ncvar_get("xt_ocean")
+lon[1801:3600] <- seq(-179.95, -0.05, .1)
+lat <- nc_temp |> ncvar_get("yt_ocean")
 
-world_map_data_df <- data.frame(# Final data frame for whole world
-  lonlat,
-  "temp" = as.vector(temp_matrix),
-  "u"    = as.vector(u_matrix),
-  "v"    = as.vector(v_matrix)
-)
-
-# Crop to smaller size for diminished render time
+# Fuse for use in ggplot and crop to smaller size for faster computing time
 crop_lonlat <- expand.grid(
   "lon" = lon[(3600 - 1300):(3600 - 1100)],
   "lat" = lat[(200 + 750):(400 + 750)]
-) |> as.matrix()
-crop_temp   <- temp_matrix[
-  (3600 - 1300):(3600 - 1100),
-  (200 + 750):(400 + 750)
-  ] |> as.vector()
-crop_u      <- u_matrix[
-  (3600 - 1300):(3600 - 1100),
-  (200 + 750):(400 + 750)
-  ] |> as.vector()
-crop_v      <- v_matrix[
-  (3600 - 1300):(3600 - 1100),
-  (200 + 750):(400 + 750)
-  ] |> as.vector()
-# Reduce current speed vector density
-crop_u_lowres <- replace(crop_u, list = 2 * 1:(length(crop_u)/2), values = NA)
-crop_v_lowres <- replace(crop_v, list = 2 * 1:(length(crop_v)/2), values = NA)
-
-map_data_lowres_df <- data.frame(# Final used data frame for map
-  crop_lonlat,
-  "temp" = crop_temp,
-  "u"    = crop_u_lowres,
-  "v"    = crop_v_lowres
 )
 
-rm(nc_temp, nc_u, nc_v, temp_matrix, u_matrix, v_matrix) # Clear unused big variables
+lon_min <- -130.0
+lon_max <- -110.0
+lat_min <- 20.0
+lat_max <- 40.0
+
+crop_temp <- nc_temp |> nc_crop(lon_min, lon_max, lat_min, lat_max)
+
+crop_u_lowres <- nc_u |>
+  nc_crop(lon_min, lon_max, lat_min, lat_max) |> 
+  reduce_density(2)
+
+crop_v_lowres <- nc_v |>
+  nc_crop(lon_min, lon_max, lat_min, lat_max) |> 
+  reduce_density(2)
+
+map_data_lowres_df <- crop_lonlat |>
+  mutate("temp" = crop_temp, "u" = crop_u_lowres, "v" = crop_v_lowres)
 
 current_uv_scalar <- 2 # Set scalar for better vector visibility, don"t forget when setting scale in final graph
+```
+
+###### Memory cleanup
+
+```{r}
+rm(
+  nc_temp, nc_u, nc_v,
+  crop_lonlat, crop_temp, crop_u_lowres, crop_v_lowres
+) # Clear unused big variables
+gc()
 ```
 
 ##### Landmass
 
 ```{r}
 # Setting up landmass map from naturalearth
-world  <- ne_countries(
-  scale       = "large",
-  country     = c("united states of america", "mexico"),
-  returnclass = "sf"
-)
 states <- ne_states(
   country     = c("united states of america", "mexico"),
   returnclass = "sf"
@@ -701,13 +722,13 @@ ocean_labels <- data.frame(
 
 ```{r}
 map <- ggplot() +
-  #Temperature map (https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
+  # Temperature map (https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
   geom_tile(
     mapping = aes(x = lon, y = lat, fill = temp),
     data =  map_data_lowres_df
   ) +
   scale_fill_viridis(name = "Temp.\n(°C)", option = "turbo") +
-  #Current vectors (https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
+  # Current vectors (https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
   geom_segment(
     data    = map_data_lowres_df,
     mapping = aes(
@@ -716,13 +737,13 @@ map <- ggplot() +
       xend = lon + current_uv_scalar * u,
       yend = lat + current_uv_scalar * v
     ),
-    arrow   = arrow(angle = 15, length = unit(0.04, "inches"), type = "closed"),
+    arrow   = arrow(angle = 15, length = unit(0.035, "inches"), type = "closed"),
     na.rm   = TRUE,
     alpha   = 0.3
   ) +
-  #Landmass
+  # Landmass
   geom_sf(data = states) +
-  #Sampling sites points and labels
+  # Sampling sites points and labels
   new_scale("fill") +
   geom_path(
     data.frame(
@@ -747,7 +768,7 @@ map <- ggplot() +
     mapping = aes(x = lab_lon, y = lab_lat, label = Sampling_location),
     hjust   = 0
   ) +
-  #Extra cities points and labels
+  # Extra cities points and labels
   geom_point(
     city_labels,
     mapping     = aes(x = long, y = lat),
@@ -761,28 +782,28 @@ map <- ggplot() +
     lineheight = .7,
     hjust      = 0
   ) +
-  #Ocean and state names
+  # Ocean and state names
   geom_text(
     states_labels,
     mapping = aes(x = long, y = lat, label = lab),
     size = 5.5
   ) +
   geom_text(
-    ocean_labels[2,],
+    ocean_labels[2, ],
     mapping = aes(x = long, y = lat, label = lab),
     colour  = "ivory",
     size    = 5
   ) +
   geom_label(
-    ocean_labels[1,],
+    ocean_labels[1, ],
     mapping       = aes(x = long, y = lat, label = lab),
     colour        = "black",
     size          = 5,
     label.padding = unit(0.5, "lines")
   ) +
-  #Crop map 
+  # Crop map 
   coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
-  #Vector, temperature and distance scale + orientation
+  # Vector, temperature and distance scale + orientation
   geom_label(
     aes(x = -122, y = 29.5, label = "1.0 m/s\n"),
     size          = 4.5,
@@ -790,18 +811,19 @@ map <- ggplot() +
   ) +
   geom_segment(
     aes(x = -122.5, y = 29.25, xend = -121.5, yend = 29.25),
-    arrow = arrow(angle = 15, length = unit(0.04, "inches"), type = "closed")
+    arrow = arrow(angle = 15, length = unit(0.035, "inches"), type = "closed")
   ) +
   geom_label(aes(x = -119.1, y = 28.71, label = "        ")) +
   annotation_scale(location = "bl", width_hint = 0.4) +
-  annotation_north_arrow( # Set text around map and coordinates display
+  annotation_north_arrow(
     location = "tr",
     style = north_arrow_fancy_orienteering()
   ) +
+  # Set text around map and coordinates display
   labs(x = "Longitude", y = "Latitude") +
   scale_x_continuous(
     breaks = c(-120, -115),
-    labels = c("120°W","115°W")
+    labels = c("120°W", "115°W")
   ) +
   scale_y_continuous(
     breaks = c(30, 35),
@@ -814,12 +836,21 @@ ggsave(
   width  = 9,
   height = 9
 )
+
 system2(
   "open",
   args = c("-a Preview.app", here("output", "plots", "temp_current_map.pdf")),
   wait = FALSE
 )
 ```
+
+##### Memory cleanup
+
+```{r}
+rm(map, states, sample_sites, states_labels, city_labels, ocean_labels, current_uv_scalar)
+gc()
+```
+
 
 ### Fusing PCA plot and map
 
