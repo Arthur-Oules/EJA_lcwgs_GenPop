@@ -42,6 +42,7 @@ library(ggnewscale)
 ```
 
 # Functions
+
 ```{r}
 reduce_all_numeric <- function(liste) {
   for (i in 1:length(liste)) {
@@ -51,7 +52,7 @@ reduce_all_numeric <- function(liste) {
 }
 
 Get_outliers <- function(vcf_path, pcadapt, filename, save = FALSE) {
-  vcf_to_catalog_ranks <- paste0(vcf_path, "/populations.snps.vcf") |> 
+  vcf_to_catalog_ranks <- paste0(vcf_path, "/populations.snps.vcf") |> # Vcf file from ustacks populations output is expected
     read.vcfR() |>
     getID() |>
     strsplit(split = ":") |>
@@ -65,7 +66,7 @@ Get_outliers <- function(vcf_path, pcadapt, filename, save = FALSE) {
   outliers_catalog_ranks <- vcf_to_catalog_ranks[outliers_vcf_ranks]
   
   #Separating balancing selection from local adaptation (sorting outliers by phi_st)
-  outliers_phi_st_filtered <- read.table(
+  outliers_phi_st_filtered <- read.table( # tsv file from ustacks populations output is expected
     file             = paste0(vcf_path, "/populations.phistats.tsv"),
     header           = FALSE,
     sep              = "\t",
@@ -153,7 +154,7 @@ XML_to_DF <- function(XML) {
 ### pcadapt pre-analysis to chose K value for outliers selection
 
 ```{r }
-EJA_all_loci <- read.pcadapt(# Read vcf file for every loci
+EJA_all_loci <- read.pcadapt(# Vcf file from ustacks populations output is expected
   here(
     "data",
     "ustacks_populations_output",
@@ -199,7 +200,7 @@ hist(
 )
 ```
 
-### Getting outliers
+### Outliers identification
 
 ```{r}
 EJA_outliers_ranks <- Get_outliers(
@@ -210,19 +211,19 @@ EJA_outliers_ranks <- Get_outliers(
 )
 ```
 
-### Getting protein sequences for all loci analysis outliers
+### Protein sequences acquisition for all loci analysis outliers
 
 ####Import and format the catalog
 
 ```{r}
 #Read and prepare catalog fasta file
-catalog_sequences <- read.csv(
+catalog_sequences <- read.csv(# fasta file from ?output is expected
   here("data", "catalog.fa"),
   col.names = c("Sequences"),
   stringsAsFactors = FALSE
-) |> 
-  filter(row_number() %% 2 != 0) |> 
-  mutate("catalog_rank" = row_number()) |> 
+) |>
+  filter(row_number() %% 2 != 0) |>
+  mutate("catalog_rank" = row_number()) |>
   select(catalog_rank, Sequences)
 
 EJA_outliers_ranks |> dim() |> _[1] |> print() # Plot number of outliers
@@ -234,13 +235,13 @@ head(outliers_sequences)
 write.csv(outliers_sequences, file = here("output", "outliers_sequences.csv"))
 ```
 
-#### Saving results as .fa fasta file for NCBI BLAST
+#### Save results as .fa fasta file for NCBI BLAST
 
 ```{r}
 sink(here("output", "outliers_sequences.fa"))
 for (i in 1:dim(outliers_sequences)[1]){
-  cat(paste0(">", outliers_sequences$catalog_rank[i], "\n"), append = TRUE)
-  cat(paste0(outliers_sequences$Sequences[i], "\n"), append = TRUE)
+  paste0(">", outliers_sequences$catalog_rank[i], "\n") |> cat(append = TRUE)
+  paste0(outliers_sequences$Sequences[i], "\n") |> cat(append = TRUE)
 }
 sink()
 ```
@@ -252,24 +253,25 @@ Please use the generated fasta file for NCBI BLAST analysis and download the res
 Please replace the second line of the XML file by "<BlastXML2>" which effectively removes the metadata from the first xml tag.
 
 ```{r}
-query_df <- read_xml(here("data", "8R1WY2TK01N-Alignment.xml")) |> XML_to_DF()
+query_df <- read_xml(here("data", "8R1WY2TK01N-Alignment.xml")) |> # "Single-file XML2" file from NCBI BLASTn output is expected
+  XML_to_DF()
 query_df |> saveRDS(file = here("output", "Blast_results_as_data_frame.RDS"))
 ```
 
 
-#### Filtering BLAST results
+#### Filter BLAST results
 
 ```{r}
-query_df_80_test <- query_df |> filter(bit_score >= 80)
-query_df_80 <- query_df[query_df$bit_score >= 80, ] #Keep only significant matches
+query_df_80 <- query_df |> filter(bit_score >= 80) # Keep only significant matches
 dim(query_df_80)[1]
-query_df_80_PREDICTED <- query_df_80[grepl("PREDICTED", query_df_80$title), ] #keep only PREDICTED proteins. Removes non coding sequences and whole chromosome matches (causes problem when searching GeneBank)
+query_df_80_PREDICTED <- query_df_80[grepl("PREDICTED", query_df_80$title), ] # Keep only PREDICTED proteins. Removes non coding sequences and whole chromosome matches (causes problem when searching GeneBank)
 dim(query_df_80_PREDICTED)[1]
-query_df_80_PREDICTED_unique <-
-  query_df_80_PREDICTED[!duplicated(query_df_80_PREDICTED$query_number), ] #Keep the first match for each locus
+query_df_80_PREDICTED_unique_test <- query_df_80_PREDICTED |>
+  filter(!duplicated(query_number)) # Keep the first match for each locus
 dim(query_df_80_PREDICTED_unique)[1]
-query_df_80_PREDICTED_unique_unique <-
-  query_df_80_PREDICTED_unique[!duplicated(query_df_80_PREDICTED_unique$accession_number), ] #Removes duplicated accession numbers
+
+query_df_80_PREDICTED_unique_unique <- query_df_80_PREDICTED_unique |>
+  filter(!duplicated(accession_number)) # Removes duplicated accession numbers
 dim(query_df_80_PREDICTED_unique_unique)[1]
 
 # write.csv(query_df_80_PREDICTED_unique_unique, file = here("output", "query_df_80_PREDICTED_unique_unique.csv"))
@@ -316,7 +318,7 @@ for (i in 1:dim(prot_sequences)[1]){
 sink()
 ```
 
-#### Outliers protein match table
+#### Save outliers protein match table
 
 ```{r}
 Table_2 <-
@@ -335,7 +337,7 @@ write.csv(x = Table_2, file = here("output", "Table_2.csv"), row.names = FALSE)
 ## Blacklist (neutral loci)
 
 ```{r}
-pcadapt_blacklist_raw <- read.pcadapt(
+pcadapt_blacklist_raw <- read.pcadapt( # vcf file from pcadapt analysis output is expected
   here(
     "data",
     "ustacks_populations_output",
@@ -358,7 +360,7 @@ plot(
 ## Whitelist (outliers loci)
 
 ```{r}
-EJA_whitelist <- read.pcadapt(
+EJA_whitelist <- read.pcadapt( # vcf file from pcadapt analysis output is expected
   here(
     "data",
     "ustacks_populations_output",
@@ -373,12 +375,12 @@ plot(pcadapt_whitelist, option = "screeplot")
 plot(pcadapt_whitelist, option = "scores", pop = poplist_names, i = 1, j = 2)
 ```
 
-## Excluding Catalina
+## Analysis excluding Catalina
 
 ### pcadapt pre-analysis to chose K value
 
 ```{r}
-EJA_all_loci_catalina <- read.pcadapt(#Read vcf file for every loci
+EJA_all_loci_catalina <- read.pcadapt( # vcf file from pcadapt analysis output is expected
   here(
     "data",
     "ustacks_populations_output",
@@ -418,7 +420,7 @@ plot(
 100*pcadapt_all_loci_catalina$singular.values**2
 ```
 
-### Getting outliers excluding Catalina
+### Outliers identification excluding Catalina
 
 ```{r}
 EJA_catalina_outliers_ranks <- Get_outliers(
@@ -433,11 +435,9 @@ EJA_catalina_outliers_ranks <- Get_outliers(
 )
 ```
 
-# Figures plotting
+# Figures
 
-## Manhattan plot homemade
-
-### Function
+## Functions
 
 ```{r}
 manhattan_plot_custom <- function(vcf_file,
@@ -507,7 +507,39 @@ manhattan_plot_custom <- function(vcf_file,
     manhattan_plot
   }
 }
+
+nc_crop <- function(var, lon_min, lon_max, lat_min, lat_max) {
+  # Coordinates conversion
+  lon_min <- lon_min * 10
+  lon_max <- lon_max * 10
+  if (lon_min < 0) {
+    lon_min <- 3600 + lon_min
+  }
+  if (lon_max < 0) {
+    lon_max <- 3600 + lon_max
+  }
+  lat_min <- lat_min * 10 + 750
+  lat_max <- lat_max * 10 + 750
+  
+  # Get and crop data
+  var_crop <- ncvar_get(var) |>
+  _[, , 1] |>
+  as.matrix() |>
+  _[(lon_min):(lon_max), (lat_min):(lat_max)] |>
+  as.vector()
+  
+  var_crop
+}
+
+reduce_density <- function(high_density_vector, factor) {
+  high_density_vector |>
+    data.frame("value" = _) |>
+    mutate(value = ifelse(row_number() %% factor == 1, value, NA)) |> # Reduce vector density
+    pull(value)
+}
 ```
+
+## Manhattan plot homemade
 
 ### Getting data
 
@@ -518,7 +550,7 @@ EJA_all_loci_vcf <- here(
   "all_loci",
   "populations.snps.vcf"
 ) |>
-  read.vcfR()
+  read.vcfR() # vcf file from pcadapt analysis output is expected
 ```
 
 ### Generate plot without points labels
@@ -568,7 +600,7 @@ ggsave(
 )
 ```
 
-## Figure 1
+## Figure 1 - PCA 
 
 ### PCA plot
 
@@ -642,46 +674,14 @@ PCA <- ggplot() +
 
 ### Surface temperature and current map
 
-#### Functions
-
-```{r}
-nc_crop <- function(var, lon_min, lon_max, lat_min, lat_max) {
-  # Coordinates conversion
-  lon_min <- lon_min * 10
-  lon_max <- lon_max * 10
-  if (lon_min < 0) {
-    lon_min <- 3600 + lon_min
-  }
-  if (lon_max < 0) {
-    lon_max <- 3600 + lon_max
-  }
-  lat_min <- lat_min * 10 + 750
-  lat_max <- lat_max * 10 + 750
-  
-  # Get and crop data
-  var_crop <- ncvar_get(var) |>
-  _[, , 1] |>
-  as.matrix() |>
-  _[(lon_min):(lon_max), (lat_min):(lat_max)] |>
-  as.vector()
-  
-  var_crop
-}
-
-reduce_density <- function(high_density_vector, factor) {
-  high_density_vector |>
-    data.frame("value" = _) |>
-    mutate(value = ifelse(row_number() %% factor == 1, value, NA)) |> # Reduce vector density
-    pull(value)
-}
-```
 
 #### Getting data
 
+Extracting ocean surface temperature and current from [BRAN2020](https://research.csiro.au/bluelink/global/reanalysis/) 
+[Dataset](https://dapds00.nci.org.au/thredds/catalog/gb6/BRAN/BRAN2020/catalog.html).\
+[Tutorial on NetCDF4 files](https://towardsdatascience.com/how-to-crack-open-netcdf-files-in-r-and-extract-data-as-time-series-24107b70dcd)
+
 ```{r}
-# Extracting ocean surface temperature and current from BRAN2020
-# (https://dapds00.nci.org.au/thredds/catalog/gb6/BRAN/BRAN2020/month/catalog.html)
-# See https://towardsdatascience.com/how-to-crack-open-netcdf-files-in-r-and-extract-data-as-time-series-24107b70dcd for tutorial on NetCDF4 files
 nc_temp <- nc_open(here("data","ocean_temp_ann_2022.nc"))
 # Longitude's 0 is at Greenwich and -180 become 3600
 # Latitudes start at -75 and end at +75
@@ -695,6 +695,12 @@ nc_v   <- nc_open(here("data", "ocean_v_ann_2022.nc"))
 ##### BRAN2020 data
 
 ```{r}
+# Coordinates of interest
+lon_min <- -130.0
+lon_max <- -110.0
+lat_min <- 20.0
+lat_max <- 40.0
+
 # Convert coordinate system
 lon <- nc_temp |> ncvar_get("xt_ocean")
 lon[1801:3600] <- seq(-179.95, -0.05, .1)
@@ -702,14 +708,9 @@ lat <- nc_temp |> ncvar_get("yt_ocean")
 
 # Fuse for use in ggplot and crop to smaller size for faster computing time
 crop_lonlat <- expand.grid(
-  "lon" = lon[(3600 - 1300):(3600 - 1100)],
-  "lat" = lat[(200 + 750):(400 + 750)]
+  "lon" = lon[(3600 + 10 * lon_min):(3600 + 10 * lon_max)],
+  "lat" = lat[(750 + 10 * lat_min):(750 + 10 * lat_max)]
 )
-
-lon_min <- -130.0
-lon_max <- -110.0
-lat_min <- 20.0
-lat_max <- 40.0
 
 crop_temp <- nc_temp |> nc_crop(lon_min, lon_max, lat_min, lat_max)
 
@@ -733,7 +734,7 @@ current_uv_scalar <- 2 # Set scalar for better vector visibility, don"t forget w
 rm(
   nc_temp, nc_u, nc_v,
   lon, lat,
-  crop_lonlat, crop_temp, crop_u_lowres, crop_v_lowres
+  crop_temp, crop_u_lowres, crop_v_lowres
 ) # Clear unused big variables
 gc()
 ```
@@ -749,7 +750,7 @@ states <- ne_states(
 
 # Sampling site coordinates and misc info on map
 sample_sites <- read.csv(
-    here("data","EJA_RAD_Samples.csv"),
+    here("data","EJA_RAD_sampling_sites.csv"),
     stringsAsFactors = FALSE
   ) |>
   filter(!duplicated(Sampling_location)) |> 
@@ -779,15 +780,18 @@ ocean_labels <- data.frame(
 
 #### Generate map
 
+[Tutorial for surface temperature and current speed map](https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
+
 ```{r}
 map <- ggplot() +
-  # Temperature map (https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
+  # Temperature map
   geom_tile(
     mapping = aes(x = lon, y = lat, fill = temp),
     data    =  map_data_lowres_df
   ) +
+  # Temperature scale
   scale_fill_viridis(name = "Temp.\n(°C)", option = "turbo") +
-  # Current vectors (https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
+  # Current vectors
   geom_segment(
     data    = map_data_lowres_df,
     mapping = aes(
@@ -802,6 +806,8 @@ map <- ggplot() +
   ) +
   # Landmass
   geom_sf(data = states) +
+  # Crop map
+  coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
   # Sampling sites points and labels
   new_scale("fill") +
   geom_path( # Path from Catalina label to Catalina island
@@ -860,9 +866,7 @@ map <- ggplot() +
     size          = 5,
     label.padding = unit(0.5, "lines")
   ) +
-  # Crop map 
-  coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
-  # Vector, temperature and distance scale + orientation
+  # Vector scale
   geom_label(
     aes(x = -122, y = 29.5, label = "1.0 m/s\n"),
     size          = 4.5,
@@ -872,13 +876,15 @@ map <- ggplot() +
     aes(x = -122.5, y = 29.25, xend = -121.5, yend = 29.25),
     arrow = arrow(angle = 15, length = unit(0.035, "inches"), type = "closed")
   ) +
+  # Cartographic scale
   geom_label(aes(x = -119.1, y = 28.71, label = "        ")) +
   annotation_scale(location = "bl", width_hint = 0.4) +
+  # Orientation
   annotation_north_arrow(
     location = "tr",
     style = north_arrow_fancy_orienteering()
   ) +
-  # Set text around map and coordinates display
+  # Axes
   labs(x = "Longitude", y = "Latitude") +
   scale_x_continuous(
     breaks = c(-120, -115),
@@ -906,7 +912,9 @@ system2(
 ##### Memory cleanup
 
 ```{r}
-rm(map, states, sample_sites, states_labels, city_labels, ocean_labels, current_uv_scalar)
+rm(map, states,
+   sample_sites, states_labels, city_labels, ocean_labels,
+   current_uv_scalar)
 gc()
 ```
 
@@ -934,6 +942,17 @@ system2(
 ### Generating bathymetry map
 
 #### Getting and formatting data
+
+```{r}
+nc_u   <- nc_open(here("data", "ocean_u_ann_2022.nc"))
+nc_v   <- nc_open(here("data", "ocean_v_ann_2022.nc"))
+
+crop_u <- nc_u |>
+  nc_crop(lon_min, lon_max, lat_min, lat_max)
+crop_v <- nc_v |>
+  nc_crop(lon_min, lon_max, lat_min, lat_max)
+```
+
 
 ```{r}
 catalina_df <-
