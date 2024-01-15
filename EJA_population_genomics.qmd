@@ -145,6 +145,35 @@ XML_to_DF <- function(XML) {
   }
   query_df
 }
+
+Get_protein_sequences <- function(query) {
+  # Initialisation
+  n_protein <- dim(query)[1]
+  
+  prot_sequences <- data.frame(
+    "accession_number"  = query$accession_number,
+    "sequences" = rep(NA, n_protein)
+  )
+  
+  pb <- txtProgressBar(min = 0, max = n_protein, initial = 0) # Setup progress bar
+  for (i in 1:n_protein) {
+    sequence_info <- entrez_fetch(
+      "nuccore",
+      id      = prot_sequences$accession_number[i],
+      rettype = "fasta_cds_aa",
+      retmode = "text"
+    ) # Fetch protein info from GenBank from accession number
+    prot_sequences$sequences[i] <-
+      sequence_info |>
+      strsplit("]") |>
+      unlist()|>
+      tail(1) |> 
+      gsub(pattern = "\n", replacement = "",  x = _) # Extract protein sequence from information
+    setTxtProgressBar(pb, i) # Update progress bar
+  }
+  close(pb)
+  prot_sequences
+}
 ```
 
 # pcadapt analysis
@@ -164,11 +193,11 @@ EJA_all_loci <- read.pcadapt(# Vcf file from ustacks populations output is expec
   type = "vcf"
 )
 
-pcadapt_all_loci_raw <- pcadapt(input = EJA_all_loci, K = 20)
-plot(pcadapt_all_loci_raw, option = "screeplot") #screeplot to visually chose pca component to keep
+pcadapt(input = EJA_all_loci, K = 20) |>
+  plot(option = "screeplot") # screeplot to visually chose pca component to keep
 ```
 
-K = 3 seems to be the most optimal for this data set
+K = 3 seems to be the most optimal number of PCA axes to keep for this data set.
 
 ### Analysis with K = 3
 
@@ -193,10 +222,10 @@ plot(pcadapt_all_loci, option = "scores", pop = poplist_names, i = 1, j = 3)
 plot(pcadapt_all_loci, option = "qqplot")
 hist(
   pcadapt_all_loci$pvalues,
-  xlab = "p-values",
-  main = NULL,
+  xlab   = "p-values",
+  main   = NULL,
   breaks = 50,
-  col = "orange"
+  col    = "orange"
 )
 ```
 
@@ -246,14 +275,15 @@ for (i in 1:dim(outliers_sequences)[1]){
 sink()
 ```
 
-Please use the generated fasta file for NCBI BLAST analysis and download the result as Single-file XML2
+Please run a NCBI nBLAST analysis with the generated .fa file and download the result as Single-file XML2
 
 #### Import BLAST results saved as xml file and extract results
 
 Please replace the second line of the XML file by "<BlastXML2>" which effectively removes the metadata from the first xml tag.
 
 ```{r}
-query_df <- read_xml(here("data", "8R1WY2TK01N-Alignment.xml")) |> # "Single-file XML2" file from NCBI BLASTn output is expected
+query_df <- here("data", "8R1WY2TK01N-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
+  read_xml() |>
   XML_to_DF()
 query_df |> saveRDS(file = here("output", "Blast_results_as_data_frame.RDS"))
 ```
@@ -262,58 +292,34 @@ query_df |> saveRDS(file = here("output", "Blast_results_as_data_frame.RDS"))
 #### Filter BLAST results
 
 ```{r}
-query_df_80 <- query_df |> filter(bit_score >= 80) # Keep only significant matches
-dim(query_df_80)[1]
-query_df_80_PREDICTED <- query_df_80[grepl("PREDICTED", query_df_80$title), ] # Keep only PREDICTED proteins. Removes non coding sequences and whole chromosome matches (causes problem when searching GeneBank)
-dim(query_df_80_PREDICTED)[1]
-query_df_80_PREDICTED_unique_test <- query_df_80_PREDICTED |>
-  filter(!duplicated(query_number)) # Keep the first match for each locus
-dim(query_df_80_PREDICTED_unique)[1]
-
-query_df_80_PREDICTED_unique_unique <- query_df_80_PREDICTED_unique |>
-  filter(!duplicated(accession_number)) # Removes duplicated accession numbers
+query_df_80_PREDICTED_unique_unique <- query_df |>
+  filter(bit_score >= 80) |> # Keep only significant matches
+  filter(grepl("PREDICTED", title)) |> # Keep only PREDICTED proteins. Removes non coding sequences and whole chromosome matches (causes problem when searching GeneBank)
+  filter(!duplicated(query_number)) |> # Keep the first match for each locus
+  filter(!duplicated(accession_number))  # Removes duplicated accession numbers
 dim(query_df_80_PREDICTED_unique_unique)[1]
 
-# write.csv(query_df_80_PREDICTED_unique_unique, file = here("output", "query_df_80_PREDICTED_unique_unique.csv"))
+query_df_80_PREDICTED_unique_unique |>
+  write.csv(file = here("output", "query_df_80_PREDICTED_unique_unique.csv"))
 ```
 
 #### Get protein sequences from GenBank
 
 ```{r}
-# Initialisation
-prot_sequences <- data.frame(
-  "protein_sequence" = rep(
-    NA,
-    length(query_df_80_PREDICTED_unique_unique$accession_number)
-  ),
-  row.names          = query_df_80_PREDICTED_unique_unique$accession_number
-)
+# query_df <- readRDS(here("output", "Blast_results_as_data_frame.RDS"))
+prot_sequences <- Get_protein_sequences(query_df_80_PREDICTED_unique_unique)
 
-pb <- txtProgressBar(min = 0, max = dim(prot_sequences)[1], initial = 0) #Setup progress bar
-for (i in 1:dim(prot_sequences)[1]){
-  sequence_info <- entrez_fetch(
-    "nuccore",
-    id     = rownames(prot_sequences)[i],
-    rettype ="fasta_cds_aa",
-    retmode = "text"
-  ) #Fetch protein info from GenBank from accession number
-  prot_sequences[rownames(prot_sequences)[i], ] <-
-    gsub(
-      pattern     = "\n",
-      replacement = "",
-      x           = tail(unlist(strsplit(sequence_info, "]")),1)
-    ) #Extract protein sequence from information
-  setTxtProgressBar(pb, i) #Update progress bar
-}
-close(pb)
+prot_sequences_matches <- prot_sequences |>
+  filter(!sequences == "")
+```
 
-# prot_sequences = subset(x = prot_sequences, !(subset = prot_sequences$protein_sequence == ""))
 
+```{r}
 #Write protein sequences as fasta file with GenBank access number as sequence names
 sink(here("output", "outliers_protein_sequences.fa"))
-for (i in 1:dim(prot_sequences)[1]){
-  cat(paste0(">", rownames(prot_sequences)[i], "\n"), append = TRUE)
-  cat(paste0(prot_sequences$protein_sequence[i], "\n"), append = TRUE)
+for (i in 1:dim(prot_sequences_matches[1])){
+  cat(paste0(">", prot_sequences_matches$accession_number[i], "\n"), append = TRUE)
+  cat(paste0(prot_sequences_matches$sequences[i], "\n"), append = TRUE)
 }
 sink()
 ```
@@ -937,7 +943,7 @@ system2(
 )
 ```
 
-## Figure 2?
+## Figure 2? - Bathymetry
 
 ### Generating bathymetry map
 
@@ -1065,7 +1071,7 @@ system2(
 )
 ```
 
-### Generating map without specific background
+## Blank map
 
 ```{r}
 map_blank <- ggplot() +
@@ -1163,12 +1169,12 @@ system2(
 )
 ```
 
-## Figure 3?
+## Figure 3? - Protein sequences annotation
 
 ### Convert blast KOALA pie piechart in barplot
 
 ```{r}
-koala_results <- read.csv(
+koala_results <- read.csv( # File downloaded from https://www.kegg.jp/blastkoala/ is expected
   here("external_results", "Blast_koala_results.csv"),
   stringsAsFactors = FALSE
 ) |>
@@ -1185,7 +1191,6 @@ koala_barplot <- ggplot(
     )
   ) +
   geom_col() +
-  # scale_fill_discrete(name = "Functional category") +
   scale_fill_manual(
     name   = "Functional category",
     labels = koala_results$Functional.category,
@@ -1197,13 +1202,13 @@ koala_barplot <- ggplot(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank(),
     panel.grid.major.y = element_line(
-      colour = "black",
-      linetype = "solid",
+      colour    = "black",
+      linetype  = "solid",
       linewidth = .12
     ),
     panel.grid.minor.y = element_line(
-      colour = "black",
-      linetype = "dashed",
+      colour    = "black",
+      linetype  = "dashed",
       linewidth = .08
     ),
     axis.ticks.x      = element_blank(),
@@ -1212,14 +1217,17 @@ koala_barplot <- ggplot(
   )
 ggsave(
   filename = here("external_results", "blast_koala_bar_plot.pdf"),
-  plot = koala_barplot,
-  width = 21,
-  height = 10,
-  units = "cm"
+  plot     = koala_barplot,
+  width    = 21,
+  height   = 10,
+  units    = "cm"
 )
 system2(
   "open",
-  args = c("-a Preview.app", here("external_results", "blast_koala_bar_plot.pdf")),
+  args = c(
+    "-a Preview.app",
+    here("external_results", "blast_koala_bar_plot.pdf")
+  ),
   wait = FALSE
 )
 ```
