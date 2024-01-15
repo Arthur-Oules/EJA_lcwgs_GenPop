@@ -154,7 +154,12 @@ XML_to_DF <- function(XML) {
 
 ```{r }
 EJA_all_loci <- read.pcadapt(# Read vcf file for every loci
-  here("ustacks_populations_output", "all_loci", "populations.snps.vcf"),
+  here(
+    "data",
+    "ustacks_populations_output",
+    "all_loci",
+    "populations.snps.vcf"
+  ),
   type = "vcf"
 )
 
@@ -198,7 +203,7 @@ hist(
 
 ```{r}
 EJA_outliers_ranks <- Get_outliers(
-  here("ustacks_populations_output", "all_loci"),
+  here("data", "ustacks_populations_output", "all_loci"),
   pcadapt  = pcadapt_all_loci,
   filename = "EJA",
   save     = TRUE
@@ -331,15 +336,21 @@ write.csv(x = Table_2, file = here("output", "Table_2.csv"), row.names = FALSE)
 
 ```{r}
 pcadapt_blacklist_raw <- read.pcadapt(
-  here("ustacks_populations_output", "EJA_blacklist", "populations.snps.vcf"),
+  here(
+    "data",
+    "ustacks_populations_output",
+    "EJA_blacklist",
+    "populations.snps.vcf"
+  ),
   type = "vcf"
-) |> pcadapt(K = 20)
+) |>
+  pcadapt(K = 20)
 
 plot(pcadapt_blacklist_raw, option = "screeplot")
 plot(
   pcadapt_blacklist_raw,
   option = "scores",
-  pop = poplist_names,
+  pop    = poplist_names,
   i = 1, j = 2
 )
 ```
@@ -349,6 +360,7 @@ plot(
 ```{r}
 EJA_whitelist <- read.pcadapt(
   here(
+    "data",
     "ustacks_populations_output",
     "EJA_whitelist_outliers",
     "populations.snps.vcf"
@@ -368,6 +380,7 @@ plot(pcadapt_whitelist, option = "scores", pop = poplist_names, i = 1, j = 2)
 ```{r}
 EJA_all_loci_catalina <- read.pcadapt(#Read vcf file for every loci
   here(
+    "data",
     "ustacks_populations_output",
     "EJA_all_loci-catalina",
     "populations.snps.vcf"
@@ -409,7 +422,11 @@ plot(
 
 ```{r}
 EJA_catalina_outliers_ranks <- Get_outliers(
-  vcf_path = here("ustacks_populations_output", "EJA_all_loci-catalian"),
+  vcf_path = here(
+    "data",
+    "ustacks_populations_output",
+    "EJA_all_loci-catalian"
+  ),
   pcadapt  = pcadapt_all_loci_catalina,
   filename = "EJA_catalina",
   save     = FALSE
@@ -496,6 +513,7 @@ manhattan_plot_custom <- function(vcf_file,
 
 ```{r}
 EJA_all_loci_vcf <- here(
+  "data",
   "ustacks_populations_output",
   "all_loci",
   "populations.snps.vcf"
