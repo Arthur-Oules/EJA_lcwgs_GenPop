@@ -580,13 +580,13 @@ PCA_average$pop <- c( # Rename populations with human readable syntax
   "Punta Banda",
   "San Diego"
 )
-# Add ofsets
+# Add offsets
 PCA_average$average_x <- PCA_average$average_x + c(0, -.02, .015, 0, 0, 0, 0, 0)
 
 PCA_average$average_y <-
   PCA_average$average_y - c(.04, .01, -.01, .06, .06, .06, .055, .045)
 
-PCA_percentages <- pcadapt_all_loci$singular.values^2
+PCA_percentages <- pcadapt_all_loci$singular.values^2*100
 ```
 
 #### Generate plot
@@ -604,8 +604,8 @@ PCA <- ggplot() +
     mapping = aes(x = average_y, y = average_x, label = pop)
   ) +
   labs(
-    x = paste0("-PC2: ", as.character(round(PCA_percentages[2]*100, 2)), "%"),
-    y = paste0("-PC1: ", as.character(round(PCA_percentages[1]*100, 2)), "%")
+    x = paste0("-PC2: ", as.character(round(PCA_percentages[2], 2)), "%"),
+    y = paste0("-PC1: ", as.character(round(PCA_percentages[1], 2)), "%")
   ) +
   coord_fixed(ratio = 1.2) +
   theme(
@@ -628,6 +628,7 @@ PCA <- ggplot() +
 
 ```{r}
 nc_crop <- function(var, lon_min, lon_max, lat_min, lat_max) {
+  # Coordinates conversion
   lon_min <- lon_min * 10
   lon_max <- lon_max * 10
   if (lon_min < 0) {
@@ -639,10 +640,11 @@ nc_crop <- function(var, lon_min, lon_max, lat_min, lat_max) {
   lat_min <- lat_min * 10 + 750
   lat_max <- lat_max * 10 + 750
   
+  # Get and crop data
   var_crop <- ncvar_get(var) |>
   _[, , 1] |>
   as.matrix() |>
-  _[(lon_min):(lon_max), (lat_min):(lat_max)] |> # Crop to region of interest
+  _[(lon_min):(lon_max), (lat_min):(lat_max)] |>
   as.vector()
   
   var_crop
@@ -733,7 +735,7 @@ sample_sites <- read.csv(
     stringsAsFactors = FALSE
   ) |>
   filter(!duplicated(Sampling_location)) |> 
-  mutate(
+  mutate( # Add offsets
     "lab_lon" = Longitude + .15 + c(0, 0, 0, .1, 0, 0, 0, -.1 -2),
     "lab_lat" = Latitude + .25 + c(0, -.5, 0, -.2, 0, 0, 0, -.1 -1)
   )
