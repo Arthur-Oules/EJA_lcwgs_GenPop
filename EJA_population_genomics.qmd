@@ -41,7 +41,9 @@ library(scales)
 library(ggnewscale)
 ```
 
-# Functions
+# pcadapt analysis
+
+## Functions
 
 ```{r}
 reduce_all_numeric <- function(liste) {
@@ -51,7 +53,7 @@ reduce_all_numeric <- function(liste) {
   liste
 }
 
-Get_outliers <- function(vcf_path, pcadapt, filename, save = FALSE) {
+Get_outliers <- function(vcf_path, pcadapt, filename = NULL) {
   vcf_to_catalog_ranks <- paste0(vcf_path, "/populations.snps.vcf") |> # Vcf file from ustacks populations output is expected
     read.vcfR() |>
     getID() |>
@@ -85,12 +87,13 @@ Get_outliers <- function(vcf_path, pcadapt, filename, save = FALSE) {
     )
   )
   #Saving outliers list as txt file for stacks2 whitelist analysis
-  if (save == TRUE) {
+  if (!is.null(filename)) {
     sink(here("output", paste0(filename, "_outliers_catalog_ranks.txt")))
     for (outlier in outliers_catalog_ranks){
       cat(paste0(outlier, "\n"), append = TRUE)
     }
     sink()
+    
     print(
       paste0(
         "Outliers list saved as ",
@@ -99,6 +102,37 @@ Get_outliers <- function(vcf_path, pcadapt, filename, save = FALSE) {
     )
   }
   data.frame("vcf_ranks" = outliers_vcf_ranks, "catalog_ranks" = as.numeric(outliers_catalog_ranks))
+}
+
+Get_catalog_sequences <- function(catalog_path,
+                                  outliers_ranks,
+                                  filename = NULL) {
+  catalog_sequences <- read.csv(# fasta file from ?output is expected
+    catalog_path,
+    col.names = c("Sequences"),
+    stringsAsFactors = FALSE
+  ) |>
+    filter(row_number() %% 2 != 0) |>
+    mutate("catalog_rank" = row_number()) |>
+    select(catalog_rank, Sequences)
+  
+  outliers_sequences <- catalog_sequences |>
+    filter(row_number() %in% outliers_ranks$catalog_ranks)
+  
+  if (!is.null(filename)) {
+    write.csv(
+      outliers_sequences,
+      file = here("output", paste0(filename, ".csv"))
+    )
+    
+    sink(here("output", paste0(filename, ".fa")))
+    for (i in 1:dim(outliers_sequences)[1]){
+      paste0(">", outliers_sequences$catalog_rank[i], "\n") |> cat(append = TRUE)
+      paste0(outliers_sequences$Sequences[i], "\n") |> cat(append = TRUE)
+    }
+    sink()
+  }
+  outliers_sequences
 }
 
 XML_to_DF <- function(XML) {
@@ -176,8 +210,6 @@ Get_protein_sequences <- function(query) {
 }
 ```
 
-# pcadapt analysis
-
 ## All loci
 
 ### pcadapt pre-analysis to chose K value for outliers selection
@@ -245,34 +277,11 @@ EJA_outliers_ranks <- Get_outliers(
 ####Import and format the catalog
 
 ```{r}
-#Read and prepare catalog fasta file
-catalog_sequences <- read.csv(# fasta file from ?output is expected
+EJA_outliers_sequences <- Get_catalog_sequences(
   here("data", "catalog.fa"),
-  col.names = c("Sequences"),
-  stringsAsFactors = FALSE
-) |>
-  filter(row_number() %% 2 != 0) |>
-  mutate("catalog_rank" = row_number()) |>
-  select(catalog_rank, Sequences)
-
-EJA_outliers_ranks |> dim() |> _[1] |> print() # Plot number of outliers
-
-outliers_sequences <- catalog_sequences |>
-  filter(row_number() %in% EJA_outliers_ranks$catalog_ranks)
-
-head(outliers_sequences)
-write.csv(outliers_sequences, file = here("output", "outliers_sequences.csv"))
-```
-
-#### Save results as .fa fasta file for NCBI BLAST
-
-```{r}
-sink(here("output", "outliers_sequences.fa"))
-for (i in 1:dim(outliers_sequences)[1]){
-  paste0(">", outliers_sequences$catalog_rank[i], "\n") |> cat(append = TRUE)
-  paste0(outliers_sequences$Sequences[i], "\n") |> cat(append = TRUE)
-}
-sink()
+  outliers_ranks = EJA_outliers_ranks,
+  save_path      = "EJA_outliers_sequences"
+)
 ```
 
 Please run a NCBI nBLAST analysis with the generated .fa file and download the result as Single-file XML2
@@ -282,10 +291,12 @@ Please run a NCBI nBLAST analysis with the generated .fa file and download the r
 Please replace the second line of the XML file by "<BlastXML2>" which effectively removes the metadata from the first xml tag.
 
 ```{r}
-query_df <- here("data", "8R1WY2TK01N-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
+EJA_outliers_query_df <- here("data", "8R1WY2TK01N-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
   read_xml() |>
   XML_to_DF()
-query_df |> saveRDS(file = here("output", "Blast_results_as_data_frame.RDS"))
+EJA_outliers_query_df |> saveRDS(
+  file = here("output", "EJA_outliers_nBlast_results_as_data_frame.RDS")
+)
 ```
 
 
@@ -299,27 +310,34 @@ query_df_80_PREDICTED_unique_unique <- query_df |>
   filter(!duplicated(accession_number))  # Removes duplicated accession numbers
 dim(query_df_80_PREDICTED_unique_unique)[1]
 
-query_df_80_PREDICTED_unique_unique |>
-  write.csv(file = here("output", "query_df_80_PREDICTED_unique_unique.csv"))
+query_df_80_PREDICTED_unique_unique |> write.csv(
+  file = here("output", "query_df_80_PREDICTED_unique_unique.csv")
+)
 ```
 
 #### Get protein sequences from GenBank
 
 ```{r}
 # query_df <- readRDS(here("output", "Blast_results_as_data_frame.RDS"))
-prot_sequences <- Get_protein_sequences(query_df_80_PREDICTED_unique_unique)
-
-prot_sequences_matches <- prot_sequences |>
+EJA_outliers_protein_sequences_matches <- Get_protein_sequences(
+  query_df_80_PREDICTED_unique_unique
+) |>
   filter(!sequences == "")
 ```
 
-
+Save output as fasta file which can be sent to [blast KOALA](https://www.kegg.jp/blastkoala/).
 ```{r}
 #Write protein sequences as fasta file with GenBank access number as sequence names
-sink(here("output", "outliers_protein_sequences.fa"))
-for (i in 1:dim(prot_sequences_matches[1])){
-  cat(paste0(">", prot_sequences_matches$accession_number[i], "\n"), append = TRUE)
-  cat(paste0(prot_sequences_matches$sequences[i], "\n"), append = TRUE)
+sink(here("output", "EJA_outliers_protein_sequences.fa"))
+for (i in 1:dim(EJA_outliers_protein_sequences_matches[1])){
+  cat(
+    paste0(">", EJA_outliers_protein_sequences_matches$accession_number[i], "\n"),
+    append = TRUE
+  )
+  cat(
+    paste0(EJA_outliers_protein_sequences_matches$sequences[i], "\n"),
+    append = TRUE
+  )
 }
 sink()
 ```
@@ -327,23 +345,16 @@ sink()
 #### Save outliers protein match table
 
 ```{r}
-Table_2 <-
-  query_df_80_PREDICTED_unique_unique[
-    ,
-    c(
-      "query_number",
-      "accession_number",
-      "title"
-    )
-  ]
-colnames(Table_2)[1] <- "Locus_ID"
-write.csv(x = Table_2, file = here("output", "Table_2.csv"), row.names = FALSE)
+Table_2 <- query_df_80_PREDICTED_unique_unique |> 
+  select(c(query_number, accession_number, title)) |>
+  rename(Locus_ID = query_number) |>
+  write.csv(file = here("output", "Table_2.csv"), row.names = FALSE)
 ```
 
 ## Blacklist (neutral loci)
 
 ```{r}
-pcadapt_blacklist_raw <- read.pcadapt( # vcf file from pcadapt analysis output is expected
+pcadapt_blacklist <- read.pcadapt( # vcf file from pcadapt analysis output is expected
   here(
     "data",
     "ustacks_populations_output",
@@ -351,16 +362,10 @@ pcadapt_blacklist_raw <- read.pcadapt( # vcf file from pcadapt analysis output i
     "populations.snps.vcf"
   ),
   type = "vcf"
-) |>
-  pcadapt(K = 20)
+) |> pcadapt(K = 20)
 
-plot(pcadapt_blacklist_raw, option = "screeplot")
-plot(
-  pcadapt_blacklist_raw,
-  option = "scores",
-  pop    = popmap,
-  i = 1, j = 2
-)
+plot(pcadapt_blacklist, option = "screeplot")
+plot(pcadapt_blacklist, option = "scores", pop = popmap, i = 1, j = 2)
 ```
 
 ## Whitelist (outliers loci)
@@ -612,7 +617,7 @@ reduce_density <- function(high_density_vector, factor) {
 }
 ```
 
-## Manhattan plot homemade
+## Figure 1 - Manhattan plot homemade
 
 ### Getting data
 
@@ -673,7 +678,7 @@ ggsave(
 )
 ```
 
-## Figure 1 - PCA & map
+## Figure 2 - PCA & map
 
 ### PCA plot
 
@@ -951,7 +956,7 @@ system2(
 )
 ```
 
-## Figure 2? - Bathymetry
+## Figure 3? - Bathymetry
 
 ### Generating bathymetry map
 
@@ -1177,7 +1182,7 @@ system2(
 )
 ```
 
-## Figure 3? - Protein sequences annotation
+## Figure 4? - Protein sequences annotation
 
 ### Convert blast KOALA pie piechart in barplot
 
