@@ -204,7 +204,7 @@ K = 3 seems to be the most optimal number of PCA axes to keep for this data set.
 ```{r}
 pcadapt_all_loci <- pcadapt(input = EJA_all_loci, K = 3)
 
-poplist_names <- c(
+popmap <- c(
   rep("carmel", 6),
   rep("monterey", 18),
   rep("palos_verdes", 9),
@@ -215,9 +215,9 @@ poplist_names <- c(
   rep("cardon", 3)
 ) #map individuals to populations
 
-plot(pcadapt_all_loci, option = "scores", pop = poplist_names, i = 1, j = 2)
-plot(pcadapt_all_loci, option = "scores", pop = poplist_names, i = 2, j = 3)
-plot(pcadapt_all_loci, option = "scores", pop = poplist_names, i = 1, j = 3)
+plot(pcadapt_all_loci, option = "scores", pop = popmap, i = 1, j = 2)
+plot(pcadapt_all_loci, option = "scores", pop = popmap, i = 2, j = 3)
+plot(pcadapt_all_loci, option = "scores", pop = popmap, i = 1, j = 3)
 
 plot(pcadapt_all_loci, option = "qqplot")
 hist(
@@ -358,7 +358,7 @@ plot(pcadapt_blacklist_raw, option = "screeplot")
 plot(
   pcadapt_blacklist_raw,
   option = "scores",
-  pop    = poplist_names,
+  pop    = popmap,
   i = 1, j = 2
 )
 ```
@@ -378,7 +378,7 @@ EJA_whitelist <- read.pcadapt( # vcf file from pcadapt analysis output is expect
 pcadapt_whitelist <- pcadapt(input = EJA_whitelist, K = 20)
 
 plot(pcadapt_whitelist, option = "screeplot")
-plot(pcadapt_whitelist, option = "scores", pop = poplist_names, i = 1, j = 2)
+plot(pcadapt_whitelist, option = "scores", pop = popmap, i = 1, j = 2)
 ```
 
 ## Analysis excluding Catalina
@@ -407,7 +407,7 @@ K = 2 seems to be the most optimal for this data set
 ```{r}
 pcadapt_all_loci_catalina <- pcadapt(input = EJA_all_loci_catalina, K = 2)
 
-poplist_names <- c(
+popmap <- c(
   rep("carmel", 6),
   rep("monterey", 18),
   rep("palos_verdes", 9),
@@ -420,7 +420,7 @@ poplist_names <- c(
 plot(
   pcadapt_all_loci_catalina,
   option = "scores",
-  pop = poplist_names,
+  pop = popmap,
   i = 1, j = 2
 )
 100*pcadapt_all_loci_catalina$singular.values**2
@@ -446,13 +446,15 @@ EJA_catalina_outliers_ranks <- Get_outliers(
 ## Functions
 
 ```{r}
-manhattan_plot_custom <- function(vcf_file,
-                                  pcadapt_analysis,
-                                  n_chromosome,
-                                  outliers_ranks = NULL) {
-  chromosome_names <- vcf_file |> # Extract chromosome number from vcf info
+manhattan_plot_custom <- function( # Draws a manhattan plot using ggplot()
+  vcf_file, # vcf file from ustacks population analysis
+  pcadapt_analysis, # Output from the pcadapt() function
+  n_chromosome, # Number of effective chromosomes
+  outliers_ranks = NULL # Output from the Get_outliers() function
+) {
+  chromosome_names <- vcf_file |> # Extract chromosome number map from vcf info
   getFIX() |>
-  _[, "CHROM"] |> # Get chromosome for each vcf locus
+  _[, "CHROM"] |>
   lapply(FUN = gsub, pattern = "SCAF_", replacement = "") |>
   as.integer()
   
@@ -512,6 +514,71 @@ manhattan_plot_custom <- function(vcf_file,
   } else {
     manhattan_plot
   }
+}
+
+PCA_plot <- function(pcadapt_output, popmap, x_offsets, y_offsets) {
+  #Format data frame
+  PCA_df <- data.frame(
+    "x"   = -pcadapt_output$scores[, 1],
+    "y"   = -pcadapt_output$scores[, 2],
+    "pop" = popmap
+  )
+  
+  populations <- popmap |> as.factor() |> levels()
+
+  PCA_average <- data.frame("pop" = populations)
+  for (i in 1:length(PCA_average$pop)){
+    PCA_average$average_x[i] <- PCA_df |> 
+      filter(pop == PCA_average$pop[i]) |> 
+      pull(x) |>
+      mean()
+    PCA_average$average_y[i] <- PCA_df |> 
+      filter(pop == PCA_average$pop[i]) |> 
+      pull(y) |>
+      mean()
+  }
+  
+  PCA_average$pop <- populations |>
+    str_to_title() |>
+    gsub(pattern = "_", x = _, replacement = " ")
+
+  # Add offsets
+  PCA_average$average_x <- PCA_average$average_x + x_offsets
+  
+  PCA_average$average_y <- PCA_average$average_y - y_offsets
+  
+  PCA_percentages <- pcadapt_output$singular.values^2 |> percent()
+  
+  # ggplot prompt
+  PCA <- ggplot() +
+    geom_point(
+      PCA_df,
+      mapping = aes(x = y, y = x, fill = pop),
+      size = 3,
+      shape = 21
+    ) +
+    geom_text(
+      PCA_average,
+      mapping = aes(x = average_y, y = average_x, label = pop)
+    ) +
+    labs(
+      x = paste0("-PC2: ", PCA_percentages[2]),
+      y = paste0("-PC1: ", PCA_percentages[1])
+    ) +
+    coord_fixed(ratio = 1.2) +
+    theme(
+      legend.position  = "none",
+      panel.background = element_rect(
+        fill = "white",
+        color = "black"
+      ),
+      panel.grid.major = element_line(
+        color = "black",
+        linetype = "dashed",
+        linewidth = .12
+      )
+    )
+  PCA
 }
 
 nc_crop <- function(var, lon_min, lon_max, lat_min, lat_max) {
@@ -606,76 +673,17 @@ ggsave(
 )
 ```
 
-## Figure 1 - PCA 
+## Figure 1 - PCA & map
 
 ### PCA plot
 
-#### Data formatting
-
 ```{r}
-PCA_df <- data.frame(
-  "x" = -pcadapt_all_loci$scores[, 1],
-  "y" = -pcadapt_all_loci$scores[, 2],
-  "pop" = poplist_names
+PCA <- PCA_plot(
+  pcadapt_output = pcadapt_all_loci,
+  popmap = popmap,
+  x_offsets = c(0, -.02, .015, 0, 0, 0, 0, 0),
+  y_offsets = c(.04, .01, -.01, .06, .06, .06, .055, .045)
 )
-
-PCA_average <- data.frame("pop" = levels(as.factor(poplist_names)))
-for (i in 1:length(PCA_average$pop)){
-  PCA_average$average_x[i] <-
-    mean(PCA_df[PCA_df$pop == PCA_average$pop[i], "x"])
-  PCA_average$average_y[i] <-
-    mean(PCA_df[PCA_df$pop == PCA_average$pop[i], "y"])
-}
-PCA_average$pop <- c( # Rename populations with human readable syntax
-  "Cardon",
-  "Carmel",
-  "Catalina",
-  "Laguna Beach",
-  "Monterey Bay",
-  "Palos Verdes",
-  "Punta Banda",
-  "San Diego"
-)
-# Add offsets
-PCA_average$average_x <- PCA_average$average_x + c(0, -.02, .015, 0, 0, 0, 0, 0)
-
-PCA_average$average_y <-
-  PCA_average$average_y - c(.04, .01, -.01, .06, .06, .06, .055, .045)
-
-PCA_percentages <- pcadapt_all_loci$singular.values^2*100
-```
-
-#### Generate plot
-
-```{r}
-PCA <- ggplot() +
-  geom_point(
-    PCA_df,
-    mapping = aes(x = y, y = x, fill = pop),
-    size = 3,
-    shape = 21
-  ) +
-  geom_text(
-    PCA_average,
-    mapping = aes(x = average_y, y = average_x, label = pop)
-  ) +
-  labs(
-    x = paste0("-PC2: ", as.character(round(PCA_percentages[2], 2)), "%"),
-    y = paste0("-PC1: ", as.character(round(PCA_percentages[1], 2)), "%")
-  ) +
-  coord_fixed(ratio = 1.2) +
-  theme(
-    legend.position  = "none",
-    panel.background = element_rect(
-      fill = "white",
-      color = "black"
-    ),
-    panel.grid.major = element_line(
-      color = "black",
-      linetype = "dashed",
-      linewidth = .12
-    )
-  )
 ```
 
 ### Surface temperature and current map
@@ -925,7 +933,7 @@ gc()
 ```
 
 
-### Fusing PCA plot and map
+### Fuse PCA plot and map
 
 ```{r}
 PCA_map <- ggarrange(PCA, map, widths = c(1, 1.3))
