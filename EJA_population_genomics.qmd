@@ -122,7 +122,7 @@ EJA_outliers_sequences <- Get_catalog_sequences(
 )
 ```
 
-Please run a NCBI nBLAST analysis with the generated .fa file and download the result as Single-file XML2
+Please run an NCBI nBLAST analysis with the generated .fa file and download the result as Single-file XML2
 
 #### Import BLAST results saved as xml file and extract results
 
