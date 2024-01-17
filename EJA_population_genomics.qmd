@@ -46,7 +46,7 @@ library(ggnewscale)
 ## Load data analysis functions
 
 ```{r}
-source(here("tidy_functions.R"))
+source(here("functions", "tidy_functions.R"))
 ```
 
 ## All loci
@@ -287,10 +287,10 @@ EJA_catalina_outliers_ranks <- Get_outliers(
 
 # Figures
 
-## FLoad plotting functions
+## Load plotting functions
 
 ```{r}
-source(here("plot_functions.R"))
+source(here("functions", "plot_functions.R"))
 ```
 
 ## Figure 1 - Manhattan plot homemade
