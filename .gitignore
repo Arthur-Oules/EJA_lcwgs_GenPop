@@ -35,3 +35,6 @@ po/*~
 rsconnect/
 _old
 positions.txt
+_archived
+Surfperch_GenPop.Rproj
+FST_tests.qmd
