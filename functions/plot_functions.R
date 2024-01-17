@@ -1,3 +1,17 @@
+save_open_plot <- function(path, plot, width, height) {
+  ggsave(
+    path,
+    plot   = plot,
+    width  = width,
+    height = height
+  )
+  system2(
+    "open",
+    args = c("-a Preview.app", path),
+    wait = FALSE
+  )
+}
+
 manhattan_plot_custom <- function( # Draws a manhattan plot using ggplot()
   vcf_file, # vcf file from ustacks population analysis
   pcadapt_analysis, # Output from the pcadapt() function

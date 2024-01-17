@@ -53,7 +53,7 @@ source(here("functions", "tidy_functions.R"))
 
 ### pcadapt pre-analysis to chose K value for outliers selection
 
-```{r }
+```{r}
 EJA_all_loci <- read.pcadapt(# Vcf file from ustacks populations output is expected
   here(
     "data",
@@ -112,7 +112,7 @@ EJA_outliers_ranks <- Get_outliers(
 
 ### Protein sequences acquisition for all loci analysis outliers
 
-####Import and format the catalog
+#### Import and format the catalog
 
 ```{r}
 EJA_outliers_sequences <- Get_catalog_sequences(
@@ -122,11 +122,11 @@ EJA_outliers_sequences <- Get_catalog_sequences(
 )
 ```
 
-Please run an NCBI nBLAST analysis with the generated .fa file and download the result as Single-file XML2
+Please run an NCBI nBLAST analysis with the generated .fa file and download the result as Single-file XML2.
 
 #### Import BLAST results saved as xml file and extract results
 
-Please replace the second line of the XML file by "<BlastXML2>" which effectively removes the metadata from the first xml tag.
+Please replace the second line of the XML file by <BlastXML2> which effectively removes the metadata from the first xml tag.
 
 ```{r}
 EJA_outliers_query_df <- here("data", "8R1WY2TK01N-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
@@ -136,7 +136,6 @@ EJA_outliers_query_df |> saveRDS(
   file = here("output", "EJA_outliers_nBlast_results_as_data_frame.RDS")
 )
 ```
-
 
 #### Filter BLAST results
 
@@ -154,7 +153,7 @@ query_df_80_PREDICTED_unique_unique |> write.csv(
 )
 ```
 
-#### Get protein sequences from GenBank
+#### Get protein sequences from GenBank and remove miss
 
 ```{r}
 # query_df <- readRDS(here("output", "Blast_results_as_data_frame.RDS"))
@@ -164,7 +163,8 @@ EJA_outliers_protein_sequences_matches <- Get_protein_sequences(
   filter(!sequences == "")
 ```
 
-Save output as fasta file which can be sent to [blast KOALA](https://www.kegg.jp/blastkoala/).
+#### Save output as fasta file which can be sent to [blast KOALA](https://www.kegg.jp/blastkoala/).
+
 ```{r}
 #Write protein sequences as fasta file with GenBank access number as sequence names
 sink(here("output", "EJA_outliers_protein_sequences.fa"))
@@ -293,7 +293,7 @@ EJA_catalina_outliers_ranks <- Get_outliers(
 source(here("functions", "plot_functions.R"))
 ```
 
-## Figure 1 - Manhattan plot homemade
+## Figure 1 - Manhattan plot home-made
 
 ### Getting data
 
@@ -307,7 +307,7 @@ EJA_all_loci_vcf <- here(
   read.vcfR() # vcf file from pcadapt analysis output is expected
 ```
 
-### Generate plot without points labels
+### Generate plot without labels
 
 ```{r}
 manhattan_plot <- manhattan_plot_custom(
@@ -316,20 +316,15 @@ manhattan_plot <- manhattan_plot_custom(
   n_chromosome     = 24
 )
 
-ggsave(
+save_open_plot(
   here("output", "plots", "manhattan_plot.pdf"),
-  plot = manhattan_plot,
-  width = 16,
+  plot   = manhattan_plot,
+  width  = 16,
   height = 7
-)
-system2(
-  "open",
-  args = c("-a Preview.app", here("output", "plots", "manhattan_plot.pdf")),
-  wait = FALSE
 )
 ```
 
-### Generate plot with points labels
+### Generate plot with labels
 
 ```{r}
 manhattan_plot_labels <- manhattan_plot_custom(
@@ -339,19 +334,11 @@ manhattan_plot_labels <- manhattan_plot_custom(
   outliers_ranks   = EJA_outliers_ranks
 )
 
-ggsave(
+save_open_plot(
   here("output", "plots", "manhattan_plot_labels.pdf"),
-  plot = manhattan_plot_labels,
-  width = 16,
+  plot   = manhattan_plot_labels,
+  width  = 16,
   height = 7
-)
-system2(
-  "open",
-  args = c(
-    "-a Preview.app",
-    here("output", "plots", "manhattan_plot_labels.pdf")
-  ),
-  wait = FALSE
 )
 ```
 
@@ -370,12 +357,10 @@ PCA <- PCA_plot(
 
 ### Surface temperature and current map
 
-
 #### Getting data
 
-Extracting ocean surface temperature and current from [BRAN2020](https://research.csiro.au/bluelink/global/reanalysis/) 
-[Dataset](https://dapds00.nci.org.au/thredds/catalog/gb6/BRAN/BRAN2020/catalog.html).\
-[Tutorial on NetCDF4 files](https://towardsdatascience.com/how-to-crack-open-netcdf-files-in-r-and-extract-data-as-time-series-24107b70dcd)
+Surface temperature and current speed come from the [BRAN2020](https://research.csiro.au/bluelink/global/reanalysis/) [Dataset](https://dapds00.nci.org.au/thredds/catalog/gb6/BRAN/BRAN2020/catalog.html).\
+[Tutorial on NetCDF4 files](https://towardsdatascience.com/how-to-crack-open-netcdf-files-in-r-and-extract-data-as-time-series-24107b70dcd).
 
 ```{r}
 nc_temp <- nc_open(here("data","ocean_temp_ann_2022.nc"))
@@ -422,17 +407,6 @@ map_data_lowres_df <- crop_lonlat |>
   mutate("temp" = crop_temp, "u" = crop_u_lowres, "v" = crop_v_lowres)
 
 current_uv_scalar <- 2 # Set scalar for better vector visibility, don"t forget when setting scale in final graph
-```
-
-###### Memory cleanup
-
-```{r}
-rm(
-  nc_temp, nc_u, nc_v,
-  lon, lat,
-  crop_temp, crop_u_lowres, crop_v_lowres
-) # Clear unused big variables
-gc()
 ```
 
 ##### Landmass
@@ -591,45 +565,36 @@ map <- ggplot() +
     labels = unit_format(suffix = "°N", sep = "")
   )
 
-ggsave(
+save_open_plot(
   here("output", "plots", "temp_current_map.pdf"),
   plot   = map,
   width  = 9,
   height = 9
 )
-
-system2(
-  "open",
-  args = c("-a Preview.app", here("output", "plots", "temp_current_map.pdf")),
-  wait = FALSE
-)
 ```
 
-##### Memory cleanup
+### Memory cleanup
 
 ```{r}
-rm(map, states,
+rm(nc_temp, nc_u, nc_v,
+   lon, lat,
+   crop_temp, crop_u_lowres, crop_v_lowres,
+   map, states,
    sample_sites, states_labels, city_labels, ocean_labels,
    current_uv_scalar)
 gc()
 ```
-
 
 ### Fuse PCA plot and map
 
 ```{r}
 PCA_map <- ggarrange(PCA, map, widths = c(1, 1.3))
 
-ggsave(
+save_open_plot(
   here("output", "plots", "pca_map.pdf"),
   plot   = PCA_map,
   width  = 14,
   height = 9
-)
-system2(
-  "open",
-  args = c("-a Preview.app", here("output", "plots", "pca_map.pdf")),
-  wait = FALSE
 )
 ```
 
@@ -648,7 +613,6 @@ crop_u <- nc_u |>
 crop_v <- nc_v |>
   nc_crop(lon_min, lon_max, lat_min, lat_max)
 ```
-
 
 ```{r}
 catalina_df <-
@@ -747,17 +711,12 @@ bathy <- ggplot() +
     legend.position = c(.93, .73),
     plot.margin     = margin(t = 0, r = 1, b = 0, l = .5, unit = "cm")
   )
-  
-ggsave(
+
+save_open_plot(
   here("output", "plots", "bathy.pdf"),
-  plot = bathy,
-  width = 9,
+  plot   = bathy,
+  width  = 9,
   height = 7
-)
-system2(
-  "open",
-  args = c("-a Preview.app", here("output", "plots", "bathy.pdf")),
-  wait = FALSE
 )
 ```
 
@@ -845,17 +804,11 @@ map_blank <- ggplot() +
   ) +
   theme(panel.background = element_rect("lightblue"))
 
-ggsave(
+save_open_plot(
   here("output", "plots", "map_blank.pdf"),
-  plot = map_blank,
-  width = 7.5,
+  plot   = map_blank,
+  width  = 7.5,
   height = 7.5
-)
-
-system2(
-  "open",
-  args = c("-a Preview.app", here("output", "plots", "map_blank.pdf")),
-  wait = FALSE
 )
 ```
 
@@ -905,19 +858,11 @@ koala_barplot <- ggplot(
     axis.text.x       = element_blank(),
     axis.title.x      = element_blank()
   )
-ggsave(
-  filename = here("external_results", "blast_koala_bar_plot.pdf"),
-  plot     = koala_barplot,
-  width    = 21,
-  height   = 10,
-  units    = "cm"
-)
-system2(
-  "open",
-  args = c(
-    "-a Preview.app",
-    here("external_results", "blast_koala_bar_plot.pdf")
-  ),
-  wait = FALSE
+
+save_open_plot(
+  here("external_results", "blast_koala_bar_plot.pdf"),
+  plot   = koala_barplot,
+  width  = 8,
+  height = 4
 )
 ```
