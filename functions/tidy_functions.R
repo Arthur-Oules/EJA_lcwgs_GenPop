@@ -85,18 +85,33 @@ Get_catalog_sequences <- function(catalog_path,
 
 XML_to_DF <- function(XML) {
   # Initialisation
-  end <- length(xml_find_all(XML, ".//BlastOutput2"))
+  query_df <- data.frame(
+    matrix(
+      NA,
+      nrow = length(xml_find_all(XML, ".//Hit")),
+      ncol  = 7
+    )
+  )
+  colnames(query_df) <- c(
+    "query_number",
+    "hit_number",
+    "accession_number",
+    "title",
+    "organism",
+    "bit_score",
+    "eval_number"
+  )
+  queries <- xml_find_all(XML, ".//BlastOutput2")
+  end <- length(queries)
   counter <- 0
-  query_df <- data.frame()
   # Main loop
-  for (query in xml_find_all(XML, ".//BlastOutput2")) { # Reads XML BLAST results as data frame
+  for (query in queries) { # Reads XML BLAST results as data frame
     counter <- counter + 1
-    # query_id <- 
     print(paste0("Extracting query ", counter, "/", end))
     print("Parsing hits")
     for (Hit in xml_find_all(query, ".//Hit")) { # For each locus get all hits
       match_1 <- xml_find_all(Hit, ".//Hsp") |> _[1] # Keep best match
-      new_row <- data.frame(
+      query_df[which(rowSums(is.na(query_df)) > 0)[1], ] <- data.frame(
         "query_number"     = xml_find_all(query, ".//query-title") |>
           xml_text() |> 
           as.numeric(),
@@ -120,8 +135,6 @@ XML_to_DF <- function(XML) {
           xml_text() |>
           as.numeric()
       )
-      query_df <- query_df |>
-        bind_rows(new_row)
     }
     print("End of parsing")
   }
