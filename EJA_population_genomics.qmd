@@ -869,3 +869,42 @@ save_open_plot(
   height = 4
 )
 ```
+# Tests
+
+##Data
+```{r}
+california_df <-
+  getNOAA.bathy(
+    lon1 = -130,
+    lon2 = -110,
+    lat1 = 20,
+    lat2 = 40,
+    resolution = .5
+  ) |> 
+  fortify.bathy()
+```
+
+## Generate map
+
+```{r}
+topo <- ggplot() +
+  geom_raster(data = california_df, mapping = aes(x = x, y = y, fill = z)) +
+  scale_fill_etopo() +
+  # Crop map
+  coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
+  # Axis labels and theme
+  labs(x = "Longitude", y = "Latitude") +
+  theme(
+    plot.margin = margin(t = 0, r = 1, b = 0, l = .5, unit = "cm")
+  )
+topo
+
+save_open_plot(
+  here("output", "plots", "californioa_topo.pdf"),
+  plot   = topo,
+  width  = 9,
+  height = 7
+)
+```
+```
+
