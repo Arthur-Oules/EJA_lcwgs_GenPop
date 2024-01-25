@@ -131,21 +131,28 @@ Please run an NCBI nBLAST analysis with the generated .fa file and download the 
 Please replace the second line of the XML file by <BlastXML2> which effectively removes the metadata from the first xml tag.
 
 ```{r}
-EJA_outliers_query_df <- here("data", "8R1WY2TK01N-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
+# EJA_outliers_query_df <- here("data", "8R1WY2TK01N-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
+#   read_xml() |>
+#   XML_to_df_old()
+# EJA_outliers_query_df |> saveRDS(
+#   file = here("output", "EJA_outliers_nBlast_results_as_data_frame.RDS")
+# )
+
+EJA_outliers_query_tib <- here("data", "8R1WY2TK01N-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
   read_xml() |>
-  XML_to_DF()
-EJA_outliers_query_df |> saveRDS(
-  file = here("output", "EJA_outliers_nBlast_results_as_data_frame.RDS")
+  XML_to_df()
+EJA_outliers_query_tib |> saveRDS(
+  file = here("output", "EJA_outliers_nBlast_results_as_tibble.RDS")
 )
 ```
 
 #### Filter BLAST results
 
 ```{r}
-query_df_80_PREDICTED_unique_unique <- query_df |>
+query_df_80_PREDICTED_unique_unique <- EJA_outliers_query_tib |>
   filter(bit_score >= 80) |> # Keep only significant matches
   filter(grepl("PREDICTED", title)) |> # Keep only PREDICTED proteins. Removes non coding sequences and whole chromosome matches (causes problem when searching GeneBank)
-  filter(!duplicated(query_number)) |> # Keep the first match for each locus
+  filter(!duplicated(Rank)) |> # Keep the first match for each locus
   filter(!duplicated(accession_number))  # Removes duplicated accession numbers
 
 dim(query_df_80_PREDICTED_unique_unique)[1]

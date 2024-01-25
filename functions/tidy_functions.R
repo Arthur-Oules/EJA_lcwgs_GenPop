@@ -83,13 +83,13 @@ Get_catalog_sequences <- function(catalog_path,
   outliers_sequences
 }
 
-XML_to_DF <- function(XML) {
+XML_to_df_old <- function(XML) {
   # Initialisation
   query_df <- data.frame(
     matrix(
       NA,
       nrow = length(xml_find_all(XML, ".//Hit")),
-      ncol  = 7
+      ncol = 7
     )
   )
   colnames(query_df) <- c(
@@ -139,6 +139,53 @@ XML_to_DF <- function(XML) {
     print("End of parsing")
   }
   query_df
+}
+
+XML_to_df <- function(xml_file){
+  xml_tib <- xml_file |> as_list() |> as_tibble() |> 
+    mutate(BlastXML2 = map(BlastXML2, ~if(is.list(.x)) .x else list(.x))) |>
+    unnest_longer(BlastXML2) |>
+    filter(BlastXML2_id == "report") |>
+    unnest_wider(BlastXML2) |> 
+    unnest_longer(Report) |>
+    filter(Report_id == "results") |> 
+    unnest_wider(Report) |> 
+    unnest_longer(Results) |>
+    unnest_wider(Results) |>
+    unnest_longer(Search) |>
+    filter((Search_id == "query-title") | (Search_id == "hits")) |>
+    select(c(Search, Search_id)) |>
+    mutate(
+      Rank = ifelse(Search_id == "hits", rep(Search[Search_id == "query-title"], each = 2), NA)
+    ) |>
+    filter(Search_id == "hits") |>
+    select(-Search_id) |>
+    unnest(Rank) |> unnest(c(Search, Rank)) |>
+    unnest_longer(Search, names_repair = "universal") |>
+    filter(Search_id != "len") |> 
+    mutate(
+      Hit = rep(Search[Search_id == "num"], each = 3)
+    ) |> 
+    filter(Search_id != "num") |> 
+    unnest(Hit) |> unnest(Hit) |>
+    unnest_longer(Search, names_repair = "universal")
+  
+  metadata <- xml_tib |>
+    filter(Search_id...2 == "HitDescr") |>
+    unnest_wider(Search) |>
+    select(c(accession_number = accession, title, sciname, Rank, Hit)) |>
+    unnest(c(accession_number, title, sciname))
+  
+  xml_tib <- xml_tib |>
+    filter(Search_id...2 == "Hsp") |> 
+    unnest_wider(Search) |>
+    select(num, bit_score = "bit-score", evalue, Rank, Hit) |>
+    unnest(cols = c(num, bit_score, evalue)) |> 
+    left_join(x = _, y = metadata, by = join_by(Rank == Rank, Hit == Hit), relationship = "many-to-many") |> 
+    select(Rank, Hit, Hits = num, accession_number, title, sciname, bit_score, evalue) |>
+    mutate_at(vars(Rank, Hit, Hits, bit_score, evalue), as.numeric) |> 
+    unnest(cols = c(accession_number, title, sciname))
+  xml_tib
 }
 
 Get_protein_sequences <- function(query) {
