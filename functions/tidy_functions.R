@@ -188,32 +188,29 @@ XML_to_df <- function(xml_file){
   xml_tib
 }
 
-Get_protein_sequences <- function(query) {
-  # Initialisation
-  n_protein <- dim(query)[1]
-  
-  prot_sequences <- data.frame(
-    "accession_number"  = query$accession_number,
-    "sequences" = rep(NA, n_protein)
-  )
-  
-  pb <- txtProgressBar(min = 0, max = n_protein, initial = 0)
-  for (i in 1:n_protein) {
-    sequence_info <- entrez_fetch( # Fetch protein info from GenBank
-      "nuccore",
-      id      = prot_sequences$accession_number[i],
-      rettype = "fasta_cds_aa",
-      retmode = "text"
-    )
-    prot_sequences$sequences[i] <- # Extract protein sequences from fetch result
-      sequence_info |>
-      strsplit("]") |>
-      unlist()|>
-      tail(1) |> 
-      gsub(pattern = "\n", replacement = "",  x = _)
-    
-    setTxtProgressBar(pb, i)
-  }
-  close(pb)
-  prot_sequences
+Get_protein_sequences <- function(df, silent = TRUE) {
+  df |>
+    select(accession_number) |>
+    mutate(
+      Sequences = accession_number |>
+        map(
+          \(x) entrez_fetch(
+            db      = "nuccore",
+            id      = x,
+            rettype = "fasta_cds_aa",
+            retmode = "text"
+          )
+        ) |> 
+        map(
+          \(str) {
+            str |> 
+              strsplit("]") |>
+              unlist() |>
+              tail(1) |>
+              gsub(pattern = "\n", replacement = "",  x = _)
+          }
+        )
+    ) |>
+    unnest(Sequences) |>
+    filter(!Sequences == "")
 }

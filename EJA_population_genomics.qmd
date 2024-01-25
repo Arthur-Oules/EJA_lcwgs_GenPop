@@ -166,10 +166,8 @@ query_df_80_PREDICTED_unique_unique |> write.csv(
 
 ```{r}
 # query_df <- readRDS(here("output", "Blast_results_as_data_frame.RDS"))
-EJA_outliers_protein_sequences_matches <- Get_protein_sequences(
-  query_df_80_PREDICTED_unique_unique
-) |>
-  filter(!sequences == "")
+EJA_outliers_protein_sequences_matches <- query_df_80_PREDICTED_unique_unique |>
+  Get_protein_sequences()
 ```
 
 #### Save output as fasta file which can be sent to [blast KOALA](https://www.kegg.jp/blastkoala/).
