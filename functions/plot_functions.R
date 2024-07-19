@@ -12,12 +12,10 @@ save_open_plot <- function(path, plot, width, height) {
   )
 }
 
-manhattan_plot_custom <- function( # Draws a manhattan plot using ggplot()
-  vcf_file, # vcf file from ustacks population analysis
-  pcadapt_analysis, # Output from the pcadapt() function
-  n_chromosome, # Number of effective chromosomes
-  outliers_ranks = NULL # Output from the Get_outliers() function
-) {
+manhattan_plot_custom <- function(vcf_file,                # vcf file from ustacks population analysis
+                                  pcadapt_analysis,        # Output from the pcadapt() function
+                                  n_chromosome,            # Number of effective chromosomes
+                                  outliers_ranks = NULL) { # Output from the Get_outliers() function
   chromosome_names <- vcf_file |> # Extract chromosome number map from vcf info
     getFIX() |>
     _[, "CHROM"] |>
@@ -30,12 +28,12 @@ manhattan_plot_custom <- function( # Draws a manhattan plot using ggplot()
   
   for (i in 1:n_chromosome){
     mid_pos[i] <-
-      Position(function(x) x == i, chromosome_names) + count_pos$Freq[i]/2
+      Position(\(x) x == i, chromosome_names) + count_pos$Freq[i]/2
   }
   
   notNA.idx <- !is.na(pcadapt_analysis$pvalues)
   
-  manhattan_df <- data.frame(
+  manhattan_df <- tibble(
     x   = which(notNA.idx), # Catalog rank of locus with non-NA pcadapt p-value 
     y   = -as.numeric( # Gets non adjusted -log10(pvalues) without infinite values
       pchisq(
@@ -82,69 +80,61 @@ manhattan_plot_custom <- function( # Draws a manhattan plot using ggplot()
   }
 }
 
-PCA_plot <- function(pcadapt_output, popmap, x_offsets, y_offsets) {
-  #Format data frame
-  PCA_df <- data.frame(
-    "x"   = -pcadapt_output$scores[, 1],
-    "y"   = -pcadapt_output$scores[, 2],
-    "pop" = popmap
+PCA_plot <- function(pcadapt_output,
+                     popmap,
+                     x_offsets = NULL,
+                     y_offsets = NULL) {
+  # Format data frame
+  PCA_df <- tibble(
+    x   = -pcadapt_output$scores[, 1],
+    y   = -pcadapt_output$scores[, 2],
+    pop = popmap
   )
   
-  populations <- popmap |> as.factor() |> levels()
+  # Compute coords averages by populations
+  PCA_average <- PCA_df |>
+    group_by(pop) |>
+    summarise(average_x = mean(x), average_y = mean(y)) |>
+    mutate(
+      pop = pop |>
+        gsub(pattern = "_", x = _, replacement = " ") |>
+        str_to_title()
+    )
   
-  PCA_average <- data.frame("pop" = populations)
-  for (i in 1:length(PCA_average$pop)){
-    PCA_average$average_x[i] <- PCA_df |> 
-      filter(pop == PCA_average$pop[i]) |> 
-      pull(x) |>
-      mean()
-    PCA_average$average_y[i] <- PCA_df |> 
-      filter(pop == PCA_average$pop[i]) |> 
-      pull(y) |>
-      mean()
-  }
-  
-  PCA_average$pop <- populations |>
-    str_to_title() |>
-    gsub(pattern = "_", x = _, replacement = " ")
-  
-  # Add offsets
-  PCA_average$average_x <- PCA_average$average_x + x_offsets
-  
-  PCA_average$average_y <- PCA_average$average_y - y_offsets
-  
+  # Compute axes percentages
   PCA_percentages <- pcadapt_output$singular.values^2 |> percent()
   
-  # ggplot prompt
   PCA <- ggplot() +
     geom_point(
       PCA_df,
       mapping = aes(x = y, y = x, fill = pop),
-      size = 3,
-      shape = 21
-    ) +
-    geom_text(
-      PCA_average,
-      mapping = aes(x = average_y, y = average_x, label = pop)
+      size    = 3,
+      shape   = 21
     ) +
     labs(
       x = paste0("-PC2: ", PCA_percentages[2]),
       y = paste0("-PC1: ", PCA_percentages[1])
     ) +
     coord_fixed(ratio = 1.2) +
-    theme(
-      legend.position  = "none",
-      panel.background = element_rect(
-        fill = "white",
-        color = "black"
-      ),
-      panel.grid.major = element_line(
-        color = "black",
-        linetype = "dashed",
-        linewidth = .12
-      )
+    theme_minimal()
+  
+  if (is.null(x_offsets) | is.null(y_offsets) == TRUE) {
+    PCA + geom_text_repel(
+      PCA_average,
+      mapping = aes(x = average_y, y = average_x, label = pop)
     )
-  PCA
+  } else {
+    # Add offsets
+    PCA_average <- PCA_average |> mutate(average_x = average_x + x_offsets)
+    PCA_average <- PCA_average |> mutate(average_y = average_y + y_offsets)
+    
+    PCA +
+    geom_text(
+      PCA_average,
+      mapping = aes(x = average_y, y = average_x, label = pop)
+    ) +
+    theme(legend.position = "none")
+  }
 }
 
 nc_crop <- function(var, lon_min, lon_max, lat_min, lat_max) {

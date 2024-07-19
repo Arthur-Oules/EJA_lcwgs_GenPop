@@ -73,6 +73,7 @@ Get_catalog_sequences <- function(catalog_path,
       file = here("output", paste0(filename, ".csv"))
     )
     
+    #Write as .fa file
     sink(here("output", paste0(filename, ".fa")))
     for (i in 1:dim(outliers_sequences)[1]){
       paste0(">", outliers_sequences$catalog_rank[i], "\n") |> cat(append = TRUE)
