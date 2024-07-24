@@ -13,12 +13,14 @@ editor: source
 
 # Mandatory
 library(here)
+library(tidyverse)
 
 # Data analysis
 library(pcadapt)
 library(vcfR)
 library(adegenet)
 library(ape)
+library(LEA)
 
 # External data acquisition for maps
 library(ncdf4)
@@ -34,7 +36,6 @@ library(xml2) #Allows xml file manipulation
 # Making graph
 library(patchwork)
 library(plotly)
-library(tidyverse)
 library(sf)
 library(ggrepel)
 library(ggpubr)
@@ -108,9 +109,12 @@ hist(
 
 ```{r}
 EJA_outliers_ranks <- Get_outliers(
-  here("data", "ustacks_populations_output", "all_loci"),
-  pcadapt  = pcadapt_all_loci,
-  filename = "EJA"
+  vcf_path      = here("data", "ustacks_populations_output", "all_loci",
+                       "populations.snps.vcf"),
+  phistats_path = here("data", "ustacks_populations_output", "all_loci",
+                       "populations.phistats.tsv"),
+  pcadapt       = pcadapt_all_loci,
+  filename      = "EJA"
 )
 ```
 
@@ -198,8 +202,6 @@ Table_2 <- EJA_outliers_blast_tib_80_PREDICTED |>
   write.csv(file = here("output", "Table_2.csv"), row.names = FALSE)
 ```
 
-
-
 ## Blacklist (neutral loci)
 
 ```{r}
@@ -216,7 +218,6 @@ pcadapt_blacklist <- read.pcadapt( # vcf file from pcadapt analysis output is ex
 plot(pcadapt_blacklist, option = "screeplot")
 plot(pcadapt_blacklist, option = "scores", pop = popmap, i = 1, j = 2)
 ```
-
 
 ## Whitelist (outliers loci)
 
@@ -235,7 +236,6 @@ pcadapt_whitelist <- pcadapt(input = EJA_whitelist, K = 20)
 plot(pcadapt_whitelist, option = "screeplot")
 plot(pcadapt_whitelist, option = "scores", pop = popmap, i = 1, j = 2)
 ```
-
 
 ## Analysis excluding Catalina
 
@@ -296,30 +296,42 @@ EJA_catalina_outliers_ranks <- Get_outliers(
 )
 ```
 
-
 ## Using low coverage data
 
-First make .bed/.bim/.fam file using plink 2 "--vcf [.vcf.gz filepath] --make-bed [filename]"
+### Using all populations
 
-### Preanalysis to determine optimal K value
+#### Convert vcf to bed file using plink2
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --vcf 8-Embiotoca_filtered.vcf.gz --make-bed --out 8-Embiotoca_filtered
+```
+
+#### Preanalysis to determine optimal K value
+
 ```{r}
-EJA_lcwgs <- read.pcadapt(here("data", "lcwgs", "8-Embiotoca_filtered.bed"), type = "bed")
+EJA_lcwgs <- read.pcadapt(
+  here("data", "lcwgs", "8-Embiotoca_filtered.bed"),
+  type = "bed"
+)
 
 pcadapt(input = EJA_lcwgs, K = 20) |>
   plot(option = "screeplot")
 ```
 
-K = 7 seems correct
+K = 4 seems correct
 
-### Analysis using K = 7
+#### Analysis using K = 4
+
 ```{r}
 popmap_lcwgs <- c(
-  rep("bodega_bay", 5), # BBA
-  rep("big_creek", 13), # BIGC
+  rep("bodega_bay", 5), # BB
+  rep("big_creek", 13), # BIGC -> BCR
   rep("catalina_island", 11), # CAT
   rep("elkhorn", 6), # ELK
   rep("guadalupe_island", 10), # GUA
-  rep("lovers_point", 13), # LP
+  rep("lovers_point", 13), # HOP -> Pacific Grove PGR 
   rep("isla_san_jeronimo", 11), # ISJ
   rep("laguna_beach", 13), # LB
   rep("point_dume", 5), # PD
@@ -331,14 +343,19 @@ popmap_lcwgs <- c(
   rep("santa_cruz_harbour", 10) # SCH
 )
 
-pcadapt_lcwgs <- EJA_lcwgs |> pcadapt(K = 7)
+pcadapt_lcwgs <- EJA_lcwgs |> pcadapt(K = 4)
 ```
 
-### Associated exploratory plots
+#### Associated exploratory plots
+
 ```{r}
 pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 1, j = 2)
+pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 2, j = 3)
+pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 3, j = 4)
 
 pcadapt_lcwgs |> plot(option = "qqplot")
+
+pcadapt_lcwgs |> plot(option = "manhattan")
 
 pcadapt_lcwgs$pvalues |> hist(
   xlab   = "p-values",
@@ -348,15 +365,277 @@ pcadapt_lcwgs$pvalues |> hist(
 )
 ```
 
-### Outliers identification
+### Generating whitelist
+
 ```{r}
-EJA_lcwgs_outliers_ranks <- Get_outliers(
-  here("data", "lcwgs", "all_loci"),
-  pcadapt  = pcadapt_all_loci,
-  filename = "EJA"
+EJA_lcwgs_vcf |>
+  vcfR2tidy() |> 
+  _$gt$Indiv |> 
+  unique() |>
+  {\(x) {
+    x[!(grepl(pattern = "SCL", x = x) | grepl(pattern = "GUA", x = x) | grepl(pattern = "CAT", x = x))]}
+  }() |> 
+  paste(collapse = "\n") |> 
+  write_file(here("plink2", "whitelist.txt"))
+```
+
+### Excluding islanders
+#### Generating bed file
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist.txt --make-bed --out 8-Embiotoca_filtered_whitelisted
+```
+
+#### Preanalysis to determine optimal K value
+
+```{r}
+EJA_lcwgs_coast <- read.pcadapt(
+  here("data", "lcwgs", "8-Embiotoca_filtered_whitelisted.bed"),
+  type = "bed"
+)
+
+pcadapt(input = EJA_lcwgs_coast, K = 20) |>
+  plot(option = "screeplot")
+```
+
+K = 4 seems correct
+
+#### Analysis using K = 3
+
+```{r}
+popmap_lcwgs_coast <- c(
+  rep("bodega_bay", 5), # BB
+  rep("big_creek", 13), # BIGC -> BCR
+  rep("elkhorn", 6), # ELK
+  rep("lovers_point", 13), # HOP -> Pacific Grove PGR 
+  rep("isla_san_jeronimo", 11), # ISJ
+  rep("laguna_beach", 13), # LB
+  rep("point_dume", 5), # PD
+  rep("santa_barbara_island", 13), # SB
+  rep("la_jolla_san_diego", 13), # SD
+  rep("tomales_bay", 1), # TB
+  rep("redondo_beach", 10), # RB
+  rep("santa_cruz_harbour", 10) # SCH
+)
+
+pcadapt_lcwgs_coast <- EJA_lcwgs_coast |> pcadapt(K = 3)
+```
+
+#### Associated exploratory plots
+
+```{r}
+coast_PCA_1_2 <- pcadapt_lcwgs_coast |> plot(
+  option = "scores",
+  pop    = popmap_lcwgs_coast,
+  i = 1, j = 2
+) +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "lcwgs", "coast_PCA_1_2.pdf"),
+  plot   = coast_PCA_1_2,
+  width  = 10,
+  height = 8
+)
+
+coast_PCA_2_3 <- pcadapt_lcwgs_coast |> plot(
+  option = "scores",
+  pop    = popmap_lcwgs_coast,
+  i = 2, j = 3
+) +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "lcwgs", "coast_PCA_2_3.pdf"),
+  plot   = coast_PCA_2_3,
+  width  = 10,
+  height = 8
+)
+
+pcadapt_lcwgs_coast |> plot(option = "qqplot") + theme_minimal()
+
+coast_manhattan <- pcadapt_lcwgs_coast |>
+  plot(option = "manhattan") + theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "lcwgs", "coast_manhattan.pdf"),
+  plot   = coast_manhattan,
+  width  = 16,
+  height = 4
+)
+
+pcadapt_lcwgs_coast$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
 )
 ```
 
+### Using only islanders
+
+#### Generating bed file
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --remove whitelist.txt --make-bed --out 8-Embiotoca_filtered_blacklisted
+```
+
+#### Preanalysis to determine optimal K value
+
+```{r}
+EJA_lcwgs_islands <- read.pcadapt(
+  here("data", "lcwgs", "8-Embiotoca_filtered_blacklisted.bed"),
+  type = "bed"
+)
+
+pcadapt(input = EJA_lcwgs_islands, K = 2) |> plot(option = "screeplot")
+```
+
+#### Analysis using K = 2
+
+```{r}
+popmap_lcwgs_islands <- c(
+  rep("catalina_island", 11), # CAT
+  rep("guadalupe_island", 10), # GUA
+  rep("san_clemente_island", 10) # SCL
+)
+
+pcadapt_lcwgs_islands <- EJA_lcwgs_islands |> pcadapt(K = 2)
+```
+
+#### Associated exploratory plots
+
+```{r}
+islands_PCA_1_2 <- pcadapt_lcwgs_islands |> plot(
+  option = "scores",
+  pop    = popmap_lcwgs_islands,
+  i = 1, j = 2
+) +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "lcwgs", "islands_PCA_1_2.pdf"),
+  plot   = islands_PCA_1_2,
+  width  = 10,
+  height = 8
+)
+
+pcadapt_lcwgs_islands |> plot(option = "qqplot") + theme_minimal()
+
+islands_manhattan <- pcadapt_lcwgs_islands |>
+  plot(option = "manhattan") + theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "lcwgs", "islands_manhattan.pdf"),
+  plot   = islands_manhattan,
+  width  = 16,
+  height = 4
+)
+
+pcadapt_lcwgs_islands$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
+```
+# Admixture analysis
+
+## Convert data to ped format for LEA import using plink2
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+./plink2 --vcf 8-Embiotoca_filtered.vcf.gz --export ped --out 8-Embiotoca_filtered
+```
+
+## Read and convert data
+```{r}
+EJA_lcwgs_tb <- EJA_lcwgs_vcf |>
+  vcfR2tidy()
+
+ped2geno(
+  input.file  = here("plink2", "8-Embiotoca_filtered.ped"),
+  output.file = here("data", "lcwgs", "8-Embiotoca_filtered.geno")
+)
+```
+
+## Run analysis
+```{r}
+snmf_analysis <- snmf(
+  here("data", "lcwgs", "8-Embiotoca_filtered.geno"),
+  project = "continue",
+  K       = 5:8,
+  entropy = TRUE
+)
+```
+
+## Plot cross entropy to chose value of K
+```{r}
+plot(snmf_analysis)
+```
+
+## Rerun multiple times
+```{r}
+snmf_analysis <- snmf(
+  here("data", "lcwgs", "8-Embiotoca_filtered.geno"),
+  project     = "continue",
+  repetitions = 100,
+  K           = 6,
+  entropy     = TRUE
+)
+```
+
+## Plot results for K = 6
+```{r}
+barchart(
+  snmf_analysis,
+  K         = 6,
+  run       = which.min(cross.entropy(snmf_analysis, K = 6)),
+  col       = viridis(n = 6, option = "turbo"),
+  sort.by.Q = FALSE
+)
+```
+
+## Pretty plot
+```{r}
+ID_ordered <- read.table(here("data", "lcwgs", "Individuals_plot_order.txt")) |> unlist() |> as.vector() 
+admixture_plot <- read_table(
+  here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K6", "run1",
+       "8-Embiotoca_filtered_r1.6.Q"),
+  col_names = paste0("Pop ", seq(1, 6))
+) |> 
+  mutate(Individuals = EJA_lcwgs_tb$gt$Indiv |> unique()) |> 
+  relocate(Individuals) |> 
+  pivot_longer(
+    -c(Individuals),
+    names_to  = "Populations",
+    values_to = "Ancestry proportions"
+  ) |> 
+  ggplot(
+    aes(
+      x    = factor(
+        Individuals,
+        levels = ID_ordered
+      ),
+      y    = `Ancestry proportions`,
+      fill = Populations
+    )
+  ) +
+  geom_col(position = "stack", width = 1) +
+  scale_fill_viridis(discrete = TRUE, option = "turbo") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "lcwgs", "admixture_plot_K=6.pdf"),
+  plot   = admixture_plot,
+  width  = 16,
+  height = 6
+  )
+```
 
 # Figures
 
@@ -416,6 +695,10 @@ save_open_plot(
 ### Low coverage
 
 #### Getting data
+
+```{r}
+plot(pcadapt_lcwgs, option = "manhattan")
+```
 
 ```{r}
 EJA_lcwgs_vcf <- here("data", "lcwgs", "8-Embiotoca.pruned.vcf.gz") |>
@@ -718,7 +1001,6 @@ save_open_plot(
 )
 ```
 
-
 ### Low coverage
 
 #### PCA plot
@@ -1020,7 +1302,6 @@ save_open_plot(
 )
 ```
 
-
 ## Figure 3? - Bathymetry
 
 ### Generating bathymetry map
@@ -1288,4 +1569,35 @@ save_open_plot(
   width  = 8,
   height = 4
 )
+```
+
+# vcf manipulations
+
+```{r}
+vcf_info <- EJA_lcwgs_vcf |> getFIX() |> as_tibble()
+
+chromosomes_length_plot <- vcf_info |>
+  # arrange(desc(n)) |>
+  ggplot() +
+  geom_bar(aes(x = factor(CHROM, levels = CHROM |> unique()))) +
+  labs(x = "Chromosomes", y = "Length") +
+  theme_classic() +
+  theme(axis.text.x = element_text(size = 6, angle = 90, vjust = 0.5, hjust = 1))
+
+save_open_plot(
+  here("output", "plots", "lcwgs", "chromosomes_length.pdf"),
+  plot   = chromosomes_length_plot,
+  width  = 16,
+  height = 4
+)
+```
+
+```{r}
+# test_matrix <- EJA_lcwgs_vcf |>
+#   extract.gt() |> 
+#   read.pcadapt()
+# 
+# test_matrix |> pcadapt(K = 20) |> plot(option = "screeplot")
+# 
+# test |> pcadapt(K = 4) |> plot(option = "scores", pop = popmap_lcwgs, i = 1, j = 2)
 ```

@@ -5,8 +5,11 @@ reduce_all_numeric <- function(liste) {
   liste
 }
 
-Get_outliers <- function(vcf_path, pcadapt, filename = NULL) {
-  vcf_to_catalog_ranks <- paste0(vcf_path, "/populations.snps.vcf") |> # Vcf file from ustacks populations output is expected
+Get_outliers <- function(vcf_path,
+                         phistats_path = NULL,
+                         pcadapt,
+                         filename = NULL) {
+  vcf_to_catalog_ranks <- vcf_path |> # Vcf file from ustacks populations output is expected
     read.vcfR() |>
     getID() |>
     strsplit(split = ":") |>
@@ -18,20 +21,23 @@ Get_outliers <- function(vcf_path, pcadapt, filename = NULL) {
   
   outliers_catalog_ranks <- vcf_to_catalog_ranks[outliers_vcf_ranks]
   
-  outliers_phi_st_filtered <- read.table( # tsv file from ustacks populations output is expected
-    file             = paste0(vcf_path, "/populations.phistats.tsv"),
-    header           = FALSE,
-    sep              = "\t",
-    skip             = 9,
-    stringsAsFactors = FALSE
-  ) |>
-    select(c(1, 4)) |>
-    rename("catalog_rank" = V1, "phi_st" = V4) |> 
-    filter(catalog_rank %in% outliers_catalog_ranks) |>
-    filter(phi_st > .1)
-  paste0(
-    "There are ", dim(outliers_phi_st_filtered)[1], " outliers with a phi_st > 0.1."
-  ) |> print()
+  if (!is.null(phistats_path)) {
+    outliers_phi_st_filtered <- read.table( # tsv file from ustacks populations output is expected
+      file             = phistats_path,
+      header           = FALSE,
+      sep              = "\t",
+      skip             = 9,
+      stringsAsFactors = FALSE
+    ) |>
+      select(c(1, 4)) |>
+      rename("catalog_rank" = V1, "phi_st" = V4) |> 
+      filter(catalog_rank %in% outliers_catalog_ranks) |>
+      filter(phi_st > .1)
+    
+    paste0(
+      "There are ", dim(outliers_phi_st_filtered)[1], " outliers with a phi_st > 0.1."
+    ) |> print()
+  }
   
   #Saving outliers list as txt file for stacks2 whitelist analysis
   if (!is.null(filename)) {
@@ -46,6 +52,7 @@ Get_outliers <- function(vcf_path, pcadapt, filename = NULL) {
       here("output", paste0(filename, "_outliers_catalog_ranks.txt"))
     ) |> print()
   }
+  
   data.frame(
     "vcf_ranks"     = outliers_vcf_ranks,
     "catalog_ranks" = as.numeric(outliers_catalog_ranks)
