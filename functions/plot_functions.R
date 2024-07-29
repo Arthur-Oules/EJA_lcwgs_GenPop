@@ -17,8 +17,7 @@ manhattan_plot_custom <- function(vcf_file,                # vcf file from ustac
                                   n_chromosome,            # Number of effective chromosomes
                                   outliers_ranks = NULL) { # Output from the Get_outliers() function
   chromosome_names <- vcf_file |> # Extract chromosome number map from vcf info
-    getFIX() |>
-    _[, "CHROM"] |>
+    getCHROM() |>
     lapply(FUN = gsub, pattern = "SCAF_", replacement = "") |>
     as.integer()
   
@@ -80,6 +79,22 @@ manhattan_plot_custom <- function(vcf_file,                # vcf file from ustac
   }
 }
 
+manhattan_plot_custom_2 <- function(df, pvalues) {
+  df |> ggplot() +
+    geom_point(aes(x = rank, y = {{pvalues}}, colour = factor(coloured))) +
+    scale_colour_manual(values = c("black", "grey")) +
+    scale_x_continuous(
+      breaks = df$rank[df$lab_position],
+      labels = df$CHROM[df$lab_position]
+    ) +
+    labs(x = "chromosome", y = "-log10(p-value)") +
+    theme_classic() +
+    theme(
+      axis.text.x     = element_text(angle = 90),
+      legend.position = "none"
+    )
+}
+
 PCA_plot <- function(pcadapt_output,
                      popmap,
                      x_offsets = NULL,
@@ -137,7 +152,9 @@ PCA_plot <- function(pcadapt_output,
   }
 }
 
-nc_crop <- function(var, lon_min, lon_max, lat_min, lat_max) {
+nc_crop <- function(var,
+                    lon_min, lon_max,
+                    lat_min, lat_max) {
   # Coordinates conversion
   lon_min <- lon_min * 10
   lon_max <- lon_max * 10
