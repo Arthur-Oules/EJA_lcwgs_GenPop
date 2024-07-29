@@ -149,7 +149,7 @@ XML_to_df_old <- function(XML) {
   query_df
 }
 
-XML_to_df <- function(xml_file){
+XML_to_df <- function(xml_file) {
   xml_tib <- xml_file |> as_list() |> as_tibble() |> 
     mutate(BlastXML2 = map(BlastXML2, ~if(is.list(.x)) .x else list(.x))) |>
     unnest_longer(BlastXML2) |>
@@ -221,4 +221,15 @@ Get_protein_sequences <- function(df, silent = TRUE) {
     ) |>
     unnest(Sequences) |>
     filter(!Sequences == "")
+}
+
+Get_pvalues <- function(pcadapt) {
+  -as.numeric( # Gets non adjusted -log10(pvalues) without infinite values
+    pchisq(
+      pcadapt$chi2.stat,
+      df         = attr(pcadapt, "K"),
+      lower.tail = FALSE,
+      log.p      = TRUE
+    )/log(10)
+  )
 }
