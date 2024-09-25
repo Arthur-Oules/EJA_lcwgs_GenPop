@@ -11,39 +11,24 @@ editor: source
 ```{r}
 #| echo: false
 
-# Mandatory
-library(here)
-library(tidyverse)
+c("here", "tidyverse",
+  "pcadapt", "vcfR", "adegenet", "ape", "LEA",
+  "ncdf4", "rnaturalearth", "rnaturalearthdata", "rnaturalearthhires", "marmap",
+  "rentrez", "xml2",
+  "patchwork", "plotly", "sf", "ggrepel", "ggpubr", "ggspatial", "ggtree", "RColorBrewer", "viridis",  "scales", "ggnewscale", "terra", "tidyterra") |>
+  lapply(library, character.only = TRUE)
 
 # Data analysis
-library(pcadapt)
-library(vcfR)
-library(adegenet)
-library(ape)
-library(LEA)
+
 
 # External data acquisition for maps
-library(ncdf4)
-library(rnaturalearth)
-library(rnaturalearthdata)
-library(rnaturalearthhires)
-library(marmap)
+
 
 # External data acquisition for outliers BLAST
-library(rentrez) #Allows to navigate NCBI database
-library(xml2) #Allows xml file manipulation
+ #Allows xml file manipulation
 
 # Making plots and maps
-library(patchwork)
-library(plotly)
-library(sf)
-library(ggrepel)
-library(ggpubr)
-library(ggspatial)
-library(RColorBrewer)
-library(viridis)
-library(scales)
-library(ggnewscale)
+
 ```
 
 # pcadapt analysis
@@ -54,9 +39,10 @@ library(ggnewscale)
 source(here("functions", "tidy_functions.R"))
 ```
 
-## All loci
+## RADs
+### All loci
 
-### pcadapt pre-analysis to chose K value for outliers selection
+#### pcadapt pre-analysis to chose K value for outliers selection
 
 ```{r}
 EJA_all_loci <- read.pcadapt(# Vcf file from ustacks populations output is expected
@@ -75,7 +61,7 @@ pcadapt(input = EJA_all_loci, K = 20) |>
 
 K = 3 seems to be the most optimal number of PCA axes to keep for this data set.
 
-### Analysis with K = 3
+#### Analysis with K = 3
 
 ```{r}
 pcadapt_all_loci <- pcadapt(input = EJA_all_loci, K = 3)
@@ -105,7 +91,7 @@ hist(
 )
 ```
 
-### Outliers identification
+#### Outliers identification
 
 ```{r}
 EJA_outliers_ranks <- Get_outliers(
@@ -118,9 +104,9 @@ EJA_outliers_ranks <- Get_outliers(
 )
 ```
 
-### Protein sequences acquisition for all loci analysis outliers
+#### Protein sequences acquisition for all loci analysis outliers
 
-#### Import and format the catalog
+##### Import and format the catalog
 
 ```{r}
 EJA_outliers_sequences <- Get_catalog_sequences(
@@ -132,7 +118,7 @@ EJA_outliers_sequences <- Get_catalog_sequences(
 
 Please run an NCBI nBLAST analysis with the generated .fa file and download the result as Single-file XML2.
 
-#### Import BLAST results saved as xml file and extract results
+##### Import BLAST results saved as xml file and extract results
 
 Please replace the second line of the XML file by <BlastXML2> which effectively removes the metadata from the first xml tag.
 
@@ -145,7 +131,7 @@ EJA_outliers_blast_tib |> saveRDS(
 )
 ```
 
-#### Filter BLAST results
+##### Filter BLAST results
 
 ```{r}
 EJA_outliers_blast_tib_80_PREDICTED <- EJA_outliers_query_tib |>
@@ -167,7 +153,7 @@ EJA_outliers_blast_tib_80_PREDICTED |> write.csv(
 )
 ```
 
-#### Get protein sequences from GenBank and remove miss
+##### Get protein sequences from GenBank and remove miss
 
 ```{r}
 # query_df <- readRDS(here("output", "Blast_results_as_data_frame.RDS"))
@@ -175,7 +161,7 @@ EJA_outliers_protein_sequences_matches <- EJA_outliers_blast_tib_80_PREDICTED |>
   Get_protein_sequences()
 ```
 
-#### Save output as fasta file which can be sent to [blast KOALA](https://www.kegg.jp/blastkoala/).
+##### Save output as fasta file which can be sent to [blast KOALA](https://www.kegg.jp/blastkoala/).
 
 ```{r}
 #Write protein sequences as fasta file with GenBank access number as sequence names
@@ -193,7 +179,7 @@ for (i in 1:dim(EJA_outliers_protein_sequences_matches[1])){
 sink()
 ```
 
-#### Save outliers protein match table
+##### Save outliers protein match table
 
 ```{r}
 Table_2 <- EJA_outliers_blast_tib_80_PREDICTED |> 
@@ -202,7 +188,7 @@ Table_2 <- EJA_outliers_blast_tib_80_PREDICTED |>
   write.csv(file = here("output", "Table_2.csv"), row.names = FALSE)
 ```
 
-## Blacklist (neutral loci)
+### Blacklist (neutral loci)
 
 ```{r}
 pcadapt_blacklist <- read.pcadapt( # vcf file from pcadapt analysis output is expected
@@ -219,7 +205,7 @@ plot(pcadapt_blacklist, option = "screeplot")
 plot(pcadapt_blacklist, option = "scores", pop = popmap, i = 1, j = 2)
 ```
 
-## Whitelist (outliers loci)
+### Whitelist (outliers loci)
 
 ```{r}
 EJA_whitelist <- read.pcadapt( # vcf file from pcadapt analysis output is expected
@@ -237,9 +223,9 @@ plot(pcadapt_whitelist, option = "screeplot")
 plot(pcadapt_whitelist, option = "scores", pop = popmap, i = 1, j = 2)
 ```
 
-## Analysis excluding Catalina
+### Analysis excluding Catalina
 
-### pcadapt pre-analysis to chose K value
+#### pcadapt pre-analysis to chose K value
 
 ```{r}
 EJA_all_loci_catalina <- read.pcadapt( # vcf file from pcadapt analysis output is expected
@@ -254,7 +240,7 @@ plot(pcadapt_all_loci_catalina_raw, option = "screeplot") #screeplot to visually
 
 K = 2 seems to be the most optimal for this data set
 
-### pcadapt analysis with K = 2
+#### pcadapt analysis with K = 2
 
 ```{r}
 pcadapt_all_loci_catalina <- pcadapt(input = EJA_all_loci_catalina, K = 2)
@@ -279,7 +265,7 @@ plot(
 100*pcadapt_all_loci_catalina$singular.values**2
 ```
 
-### Outliers identification excluding Catalina
+#### Outliers identification excluding Catalina
 
 ```{r}
 EJA_catalina_outliers_ranks <- Get_outliers(
@@ -289,9 +275,9 @@ EJA_catalina_outliers_ranks <- Get_outliers(
 )
 ```
 
-## Using low coverage data
+## Low Coverage
 
-### Using all populations
+### All populations
 
 #### Convert vcf to bed file using plink2
 
@@ -361,24 +347,26 @@ pcadapt_lcwgs$pvalues |> hist(
 ### Generating whitelist
 
 ```{r}
-EJA_lcwgs_vcf <- here("data", "lcwgs", "8-Embiotoca_filtered.vcf.gz") |>
-  read.vcfR() # vcf file used in pcadapt analysis output is expected
+#| echo: false
+Indiv_list <- here("data", "lcwgs", "EJA_lcwgs_gt.RDS") |>
+  read_rds() |>
+  _$Indiv
 
-EJA_lcwgs_vcf |>
-  vcfR2tidy() |> 
-  _$gt$Indiv |> 
+Indiv_list |>
+  write_rds(file = here("data", "lcwgs", "Individual_list.rds"))
+```
+
+```{r}
+Indiv_list |> 
   unique() |>
   {\(x) {
     x[
-      !(
-        grepl(pattern = "SCL", x = x) |
+      !(grepl(pattern = "SCL", x = x) |
         grepl(pattern = "GUA", x = x) |
-        grepl(pattern = "CAT", x = x)
-      )
+        grepl(pattern = "CAT", x = x))
     ]
     }}() |> 
-  paste(collapse = "\n") |> 
-  write_file(here("plink2", "whitelist.txt"))
+  write_lines(here("plink2", "whitelist_pipi.txt"))
 ```
 
 ### Excluding islanders
@@ -744,7 +732,8 @@ ggsave(
 ```
 #### Clean memory
 ```{r}
-rm(EJA_lcwgs_vcf, chromosome_names, manhattan_plot_lcwgs)
+rm(EJA_lcwgs_vcf, chromosome_names,
+   manhattan_plot_lcwgs, manhattan_plot_lcwgs_coast, manhattan_plot_lcwgs_islands)
 ```
 
 ## Figure 2 - PCA & map
@@ -1064,13 +1053,14 @@ save_open_plot(
 ##### Formatting Copernicus data
 
 ```{r}
+#| echo: false
+
 currents_tibble <- left_join(
   rast(
-    x    = here("data", "Copernicus", "merged_uv",
-                "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc")
+    x     = here("data", "Copernicus", "merged_uv",
+                 "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc"),
+    subds = "uo"
   ) |>
-    # aggregate(fact = 2, fun = "mean") |> 
-    subset(subset = 1:365) |>
     as.data.frame(xy = TRUE, time = TRUE, na.rm = FALSE) |> 
     pivot_longer(cols = -c(x, y), names_to = "Date", values_to = "u") |> 
     mutate(Date = as.Date(Date)),
@@ -1078,8 +1068,6 @@ currents_tibble <- left_join(
     x    = here("data", "Copernicus", "merged_uv",
                 "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc")
   ) |>
-    # aggregate(fact = 2, fun = "mean") |> 
-    subset(subset = 366:730) |>
     as.data.frame(xy = TRUE, time = TRUE, na.rm = FALSE) |> 
     pivot_longer(cols = -c(x, y), names_to = "Date", values_to = "v") |> 
     mutate(Date = as.Date(Date))
@@ -1090,18 +1078,36 @@ currents_tibble_annual_mean <- currents_tibble |>
   summarise(u_mean = mean(u), v_mean = mean(v)) |> 
   ungroup()
 
-currents_tibble_annual_mean_lres <- currents_tibble_annual_mean |>
-  mutate(Couples = row_number() + (row_number() %% 2)) |>
-  group_by(Couples) |>
-  summarise(
-    x = first(x),
-    y = first(y),
-    u_mean = mean(u_mean),
-    v_mean = mean(v_mean)
-  ) |> 
-  select(-c(Couples)) |> 
-  ungroup()
+currents_tibble_annual_mean_lres <- left_join(
+  rast(
+    x     = here("data", "Copernicus", "merged_uv",
+                 "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc"),
+    subds = "uo"
+  ) |>
+    mean() |> 
+    aggregate(fact = 2, fun = "mean") |> 
+    as.data.frame(xy = TRUE, na.rm = FALSE) |> 
+    as_tibble() |> 
+    rename(u_mean = mean),
+  rast(
+    x     = here("data", "Copernicus", "merged_uv",
+                "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc"),
+    subds = "vo"
+  ) |>
+    mean() |> 
+    aggregate(fact = 2, fun = "mean") |> 
+    as.data.frame(xy = TRUE, na.rm = FALSE) |> 
+    as_tibble() |> 
+    rename(v_mean = mean),
+)
 
+currents_tibble_annual_mean_lres |>
+  write_rds(file = here("data", "Copernicus", "annual_average_currents_tb.RDS"))
+
+rm(currents_tibble, currents_tibble_annual_mean)
+```
+
+```{r}
 SST_maps <- here("data", "Copernicus", "SST_temperature_UKMO-L4_GHRSST") |> 
   list.files(full.names = TRUE) |>
   map(
@@ -1112,6 +1118,21 @@ SST_maps <- here("data", "Copernicus", "SST_temperature_UKMO-L4_GHRSST") |>
 time(SST_maps) <- seq(as.Date("2023-01-01"), as.Date("2023-12-31"), by = "days")
 
 SST_annual_mean <- SST_maps |> mean() |> (`-`)(273.15)
+
+SST_annual_mean |>
+  writeRaster(file = here("data", "Copernicus", "annual_average_SST.tif"))
+
+rm(SST_maps)
+```
+
+```{r}
+currents_tibble_annual_mean_lres <- read_rds(
+  file = here("data", "Copernicus", "annual_average_currents_tb.RDS")
+)
+
+SST_annual_mean <- read_rds(
+  file = here("data", "Copernicus", "annual_average_SST.RDS")
+)
 ```
 
 ##### Landmass
@@ -1170,18 +1191,18 @@ lcwgs_map <- ggplot() +
   ) +
   # Current vectors
   geom_segment(
-    data    = currents_tibble_annual_mean_lres,
-    mapping = aes(
+    data     = currents_tibble_annual_mean_lres,
+    mapping  = aes(
       x    = x,
       y    = y,
-      xend = x + u_mean,
-      yend = y + v_mean
+      xend = x + 2*u_mean,
+      yend = y + 2*v_mean
     ),
-    size = .5,
-    colour = "#4d4d4d",
-    arrow   = arrow(angle = 20, length = unit(0.035, "inches"), type = "closed"),
+    size     = .5,
+    colour   = "#4d4d4d",
+    arrow    = arrow(angle = 20, length = unit(0.035, "inches"), type = "closed"),
     linejoin = "mitre",
-    na.rm   = TRUE
+    na.rm    = TRUE
   ) +
   # Landmass
   geom_sf(data = states) +
@@ -1189,13 +1210,6 @@ lcwgs_map <- ggplot() +
   coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
   # Sampling sites points and labels
   new_scale("fill") +
-  # geom_path( # Path from Catalina label to Catalina island
-  #   data.frame(
-  #     "x" = c(-118.4163, -118.4163 -.85),
-  #     "y" = c(33.38790, 33.38790 -.73)
-  #   ),
-  #   mapping = aes(x, y)
-  # ) +
   geom_point(
     sample_sites,
     mapping     = aes(x    = Longitude,
@@ -1244,13 +1258,15 @@ lcwgs_map <- ggplot() +
   ) +
   # Vector scale
   geom_label(
-    aes(x = -122, y = 29.5, label = "1.0 m/s\n"),
+    aes(x = -122, y = 29.5, label = ".25 m/s\n"),
     size          = 4.5,
     label.padding = unit(0.5, "lines")
   ) +
   geom_segment(
-    aes(x = -122.5, y = 29.25, xend = -121.5, yend = 29.25),
-    arrow = arrow(angle = 15, length = unit(0.035, "inches"), type = "closed")
+    aes(x = -122.25, y = 29.25, xend = -121.75, yend = 29.25),
+    size     = .5,
+    arrow = arrow(angle = 20, length = unit(0.035, "inches"), type = "closed"),
+    linejoin = "mitre"
   ) +
   # Cartographic scale
   geom_label(aes(x = -119.1, y = 28.71, label = "        ")) +
@@ -1282,9 +1298,7 @@ save_open_plot(
 #### Memory cleanup
 
 ```{r}
-rm(nc_temp, nc_u, nc_v,
-   lon, lat,
-   crop_temp, crop_u_lowres, crop_v_lowres,
+rm(currents_tibble_annual_mean_lres, SST_annual_mean,
    map, states,
    sample_sites, states_labels, city_labels, ocean_labels,
    current_uv_scalar)
@@ -1303,11 +1317,34 @@ PCA_map <- PCA_and_crop + lcwgs_map +
     )
 
 save_open_plot(
-  here("output", "plots", "lcwgs", "pca_map.pdf"),
+  here("output", "plots", "lcwgs", "pca_map.png"),
   plot   = PCA_map,
-  width  = 14,
-  height = 9
+  width  = 17.5,
+  height = 11.25
 )
+```
+
+#### 3D PCA
+
+```{r}
+TD_PCA_plot <- pcadapt_lcwgs$scores |>
+  as_tibble() |>
+  rename(PC_1 = V1, PC_2 = V2, PC_3 = V3, PC_4 = V4) |> 
+  mutate(pop = popmap_lcwgs) |> 
+  as.data.frame() |> 
+  plot_ly(
+    x = ~PC_1, y = ~PC_2, z = ~PC_3,
+    color = ~pop, colors = viridis(144, option = "turbo")
+  ) |>
+  add_markers(size = 12)
+
+setwd(here("output", "plots", "lcwgs"))
+as_widget(TD_PCA_plot) |> saveWidget(
+  file = here("output", "plots", "lcwgs", "3D_PCA.html"),
+  selfcontained = TRUE)
+setwd(here())
+
+rm(TD_PCA_plot)
 ```
 
 ## Figure 3? - Bathymetry
@@ -1586,7 +1623,7 @@ admixture_plot <- read_table(
        "8-Embiotoca_filtered_r65.6.Q"),
   col_names = paste0("Pop ", seq(1, 6))
 ) |> 
-  mutate(Individuals = EJA_lcwgs_tb$gt$Indiv |> unique()) |> 
+  mutate(Individuals = Indiv_list |> unique()) |> 
   relocate(Individuals) |> 
   pivot_longer(
     -c(Individuals),
@@ -1620,10 +1657,113 @@ save_open_plot(
   width  = 16,
   height = 6
   )
+
+rm(Indiv_list, admixture_plot)
+```
+
+
+## Figure 6 - Distance tree
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink --vcf 8-Embiotoca_filtered.vcf.gz --out Embiotoca_filtered_dist_matrix --allow-extra-chr --autosome-num 95 --distance square --const-fid
+```
+
+
+```{r}
+EJA_lcwgs_dist_IBS <- here("plink2", "Embiotoca_filtered_dist_matrix.dist") |> 
+  read_table(col_names = FALSE) |> 
+  as.matrix()
+
+IDs <- here("plink2", "Embiotoca_filtered_dist_matrix.dist.id") |> 
+  read_table(col_names = FALSE) |> pull(X2)
+
+colnames(EJA_lcwgs_dist_IBS) <- IDs
+rownames(EJA_lcwgs_dist_IBS) <- IDs
+```
+
+```{r}
+NJ_Tree_lcwgs_IBS <- EJA_lcwgs_dist_IBS |> as.dist() |> nj()
+
+NJ_Tree_lcwgs_IBS_annotations <- tibble(
+  Indiv = NJ_Tree_lcwgs_IBS$tip.label,
+  pop   = popmap_lcwgs
+)
+
+NJ_Tree_lcwgs_IBS_plot <- NJ_Tree_lcwgs_IBS |>
+  ggtree(layout = "circular") %<+% NJ_Tree_lcwgs_IBS_annotations +
+  geom_tiplab(aes(color = pop), size = 2.8) +
+  geom_treescale(x = 800000, y = 0)
+
+save_open_plot(
+  path   = here("output", "plots", "lcwgs", "dist_tree.pdf"),
+  plot   = NJ_Tree_lcwgs_IBS_plot,
+  width  = 12,
+  height = 9
+)
+```
+
+```{r}
+geo_dist <- here("data", "low_coverage_sampling.csv") |> 
+  read_csv2(show_col_types = FALSE) |> 
+  select(c(Code, Longitude, Latitude)) |> 
+  mutate(
+    pop = popmap_lcwgs |>
+      unique() |>
+      _[c(1, 13, 15, 4, 6, 2, 9, 14, 8, 10, 3, 11, 12, 7, 5)]
+  ) |> 
+  mutate(
+    pop  = as.factor(pop),
+    Code = as.factor(Code)
+  )
+
+geo_dist_mat <- left_join(
+  x = NJ_Tree_lcwgs_IBS_annotations,
+  y = geo_dist
+) |> 
+  select(Indiv, Longitude, Latitude) |> 
+  dist() |>
+  as.matrix()
+
+colnames(geo_dist_mat) <- IDs
+rownames(geo_dist_mat) <- IDs
+
+rm(IDs)
+```
+
+```{r}
+vegan::mantel(geo_dist_mat, EJA_lcwgs_dist_IBS)
+plot(geo_dist_mat)
+plot(EJA_lcwgs_dist_IBS)
+plot(geo_dist_mat/max(geo_dist_mat), EJA_lcwgs_dist_IBS/max(EJA_lcwgs_dist_IBS))
+```
+
+```{r}
+geo_df <- left_join(
+    x = NJ_Tree_lcwgs_IBS_annotations,
+    y = geo_dist
+  ) |>
+  select(Longitude, Latitude) |>
+  rename(lat = Latitude, lon = Longitude) |> 
+  as.data.frame()
+
+library(vcfR)
+
+vcf_test <- here("data", "lcwgs", "EJA_lcwgs_vcfR.RDS") |>
+  readRDS() |>
+  vcfR2genlight()
+
+vcf_test@other$latlon <- geo_df
+vcf_test@pop <- factor(NJ_Tree_lcwgs_IBS_annotations$pop)
+
+vcf_test |> saveRDS(file = here("data", "lcwgs", "Embiotoca_lcwgs_gl.rds"))
+
+library(dartR)
+
+gl.ibd(vcf_test, coordinates = "latlon")
 ```
 
 # vcf manipulations
-
 ```{r}
 vcf_info <- EJA_lcwgs_vcf |> getFIX() |> as_tibble()
 
