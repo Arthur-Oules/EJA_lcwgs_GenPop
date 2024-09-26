@@ -7,6 +7,7 @@ editor: source
 # Load packages
 
 ```{r}
+#| label: LoadPackages
 #| echo: false
 
 c("here", "tidyverse",
@@ -15,32 +16,20 @@ c("here", "tidyverse",
   "rentrez", "xml2",
   "patchwork", "plotly", "sf", "ggrepel", "ggpubr", "ggspatial", "ggtree", "RColorBrewer", "viridis",  "scales", "ggnewscale", "terra", "tidyterra") |>
   lapply(library, character.only = TRUE)
-
-# Data analysis
-
-
-# External data acquisition for maps
-
-
-# External data acquisition for outliers BLAST
- #Allows xml file manipulation
-
-# Making plots and maps
-
 ```
 
 # pcadapt analysis
 
 ## Load data analysis functions
-
 ```{r}
+#| label: LoadTidy
+
 source(here("functions", "tidy_functions.R"))
 ```
 
 ## All populations
 
 ### Convert vcf to bed file using plink2
-
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
@@ -48,8 +37,9 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 ```
 
 ### Preanalysis to determine optimal K value
-
 ```{r}
+#| label: PreAnalysis
+
 EJA_lcwgs <- read.pcadapt(
   here("data", "lcwgs", "8-Embiotoca_filtered.bed"),
   type = "bed"
@@ -62,8 +52,9 @@ pcadapt(input = EJA_lcwgs, K = 20) |>
 K = 4 seems correct
 
 ### Analysis using K = 4
-
 ```{r}
+#| label: pcadapt
+
 popmap_lcwgs <- c(
   rep("bodega_bay", 5), # BB
   rep("big_creek", 13), # BIGC -> BCR
@@ -86,8 +77,9 @@ pcadapt_lcwgs <- EJA_lcwgs |> pcadapt(K = 4)
 ```
 
 ### Exploratory plots
-
 ```{r}
+#| label: ExploPlots
+
 pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 1, j = 2)
 pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 2, j = 3)
 pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 3, j = 4)
@@ -105,9 +97,10 @@ pcadapt_lcwgs$pvalues |> hist(
 ```
 
 ## Generating whitelist
-
 ```{r}
-#| echo: false
+#| label: Whitelist
+#| eval: false
+
 Indiv_list <- here("data", "lcwgs", "EJA_lcwgs_gt.RDS") |>
   read_rds() |>
   _$Indiv
@@ -117,6 +110,9 @@ Indiv_list |>
 ```
 
 ```{r}
+#| label: SaveWhitelist
+#| eval: false
+
 Indiv_list |> 
   unique() |>
   {\(x) {
@@ -138,8 +134,8 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 ```
 
 ### Preanalysis to determine optimal K value
-
 ```{r}
+#| label: CoastPreAnalysis
 EJA_lcwgs_coast <- read.pcadapt(
   here("data", "lcwgs", "8-Embiotoca_filtered_whitelisted.bed"),
   type = "bed"
@@ -151,8 +147,9 @@ pcadapt(input = EJA_lcwgs_coast, K = 20) |> plot(option = "screeplot")
 K = 4 seems correct
 
 ### Analysis using K = 3
-
 ```{r}
+#| label: Coastpcadapt
+
 popmap_lcwgs_coast <- c(
   rep("bodega_bay",            5), # BB
   rep("big_creek",            13), # BIGC -> BCR
@@ -172,8 +169,9 @@ pcadapt_lcwgs_coast <- EJA_lcwgs_coast |> pcadapt(K = 3)
 ```
 
 ### Associated exploratory plots
-
 ```{r}
+#| label: CoastExploPlots
+
 coast_PCA_1_2 <- pcadapt_lcwgs_coast |>
   plot(option = "scores", pop = popmap_lcwgs_coast, i = 1, j = 2) +
   theme_minimal()
@@ -218,12 +216,12 @@ pcadapt_lcwgs_coast$pvalues |> hist(
 ```
 
 ```{r}
+#| label: CoastMemclean
+
 rm(EJA_lcwgs_coast)
 ```
 
-
 ## Using only islanders
-
 ### Generating bed file
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
@@ -232,8 +230,9 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 ```
 
 ### Preanalysis to determine optimal K value
-
 ```{r}
+#| label: IslPreAnalysis
+
 EJA_lcwgs_islands <- read.pcadapt(
   here("data", "lcwgs", "8-Embiotoca_filtered_blacklisted.bed"),
   type = "bed"
@@ -243,8 +242,9 @@ pcadapt(input = EJA_lcwgs_islands, K = 2) |> plot(option = "screeplot")
 ```
 
 ### Analysis using K = 2
-
 ```{r}
+#| label: Islpcadapt
+
 popmap_lcwgs_islands <- c(
   rep("catalina_island", 11), # CAT
   rep("guadalupe_island", 10), # GUA
@@ -257,6 +257,8 @@ pcadapt_lcwgs_islands <- EJA_lcwgs_islands |> pcadapt(K = 2)
 ### Associated exploratory plots
 
 ```{r}
+#| label: IslExploPlots
+
 islands_PCA_1_2 <- pcadapt_lcwgs_islands |>
   plot(option = "scores", pop = popmap_lcwgs_islands, i = 1, j = 2) +
   theme_minimal()
@@ -301,26 +303,38 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ## Read and convert data
 ```{r}
+#| label: VcfConvert
 #| eval: false
-# EJA_lcwgs_vcf <- here("data", "lcwgs", "8-Embiotoca_filtered.vcf.gz") |>
-#   read.vcfR()
-# EJA_lcwgs_vcf |> write_rds(here("data", "lcwgs", "EJA_lcwgs_vcfR.RDS"))
 
-EJA_lcwgs_vcf <- read_rds(here("data", "lcwgs", "EJA_lcwgs_vcfR.RDS"))
+EJA_lcwgs_vcf <- here("data", "lcwgs", "8-Embiotoca_filtered.vcf.gz") |>
+  read.vcfR()
 
-# EJA_lcwgs_gt <- EJA_lcwgs_vcf |> extract_gt_tidy()
-# EJA_lcwgs_gt |> write_rds(here("data", "lcwgs", "EJA_lcwgs_gt.RDS"))
+EJA_lcwgs_vcf |> write_rds(here("data", "lcwgs", "EJA_lcwgs_vcfR.RDS"))
 
-EJA_lcwgs_gt <- read_rds(here("data", "lcwgs", "EJA_lcwgs_gt.RDS"))
+EJA_lcwgs_vcf |>
+  extract_gt_tidy() |>
+  write_rds(here("data", "lcwgs", "EJA_lcwgs_gt.RDS"))
 
 ped2geno(
   input.file  = here("plink2", "8-Embiotoca_filtered.ped"),
   output.file = here("data", "lcwgs", "8-Embiotoca_filtered.geno")
 )
+
+rm(EJA_lcwgs_vcf)
+```
+
+```{r}
+#| label: LoadData
+
+EJA_lcwgs_vcf <- read_rds(here("data", "lcwgs", "EJA_lcwgs_vcfR.RDS"))
+
+EJA_lcwgs_gt <- read_rds(here("data", "lcwgs", "EJA_lcwgs_gt.RDS"))
 ```
 
 ## Run analysis
 ```{r}
+#| label: snmfAnalysisSingle
+
 snmf_analysis <- snmf(
   here("data", "lcwgs", "8-Embiotoca_filtered.geno"),
   project = "continue",
@@ -331,12 +345,16 @@ snmf_analysis <- snmf(
 
 ## Plot cross entropy to chose value of K
 ```{r}
+#| label: snmfSinglePlot
+
 plot(snmf_analysis)
 ```
 K = 6 has the minimum cross-entropy.
 
 ## Rerun multiple times with K = 6
 ```{r}
+#| label: snmfAnalysisMulti
+
 snmf_analysis <- snmf(
   here("data", "lcwgs", "8-Embiotoca_filtered.geno"),
   project     = "continue",
@@ -348,6 +366,8 @@ snmf_analysis <- snmf(
 
 ## Plot results for K = 6
 ```{r}
+#| label: snmfAnalysisMultiMplot
+
 barchart(
   snmf_analysis,
   K         = 6,
@@ -362,12 +382,16 @@ barchart(
 ## Load plotting functions
 
 ```{r}
+#| label: LoadPlot
+
 source(here("functions", "plot_functions.R"))
 ```
 
 ## Figure 1 - Manhattan plot home-made
 ### Prepare all data
 ```{r}
+#| label: ManhattanDataPrep
+
 chromosome_names <- EJA_lcwgs_vcf |>
   getFIX() |>
   as_tibble() |>
@@ -399,6 +423,8 @@ rm(labs_pos)
 
 ### Plot every populations
 ```{r}
+#| label: ManhattanPlot
+
 manhattan_plot_lcwgs <- chromosome_names |>
   manhattan_plot_custom_2(pvalues = pvalues_all)
 
@@ -413,6 +439,8 @@ ggsave(
 
 ### Plot coastal populations
 ```{r}
+#| label: ManhattanPlotCoast
+
 manhattan_plot_lcwgs_coast <- chromosome_names |>
   manhattan_plot_custom_2(pvalues = pvalues_coast)
 
@@ -427,6 +455,8 @@ ggsave(
 
 ### Plot island populations
 ```{r}
+#| label: ManhattanPlotIsl
+
 manhattan_plot_lcwgs_islands <- chromosome_names |>
   manhattan_plot_custom_2(pvalues = pvalues_island)
 
@@ -441,16 +471,18 @@ ggsave(
 
 ### Clean memory
 ```{r}
+#| label: ManhattanMemClean
+
 rm(EJA_lcwgs_vcf, chromosome_names,
    manhattan_plot_lcwgs, manhattan_plot_lcwgs_coast, manhattan_plot_lcwgs_islands)
 ```
 
 ## Figure 2 - PCA & map
 ### PCA plot
-
 ```{r}
+#| label: PCAMapPCAPlot
+
 PCA <- PCA_plot(pcadapt_output = pcadapt_lcwgs, popmap = popmap_lcwgs)
-PCA
 
 save_open_plot(
   path   = here("output", "plots", "lcwgs", "PCA.pdf"),
@@ -458,6 +490,10 @@ save_open_plot(
   width  = 9,
   height = 9
 )
+```
+
+```{r}
+#| label: PCAMapInteractivePlot
 
 PCA_plot(
   pcadapt_output = pcadapt_lcwgs,
@@ -466,11 +502,11 @@ PCA_plot(
   y_offsets      = rep(.05, 15)
 ) |>
   ggplotly()
-
-PCA
 ```
 
 ```{r}
+#| label: PCAMapPlotCrop
+
 PCA_crop <- PCA + xlim(-.065, -.05) + ylim(.1125, .1275) +
   coord_fixed(ratio = 1) +
   theme(
@@ -479,6 +515,10 @@ PCA_crop <- PCA + xlim(-.065, -.05) + ylim(.1125, .1275) +
     plot.background = element_rect(fill = "white", linetype = "longdash")
   )
 PCA_crop$layers[[2]] <- NULL
+```
+
+```{r}
+#| label: PCAMapPCAFuse
 
 PCA_and_crop <- PCA + annotate(
   "rect",
@@ -497,42 +537,44 @@ save_open_plot(
 )
 ```
 
+#### Interactive 3D PCA
+```{r}
+#| label: PCAMapPCAInteractive
+
+TD_PCA_plot <- pcadapt_lcwgs$scores |>
+  as_tibble() |>
+  rename(PC_1 = V1, PC_2 = V2, PC_3 = V3, PC_4 = V4) |> 
+  mutate(pop = popmap_lcwgs) |> 
+  as.data.frame() |> 
+  plot_ly(
+    x = ~PC_1, y = ~PC_2, z = ~PC_3,
+    color = ~pop, colors = viridis(144, option = "turbo")
+  ) |>
+  add_markers(size = 12)
+
+setwd(here("output", "plots", "lcwgs"))
+as_widget(TD_PCA_plot) |> saveWidget(
+  file = here("output", "plots", "lcwgs", "3D_PCA.html"),
+  selfcontained = TRUE)
+setwd(here())
+
+rm(TD_PCA_plot)
+```
+
 ### Map - SST and current 
 #### Formatting Copernicus data
 ```{r}
-#| echo: false
+#| label: PCAMapMapFormatCurrents
+#| eval: false
 
-currents_tibble <- left_join(
+left_join(
   rast(
     x     = here("data", "Copernicus", "merged_uv",
                  "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc"),
     subds = "uo"
   ) |>
-    as.data.frame(xy = TRUE, time = TRUE, na.rm = FALSE) |> 
-    pivot_longer(cols = -c(x, y), names_to = "Date", values_to = "u") |> 
-    mutate(Date = as.Date(Date)),
-  rast(
-    x    = here("data", "Copernicus", "merged_uv",
-                "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc")
-  ) |>
-    as.data.frame(xy = TRUE, time = TRUE, na.rm = FALSE) |> 
-    pivot_longer(cols = -c(x, y), names_to = "Date", values_to = "v") |> 
-    mutate(Date = as.Date(Date))
-)
-
-currents_tibble_annual_mean <- currents_tibble |> 
-  group_by(x, y) |> 
-  summarise(u_mean = mean(u), v_mean = mean(v)) |> 
-  ungroup()
-
-currents_tibble_annual_mean_lres <- left_join(
-  rast(
-    x     = here("data", "Copernicus", "merged_uv",
-                 "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc"),
-    subds = "uo"
-  ) |>
-    mean() |> 
-    aggregate(fact = 2, fun = "mean") |> 
+    mean() |> # Average on year
+    aggregate(fact = 2, fun = "mean") |> # Lower resolution
     as.data.frame(xy = TRUE, na.rm = FALSE) |> 
     as_tibble() |> 
     rename(u_mean = mean),
@@ -541,20 +583,18 @@ currents_tibble_annual_mean_lres <- left_join(
                 "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc"),
     subds = "vo"
   ) |>
-    mean() |> 
-    aggregate(fact = 2, fun = "mean") |> 
+    mean() |> # Average on year
+    aggregate(fact = 2, fun = "mean") |> # Lower resolution
     as.data.frame(xy = TRUE, na.rm = FALSE) |> 
     as_tibble() |> 
     rename(v_mean = mean),
-)
-
-currents_tibble_annual_mean_lres |>
+) |>
   write_rds(file = here("data", "Copernicus", "annual_average_currents_tb.RDS"))
-
-rm(currents_tibble, currents_tibble_annual_mean)
 ```
 
 ```{r}
+#| label: PCAMapMapFormatSST
+
 SST_maps <- here("data", "Copernicus", "SST_temperature_UKMO-L4_GHRSST") |> 
   list.files(full.names = TRUE) |>
   map(
@@ -562,17 +602,20 @@ SST_maps <- here("data", "Copernicus", "SST_temperature_UKMO-L4_GHRSST") |>
       rast(lyrs = "analysed_sst", win = ext(-124,-113, 28.5, 38.5))
   ) |> 
   rast()
+
 time(SST_maps) <- seq(as.Date("2023-01-01"), as.Date("2023-12-31"), by = "days")
 
-SST_annual_mean <- SST_maps |> mean() |> (`-`)(273.15)
-
-SST_annual_mean |>
+SST_maps |>
+  mean() |>
+  (`-`)(273.15) |>
   writeRaster(file = here("data", "Copernicus", "annual_average_SST.tif"))
 
 rm(SST_maps)
 ```
 
 ```{r}
+#| label: PCAMapMapLoad
+
 currents_tibble_annual_mean_lres <- read_rds(
   file = here("data", "Copernicus", "annual_average_currents_tb.RDS")
 )
@@ -584,6 +627,8 @@ SST_annual_mean <- read_rds(
 
 #### Landmass
 ```{r}
+#| label: PCAMapMapMetadata
+
 # Setting up landmass map from naturalearth
 states <- ne_states(
   country     = c("united states of america", "mexico"),
@@ -625,6 +670,8 @@ ocean_labels <- data.frame(
 [Tutorial for surface temperature and current speed map](https://theoceancode.netlify.app/post/mapping_with_ggplot2/)
 
 ```{r}
+#| label: PCAMapMapPlot
+
 lcwgs_map <- ggplot() +
   # Temperature map
   geom_spatraster(data = SST_annual_mean, aes(fill = mean)) +
@@ -742,6 +789,8 @@ save_open_plot(
 
 ### Memory cleanup
 ```{r}
+#| label: PCAMapMapMemClean
+
 rm(currents_tibble_annual_mean_lres, SST_annual_mean,
    map, states,
    sample_sites, states_labels, city_labels, ocean_labels,
@@ -751,6 +800,8 @@ gc()
 
 ### Fuse PCA plot and map
 ```{r}
+#| label: PCAMapFuse
+
 PCA_map <- PCA_and_crop + lcwgs_map +
   plot_annotation(tag_levels = list(c("A", "", "B"))) &
   theme(
@@ -767,31 +818,11 @@ save_open_plot(
 )
 ```
 
-### 3D PCA
-```{r}
-TD_PCA_plot <- pcadapt_lcwgs$scores |>
-  as_tibble() |>
-  rename(PC_1 = V1, PC_2 = V2, PC_3 = V3, PC_4 = V4) |> 
-  mutate(pop = popmap_lcwgs) |> 
-  as.data.frame() |> 
-  plot_ly(
-    x = ~PC_1, y = ~PC_2, z = ~PC_3,
-    color = ~pop, colors = viridis(144, option = "turbo")
-  ) |>
-  add_markers(size = 12)
-
-setwd(here("output", "plots", "lcwgs"))
-as_widget(TD_PCA_plot) |> saveWidget(
-  file = here("output", "plots", "lcwgs", "3D_PCA.html"),
-  selfcontained = TRUE)
-setwd(here())
-
-rm(TD_PCA_plot)
-```
-
 ## Figure 5 - Admixture plot
 Change individuals order in the file `Individuals_plot_order.txt`
 ```{r}
+#| label: AdmPlot
+
 admixture_plot <- read_table(
   here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K6", "run65",
        "8-Embiotoca_filtered_r65.6.Q"),
