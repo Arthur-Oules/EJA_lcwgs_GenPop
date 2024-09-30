@@ -11,10 +11,10 @@ editor: source
 #| echo: false
 
 c("here", "tidyverse",
-  "pcadapt", "vcfR", "adegenet", "ape", "LEA",
+  "pcadapt", "vcfR", "adegenet", "ape", "LEA", "dartR",
   "ncdf4", "rnaturalearth", "rnaturalearthdata", "rnaturalearthhires", "marmap",
   "rentrez", "xml2",
-  "patchwork", "plotly", "sf", "ggrepel", "ggpubr", "ggspatial", "ggtree", "RColorBrewer", "viridis",  "scales", "ggnewscale", "terra", "tidyterra") |>
+  "patchwork", "plotly", "sf", "ggrepel", "ggspatial", "ggtree", "RColorBrewer", "viridis",  "scales", "ggnewscale", "terra", "tidyterra") |>
   lapply(library, character.only = TRUE)
 ```
 
@@ -375,6 +375,201 @@ barchart(
   col       = viridis(n = 6, option = "turbo"),
   sort.by.Q = FALSE
 )
+```
+
+# Isolation by Distance
+### Test with plink
+#### plink script
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink --vcf 8-Embiotoca_filtered.vcf.gz --out Embiotoca_filtered_dist_matrix --allow-extra-chr --autosome-num 95 --distance square --const-fid
+```
+
+#### Plink import
+```{r}
+EJA_lcwgs_dist_IBS <- here("plink2", "Embiotoca_filtered_dist_matrix.dist") |> 
+  read_table(col_names = FALSE) |> 
+  as.matrix()
+
+IDs <- here("plink2", "Embiotoca_filtered_dist_matrix.dist.id") |> 
+  read_table(col_names = FALSE) |> pull(X2)
+
+colnames(EJA_lcwgs_dist_IBS) <- IDs
+rownames(EJA_lcwgs_dist_IBS) <- IDs
+```
+
+#### NJ tree computing
+```{r}
+NJ_Tree_lcwgs_IBS <- EJA_lcwgs_dist_IBS |> as.dist() |> nj()
+
+NJ_Tree_lcwgs_IBS_annotations <- tibble(
+  Indiv = NJ_Tree_lcwgs_IBS$tip.label,
+  pop   = popmap_lcwgs
+)
+
+NJ_Tree_lcwgs_IBS_plot <- NJ_Tree_lcwgs_IBS |>
+  ggtree(layout = "circular") %<+% NJ_Tree_lcwgs_IBS_annotations +
+  geom_tiplab(aes(color = pop), size = 2.8) +
+  geom_treescale(x = 800000, y = 0)
+
+save_open_plot(
+  path   = here("output", "plots", "lcwgs", "dist_tree.pdf"),
+  plot   = NJ_Tree_lcwgs_IBS_plot,
+  width  = 12,
+  height = 9
+)
+```
+
+#### Formating for plot
+```{r}
+geo_dist_mat <- left_join(
+  x = NJ_Tree_lcwgs_IBS_annotations,
+  y = geo_dist
+) |> 
+  select(Indiv, Longitude, Latitude) |> 
+  dist() |>
+  as.matrix()
+
+colnames(geo_dist_mat) <- IDs
+rownames(geo_dist_mat) <- IDs
+
+rm(IDs)
+```
+
+#### Mantel test
+```{r}
+vegan::mantel(geo_dist_mat, EJA_lcwgs_dist_IBS)
+plot(geo_dist_mat)
+plot(EJA_lcwgs_dist_IBS)
+plot(geo_dist_mat/max(geo_dist_mat), EJA_lcwgs_dist_IBS/max(EJA_lcwgs_dist_IBS))
+```
+
+### From R computing
+#### Euclidean distance
+##### Convert to genlight object for gl.ibd calculations
+```{r}
+#| echo: false
+
+lcwgs_gl <- here("data", "lcwgs", "8-Embiotoca_filtered.vcf.gz") |>
+  gl.read.vcf()
+
+lcwgs_gl@other$latlon <- left_join(x = NJ_Tree_lcwgs_IBS_annotations,
+                                   y = geo_dist) |>
+  select(Longitude, Latitude) |>
+  rename(lat = Latitude, lon = Longitude) |> 
+  as.data.frame()
+
+lcwgs_gl@pop <- factor(NJ_Tree_lcwgs_IBS_annotations$pop)
+
+lcwgs_gl |> saveRDS(file = here("data", "lcwgs", "Embiotoca_lcwgs_gl.rds"))
+```
+
+##### Loading data from IBD.R analysis on cluster
+```{r}
+IBD <- readRDS(here("output", "Embiotocidae_IBD.rds"))
+```
+
+##### Plot results
+```{r}
+vegan::mantel(IBD$Dgen, IBD$Dgeo)
+
+mantel_plot(IBD$Dgeo, IBD$Dgen)
+```
+
+##### Plot with PCA distances
+```{r}
+PCA_distance <- tibble(
+  PCA1 = pcadapt_lcwgs$scores[, 1],
+  PCA2 = pcadapt_lcwgs$scores[, 2],
+  PCA3 = pcadapt_lcwgs$scores[, 3],
+  PCA4 = pcadapt_lcwgs$scores[, 4],
+  pop  = popmap_lcwgs
+) |> 
+  group_by(pop) |> 
+  summarise(
+    PCA1_popmean = mean(PCA1),
+    PCA2_popmean = mean(PCA2),
+    PCA3_popmean = mean(PCA3),
+    PCA4_popmean = mean(PCA4)
+  ) |> 
+  dist()
+
+vegan::mantel(PCA_distance, IBD$Dgeo)
+
+mantel_plot(IBD$Dgeo, PCA_distance)
+```
+
+#### Manual barrier distance computing
+##### Computing barrier distance matrix
+```{r}
+water <- ne_states(
+  country     = c("united states of america", "mexico"),
+  returnclass = "sv"
+) |>
+  crop(y = ext(-124,-113, 28.5, 38.5)) |>
+  rasterize(y = rast(ext(-124, -113, 28.5, 38.5), ncols = 1100, nrows = 1000)) |> 
+  subst(from = NA, to = 2) |> 
+  subst(from = 1, to = NA) |> 
+  subst(from = 2, to = 1)
+
+barrier_distance <- function(from, to) {
+  background <- water
+  background[from] <- 2
+  grid_map <- gridDist(background, target = 2)
+  extract(grid_map, to) |> as.numeric()
+}
+
+geo_dist_cells <- here("data", "low_coverage_sampling.csv") |> 
+  read_csv2(show_col_types = FALSE) |> 
+  select(c(Code, Longitude, Latitude)) |> 
+  mutate(
+    pop = popmap_lcwgs |>
+      unique() |>
+      _[c(1, 13, 15, 4, 6, 2, 9, 14, 8, 10, 3, 11, 12, 7, 5)]
+  ) |> 
+  mutate(
+    pop  = as.factor(pop),
+    Code = as.factor(Code)
+  ) |>
+  arrange(pop) |> 
+  (\(x) mutate(x,
+               cell_id = cellFromXY(water, as.matrix(x[, 2:3]))))() |> 
+  pull(cell_id, name = pop)
+
+
+barrier_dist_mat <- proxy::dist(geo_dist_cells, method = barrier_distance)
+
+rm(water, geo_dist_cells)
+```
+
+##### Testing correlation between euclidean and barrier distances
+```{r}
+mantel_plot(IBD$Dgeo, barrier_dist_mat)
+```
+
+##### Plot with gl.ibd distance
+```{r}
+vegan::mantel(barrier_dist_mat, IBD$Dgen)
+mantel_plot(barrier_dist_mat, IBD$Dgen)
+```
+
+##### Plot with pca distance
+```{r}
+vegan::mantel(barrier_dist_mat, PCA_distance)
+mantel_plot(barrier_dist_mat, PCA_distance)
+```
+
+#### Excluding islanders
+```{r}
+lcwgs_gl <- readRDS(file = here("data", "lcwgs", "Embiotoca_lcwgs_gl.rds"))
+lcwgs_gl_islanders <- lcwgs_gl |>
+  gl.drop.pop(
+    pop.list = c("guadalupe_island", "catalina_island", "san_clemente_island"),
+    mono.rm  = TRUE,
+    recalc   = TRUE,
+    verbose  = 5
+  )
 ```
 
 # Figures
@@ -867,169 +1062,3 @@ rm(Indiv_list, admixture_plot)
 ```
 
 ## Figure 6 - IBD
-### Test with plink
-#### plink script
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
-
-./plink --vcf 8-Embiotoca_filtered.vcf.gz --out Embiotoca_filtered_dist_matrix --allow-extra-chr --autosome-num 95 --distance square --const-fid
-```
-
-#### Plink import
-```{r}
-EJA_lcwgs_dist_IBS <- here("plink2", "Embiotoca_filtered_dist_matrix.dist") |> 
-  read_table(col_names = FALSE) |> 
-  as.matrix()
-
-IDs <- here("plink2", "Embiotoca_filtered_dist_matrix.dist.id") |> 
-  read_table(col_names = FALSE) |> pull(X2)
-
-colnames(EJA_lcwgs_dist_IBS) <- IDs
-rownames(EJA_lcwgs_dist_IBS) <- IDs
-```
-
-#### NJ tree computing
-```{r}
-NJ_Tree_lcwgs_IBS <- EJA_lcwgs_dist_IBS |> as.dist() |> nj()
-
-NJ_Tree_lcwgs_IBS_annotations <- tibble(
-  Indiv = NJ_Tree_lcwgs_IBS$tip.label,
-  pop   = popmap_lcwgs
-)
-
-NJ_Tree_lcwgs_IBS_plot <- NJ_Tree_lcwgs_IBS |>
-  ggtree(layout = "circular") %<+% NJ_Tree_lcwgs_IBS_annotations +
-  geom_tiplab(aes(color = pop), size = 2.8) +
-  geom_treescale(x = 800000, y = 0)
-
-save_open_plot(
-  path   = here("output", "plots", "lcwgs", "dist_tree.pdf"),
-  plot   = NJ_Tree_lcwgs_IBS_plot,
-  width  = 12,
-  height = 9
-)
-```
-
-#### Formating for plot
-```{r}
-geo_dist_mat <- left_join(
-  x = NJ_Tree_lcwgs_IBS_annotations,
-  y = geo_dist
-) |> 
-  select(Indiv, Longitude, Latitude) |> 
-  dist() |>
-  as.matrix()
-
-colnames(geo_dist_mat) <- IDs
-rownames(geo_dist_mat) <- IDs
-
-rm(IDs)
-```
-
-#### Mantel test
-```{r}
-vegan::mantel(geo_dist_mat, EJA_lcwgs_dist_IBS)
-plot(geo_dist_mat)
-plot(EJA_lcwgs_dist_IBS)
-plot(geo_dist_mat/max(geo_dist_mat), EJA_lcwgs_dist_IBS/max(EJA_lcwgs_dist_IBS))
-```
-
-### From R computing
-#### Euclidean distance
-##### Convert to genlight object for gl.ibd calculations
-```{r}
-#| echo: false
-
-lcwgs_gl <- here("data", "lcwgs", "EJA_lcwgs_vcfR.RDS") |>
-  readRDS() |>
-  vcfR2genlight()
-
-lcwgs_gl@other$latlon <- left_join(x = NJ_Tree_lcwgs_IBS_annotations,
-                                   y = geo_dist) |>
-  select(Longitude, Latitude) |>
-  rename(lat = Latitude, lon = Longitude) |> 
-  as.data.frame()
-
-lcwgs_gl@pop <- factor(NJ_Tree_lcwgs_IBS_annotations$pop)
-
-lcwgs_gl |> saveRDS(file = here("data", "lcwgs", "Embiotoca_lcwgs_gl.rds"))
-```
-
-##### Loading data from IBD.R analysis on cluster
-```{r}
-IBD <- readRDS(here("output", "Embiotocidae_IBD.rds"))
-```
-
-##### Plot results
-```{r}
-vegan::mantel(IBD$Dgen, IBD$Dgeo)
-
-mantel_plot(IBD$Dgeo, IBD$Dgen)
-```
-
-##### Plot with PCA distances
-```{r}
-PCA_distance <- tibble(
-  PCA1 = pcadapt_lcwgs$scores[, 1],
-  PCA2 = pcadapt_lcwgs$scores[, 2],
-  PCA3 = pcadapt_lcwgs$scores[, 3],
-  PCA4 = pcadapt_lcwgs$scores[, 4],
-  pop  = popmap_lcwgs
-) |> 
-  group_by(pop) |> 
-  summarise(
-    PCA1_popmean = mean(PCA1),
-    PCA2_popmean = mean(PCA2),
-    PCA3_popmean = mean(PCA3),
-    PCA4_popmean = mean(PCA4)
-  ) |> 
-  dist()
-
-vegan::mantel(PCA_distance, IBD$Dgeo)
-
-mantel_plot(IBD$Dgeo, PCA_distance)
-```
-
-### Manual barrier distance computing
-```{r}
-water <- ne_states(
-  country     = c("united states of america", "mexico"),
-  returnclass = "sv"
-) |>
-  crop(y = ext(-124,-113, 28.5, 38.5)) |>
-  rasterize(y = rast(ext(-124, -113, 28.5, 38.5), ncols = 1100, nrows = 1000)) |> 
-  subst(from = NA, to = 2) |> 
-  subst(from = 1, to = NA) |> 
-  subst(from = 2, to = 1)
-
-barrier_distance <- function(from, to) {
-  background <- water
-  background[from] <- 2
-  grid_map <- gridDist(background, target = 2)
-  extract(grid_map, to) |> as.numeric()
-}
-
-geo_dist_cells <- here("data", "low_coverage_sampling.csv") |> 
-  read_csv2(show_col_types = FALSE) |> 
-  select(c(Code, Longitude, Latitude)) |> 
-  mutate(
-    pop = popmap_lcwgs |>
-      unique() |>
-      _[c(1, 13, 15, 4, 6, 2, 9, 14, 8, 10, 3, 11, 12, 7, 5)]
-  ) |> 
-  mutate(
-    pop  = as.factor(pop),
-    Code = as.factor(Code)
-  ) |>
-  arrange(pop) |> 
-  (\(x) mutate(x,
-               cell_id = cellFromXY(water, as.matrix(x[, 2:3]))))() |> 
-  pull(cell_id, name = pop)
-
-
-barrier_dist_mat <- proxy::dist(geo_dist_cells, method = barrier_distance)
-
-mantel_plot(IBD$Dgeo, barrier_dist_mat)
-
-rm(water, geo_dist_cells)
-```
