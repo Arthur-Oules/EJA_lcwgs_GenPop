@@ -152,34 +152,27 @@ PCA_plot <- function(pcadapt_output,
   }
 }
 
-nc_crop <- function(var,
-                    lon_min, lon_max,
-                    lat_min, lat_max) {
-  # Coordinates conversion
-  lon_min <- lon_min * 10
-  lon_max <- lon_max * 10
-  if (lon_min < 0) {
-    lon_min <- 3600 + lon_min
-  }
-  if (lon_max < 0) {
-    lon_max <- 3600 + lon_max
-  }
-  lat_min <- lat_min * 10 + 750
-  lat_max <- lat_max * 10 + 750
+mantel_plot <- function(Matx, Maty) {
   
-  # Get and crop data
-  var_crop <- ncvar_get(var) |>
-    _[, , 1] |>
-    as.matrix() |>
-    _[(lon_min):(lon_max), (lat_min):(lat_max)] |>
-    as.vector()
+  mantel_result <- vegan::mantel(Matx, Maty)
   
-  var_crop
-}
-
-reduce_density <- function(high_density_vector, factor) {
-  high_density_vector |>
-    data.frame("value" = _) |>
-    mutate(value = ifelse(row_number() %% factor == 1, value, NA)) |> # Reduce vector density
-    pull(value)
+  IBD_PCA_tb <- tibble(
+    Dgeo = as.numeric(Matx),
+    Dgen = as.numeric(Maty)
+  )
+  
+  ggplot(IBD_PCA_tb) +
+    geom_smooth(aes(x = Dgeo, y = Dgen), method = "lm", se = TRUE) +
+    geom_point(aes(x = Dgeo, y = Dgen)) +
+    annotate(
+      "text",
+      label = lm_eqn(IBD_PCA_tb, r = mantel_result$statistic, pp = mantel_result$signif),
+      x     = Inf,
+      y     = -Inf,
+      parse = TRUE,
+      hjust = 1.05,
+      vjust = 0
+    ) +
+    theme_classic() +
+    theme(aspect.ratio = 1)
 }

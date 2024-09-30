@@ -1,10 +1,3 @@
-reduce_all_numeric <- function(liste) {
-  for (i in 1:length(liste)) {
-    liste[i] <- as.numeric(liste[[i]][1])
-  }
-  liste
-}
-
 Get_outliers <- function(vcf_path,
                          phistats_path = NULL,
                          pcadapt,
@@ -13,7 +6,7 @@ Get_outliers <- function(vcf_path,
     read.vcfR() |>
     getID() |>
     strsplit(split = ":") |>
-    reduce_all_numeric()
+    lapply(\(x) x[1] |> as.numeric())
   
   #Outliers selection by pcadapt pvalues
   padj <- pcadapt$pvalues |> p.adjust(method = "bonferroni")
@@ -91,66 +84,10 @@ Get_catalog_sequences <- function(catalog_path,
   outliers_sequences
 }
 
-XML_to_df_old <- function(XML) {
-  # Initialisation
-  query_df <- data.frame(
-    matrix(
-      NA,
-      nrow = length(xml_find_all(XML, ".//Hit")),
-      ncol = 7
-    )
-  )
-  colnames(query_df) <- c(
-    "query_number",
-    "hit_number",
-    "accession_number",
-    "title",
-    "organism",
-    "bit_score",
-    "eval_number"
-  )
-  queries <- xml_find_all(XML, ".//BlastOutput2")
-  end <- length(queries)
-  counter <- 0
-  # Main loop
-  for (query in queries) { # Reads XML BLAST results as data frame
-    counter <- counter + 1
-    print(paste0("Extracting query ", counter, "/", end))
-    print("Parsing hits")
-    for (Hit in xml_find_all(query, ".//Hit")) { # For each locus get all hits
-      match_1 <- xml_find_all(Hit, ".//Hsp") |> _[1] # Keep best match
-      query_df[which(rowSums(is.na(query_df)) > 0)[1], ] <- data.frame(
-        "query_number"     = xml_find_all(query, ".//query-title") |>
-          xml_text() |> 
-          as.numeric(),
-        "hit_number"       = xml_find_all(Hit, ".//num") |>
-          xml_text() |>
-          _[1] |> 
-          as.numeric(),
-        "accession_number" = xml_find_all(Hit, ".//accession") |>
-          xml_text() |>
-          _[1],
-        "title"            = xml_find_all(Hit, ".//title") |>
-          xml_text() |>
-          _[1],
-        "organism"         = xml_find_all(Hit, ".//sciname") |>
-          xml_text() |>
-          _[1],
-        "bit_score"        = xml_find_all(match_1, ".//bit-score") |>
-          xml_text() |>
-          as.numeric(),
-        "eval_number"      = xml_find_all(match_1, ".//evalue") |>
-          xml_text() |>
-          as.numeric()
-      )
-    }
-    print("End of parsing")
-  }
-  query_df
-}
-
 XML_to_df <- function(xml_file) {
-  xml_tib <- xml_file |> as_list() |> as_tibble() |> 
+  xml_tib <- xml_file |>
+    as_list() |>
+    as_tibble() |> 
     mutate(BlastXML2 = map(BlastXML2, ~if(is.list(.x)) .x else list(.x))) |>
     unnest_longer(BlastXML2) |>
     filter(BlastXML2_id == "report") |>
@@ -232,4 +169,50 @@ Get_pvalues <- function(pcadapt) {
       log.p      = TRUE
     )/log(10)
   )
+}
+
+nc_crop <- function(var,
+                    lon_min, lon_max,
+                    lat_min, lat_max) {
+  # Coordinates conversion
+  lon_min <- lon_min * 10
+  lon_max <- lon_max * 10
+  if (lon_min < 0) {
+    lon_min <- 3600 + lon_min
+  }
+  if (lon_max < 0) {
+    lon_max <- 3600 + lon_max
+  }
+  lat_min <- lat_min * 10 + 750
+  lat_max <- lat_max * 10 + 750
+  
+  # Get and crop data
+  var_crop <- ncvar_get(var) |>
+    _[, , 1] |>
+    as.matrix() |>
+    _[(lon_min):(lon_max), (lat_min):(lat_max)] |>
+    as.vector()
+  
+  var_crop
+}
+
+reduce_density <- function(high_density_vector, factor) {
+  high_density_vector |>
+    data.frame("value" = _) |>
+    mutate(value = ifelse(row_number() %% factor == 1, value, NA)) |> # Reduce vector density
+    pull(value)
+}
+
+lm_eqn <- function(df, r = manteltest$statistic, pp = manteltest$signif) {
+  m <- lm(Dgen ~ Dgeo, df)
+  eq <- substitute(
+    italic(y) == a + b %.% italic(x) * "," ~ ~italic(R)^2 ~ "=" ~ r2 * "," ~ ~italic(p) ~ "=" ~ pp,
+    list(
+      a = format(unname(coef(m)[1]), digits = 2),
+      b = format(unname(coef(m)[2]), digits = 2),
+      r2 = format(summary(m)$r.squared, digits = 3),
+      pp = format(pp, digits = 3)
+    )
+  )
+  as.character(as.expression(eq))
 }
