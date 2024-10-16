@@ -84,55 +84,6 @@ Get_catalog_sequences <- function(catalog_path,
   outliers_sequences
 }
 
-XML_to_df <- function(xml_file) {
-  xml_tib <- xml_file |>
-    as_list() |>
-    as_tibble() |> 
-    mutate(BlastXML2 = map(BlastXML2, ~if(is.list(.x)) .x else list(.x))) |>
-    unnest_longer(BlastXML2) |>
-    filter(BlastXML2_id == "report") |>
-    unnest_wider(BlastXML2) |> 
-    unnest_longer(Report) |>
-    filter(Report_id == "results") |> 
-    unnest_wider(Report) |> 
-    unnest_longer(Results) |>
-    unnest_wider(Results) |>
-    unnest_longer(Search) |>
-    filter((Search_id == "query-title") | (Search_id == "hits")) |>
-    select(c(Search, Search_id)) |>
-    mutate(
-      Rank = ifelse(Search_id == "hits", rep(Search[Search_id == "query-title"], each = 2), NA)
-    ) |>
-    filter(Search_id == "hits") |>
-    select(-Search_id) |>
-    unnest(Rank) |> unnest(c(Search, Rank)) |>
-    unnest_longer(Search, names_repair = "universal") |>
-    filter(Search_id != "len") |> 
-    mutate(
-      Hit = rep(Search[Search_id == "num"], each = 3)
-    ) |> 
-    filter(Search_id != "num") |> 
-    unnest(Hit) |> unnest(Hit) |>
-    unnest_longer(Search, names_repair = "universal")
-  
-  metadata <- xml_tib |>
-    filter(Search_id...2 == "HitDescr") |>
-    unnest_wider(Search) |>
-    select(c(accession_number = accession, title, sciname, Rank, Hit)) |>
-    unnest(c(accession_number, title, sciname))
-  
-  xml_tib <- xml_tib |>
-    filter(Search_id...2 == "Hsp") |> 
-    unnest_wider(Search) |>
-    select(num, bit_score = "bit-score", evalue, Rank, Hit) |>
-    unnest(cols = c(num, bit_score, evalue)) |> 
-    left_join(x = _, y = metadata, by = join_by(Rank == Rank, Hit == Hit), relationship = "many-to-many") |> 
-    select(Rank, Hit, Hits = num, accession_number, title, sciname, bit_score, evalue) |>
-    mutate_at(vars(Rank, Hit, Hits, bit_score, evalue), as.numeric) |> 
-    unnest(cols = c(accession_number, title, sciname))
-  xml_tib
-}
-
 Get_protein_sequences <- function(df, silent = TRUE) {
   df |>
     select(accession_number) |>
@@ -201,18 +152,4 @@ reduce_density <- function(high_density_vector, factor) {
     data.frame("value" = _) |>
     mutate(value = ifelse(row_number() %% factor == 1, value, NA)) |> # Reduce vector density
     pull(value)
-}
-
-lm_eqn <- function(df, r = manteltest$statistic, pp = manteltest$signif) {
-  m <- lm(Dgen ~ Dgeo, df)
-  eq <- substitute(
-    italic(y) == a + b %.% italic(x) * "," ~ ~italic(R)^2 ~ "=" ~ r2 * "," ~ ~italic(p) ~ "=" ~ pp,
-    list(
-      a = format(unname(coef(m)[1]), digits = 2),
-      b = format(unname(coef(m)[2]), digits = 2),
-      r2 = format(summary(m)$r.squared, digits = 3),
-      pp = format(pp, digits = 3)
-    )
-  )
-  as.character(as.expression(eq))
 }
