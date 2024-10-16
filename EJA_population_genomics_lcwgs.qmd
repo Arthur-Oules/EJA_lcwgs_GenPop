@@ -24,7 +24,7 @@ c("here", "tidyverse",
 ```{r}
 #| label: LoadTidy
 
-source(here("functions", "tidy_functions.R"))
+source(here("functions", "lcwgs_tidy_functions.R"))
 ```
 
 ## All populations
@@ -293,6 +293,133 @@ pcadapt_lcwgs_islands$pvalues |> hist(
 )
 ```
 
+## San Diego vs Santa Cruz
+
+```{r}
+#| label: SaveWhitelist
+#| eval: false
+
+Indiv_list <- read_rds(file = here("data", "lcwgs", "Individual_list.rds"))
+
+Indiv_list |> 
+  unique() |>
+  {\(x) {
+    x[
+      (grepl(pattern = "SCH", x = x) |
+       grepl(pattern = "SD", x = x))
+    ]
+    }}() |> 
+  write_lines(here("plink2", "whitelist_SD_SC.txt"))
+rm(Indiv_list)
+```
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_SD_SC.txt --make-bed --out 8-Embiotoca_filtered_SD_SC
+```
+
+```{r}
+#| label: PreAnalysisSDSC
+
+EJA_lcwgs_SD_SC <- read.pcadapt(
+  here("plink2", "8-Embiotoca_filtered_SD_SC.bed"),
+  type = "bed"
+)
+
+pcadapt(input = EJA_lcwgs_SD_SC, K = 20) |>
+  plot(option = "screeplot")
+```
+
+K = 4 seems correct
+
+```{r}
+#| label: pcadapt
+
+popmap_lcwgs_SD_SC <- c(
+  rep("la_jolla_san_diego", 13), # SD
+  rep("santa_cruz_harbour", 10) # SCH
+)
+
+pcadapt_lcwgs_SD_SC <- EJA_lcwgs_SD_SC |> pcadapt(K = 1)
+```
+
+
+```{r}
+#| label: ExploPlots
+
+pcadapt_lcwgs_SD_SC |> plot(option = "qqplot")
+
+pcadapt_lcwgs_SD_SC |> plot(option = "manhattan")
+
+pcadapt_lcwgs_SD_SC$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
+```
+
+# Outliers
+
+## Read genome
+```{r}
+lcwgs_catalog <- read.dna(
+    here("data", "lcwgs", "JAKOON01_catalog", "catalog.fa"),
+    format = "fasta",
+    as.character = TRUE
+  )
+
+names(lcwgs_catalog) <- names(lcwgs_catalog) |>
+  str_split(pattern = " ") |>
+  map(\(x) x[1]) |>
+  unlist()
+```
+
+## Get pvalues map from coastal individuals analysis
+```{r}
+pvalues_positions <- readRDS(
+  file = here("data", "lcwgs", "manhattan_metadata.rds")
+) |> 
+  select(-c(lab_position, coloured, rank)) |> 
+  mutate(
+    pvalues = pcadapt_lcwgs_coast$pvalues,
+    logpvalues = Get_pvalues(pcadapt_lcwgs_coast)
+  )
+
+pvalues_positions_filtered <- pvalues_positions |> 
+  filter(is.na(pvalues) == FALSE) |> 
+  filter(logpvalues >= 200)
+```
+
+## Get corresponding read windows
+```{r}
+pvalues_positions_filtered_sequences <- pvalues_positions_filtered |>
+  mutate(
+    sequences = row_number() |>
+      map(
+        \(x) lcwgs_catalog[[CHROM[[x]]]][Get_window(POS[[x]])] |>
+          paste(collapse = "") |>
+          toupper()
+      ) |> 
+      unlist()
+    )
+```
+
+## Write to fasta file
+```{r}
+pvalues_positions_filtered_sequences |>
+  mutate(seq_name = paste0(">", CHROM, " POS: ", as.character(POS))) |>
+  select(seq_name, sequences) |> 
+  write.table(
+    file      = here("output", "lcwgs_outliers_sequences.fa"),
+    sep       = "\n",
+    row.names = FALSE,
+    col.names = FALSE,
+    quote     = FALSE
+  )
+```
+
 # Admixture analysis
 
 ## Convert data to ped format for LEA import using plink2
@@ -467,7 +594,7 @@ lcwgs_gl |> saveRDS(file = here("data", "lcwgs", "Embiotoca_lcwgs_gl.rds"))
 
 ##### Loading data from IBD.R analysis on cluster
 ```{r}
-IBD <- readRDS(here("output", "Embiotocidae_IBD.rds"))
+IBD <- readRDS(here("output", "Embiotocidae_lcwgs_IBD.rds"))
 ```
 
 ##### Plot results
@@ -522,12 +649,8 @@ barrier_distance <- function(from, to) {
 
 geo_dist_cells <- here("data", "low_coverage_sampling.csv") |> 
   read_csv2(show_col_types = FALSE) |> 
-  select(c(Code, Longitude, Latitude)) |> 
-  mutate(
-    pop = popmap_lcwgs |>
-      unique() |>
-      _[c(1, 13, 15, 4, 6, 2, 9, 14, 8, 10, 3, 11, 12, 7, 5)]
-  ) |> 
+  select(c(Code, Longitude, Latitude, Popmap)) |> 
+  rename(pop = Popmap) |> 
   mutate(
     pop  = as.factor(pop),
     Code = as.factor(Code)
@@ -562,15 +685,76 @@ mantel_plot(barrier_dist_mat, PCA_distance)
 
 #### Excluding islanders
 ```{r}
-lcwgs_gl <- readRDS(file = here("data", "lcwgs", "Embiotoca_lcwgs_gl.rds"))
-lcwgs_gl_islanders <- lcwgs_gl |>
-  gl.drop.pop(
-    pop.list = c("guadalupe_island", "catalina_island", "san_clemente_island"),
-    mono.rm  = TRUE,
-    recalc   = TRUE,
-    verbose  = 5
-  )
+lcwgs_IBD_islanders <- readRDS(
+  file = here("output", "Embiotocidae_lcwgs_islanders_IBD.rds")
+)
 ```
+
+```{r}
+geo_dist_cells_islanders <- here("data", "low_coverage_sampling.csv") |> 
+  read_csv2(show_col_types = FALSE) |> 
+  select(c(Code, Longitude, Latitude, Popmap)) |>
+  rename(pop = Popmap) |> 
+  filter(
+    !pop %in% c("guadalupe_island", "catalina_island", "san_clemente_island")
+  ) |> 
+  mutate(
+    pop  = as.factor(pop),
+    Code = as.factor(Code)
+  ) |>
+  arrange(pop) |> 
+  (\(x) mutate(x,
+               cell_id = cellFromXY(water, as.matrix(x[, 2:3]))))() |> 
+  pull(cell_id, name = pop)
+
+barrier_dist_mat_islanders <- proxy::dist(geo_dist_cells_islanders, method = barrier_distance)
+```
+
+```{r}
+Dist_geo_isl <- here("data", "low_coverage_sampling.csv") |> 
+  read_csv2(show_col_types = FALSE) |> 
+  select(c(Code, Longitude, Latitude, Popmap)) |>
+  rename(pop = Popmap) |> 
+  arrange(pop) |> 
+  filter(
+    !pop %in% c("guadalupe_island", "catalina_island", "san_clemente_island")
+  ) |>
+  as.data.frame()
+
+rownames(Dist_geo_isl) <- Dist_geo_isl$pop
+
+Dist_geo_isl <- Dist_geo_isl[, 2:3] |> dist()
+```
+
+```{r}
+vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgeo)
+```
+
+```{r}
+vegan::mantel(barrier_dist_mat_islanders, lcwgs_IBD_islanders$Dgen)
+vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgen)
+
+mantel_plot(barrier_dist_mat_islanders, lcwgs_IBD_islanders$Dgen)
+```
+```{r}
+PCA_distances_coast <- tibble(
+  PCA1 = pcadapt_lcwgs_coast$scores[, 1],
+  PCA2 = pcadapt_lcwgs_coast$scores[, 2],
+  pop  = popmap_lcwgs_coast
+) |> 
+  group_by(pop) |> 
+  summarise(
+    PCA1_popmean = mean(PCA1),
+    PCA2_popmean = mean(PCA2)
+  ) |> 
+  dist()
+
+vegan::mantel(Dist_geo_isl, PCA_distances_coast)
+vegan::mantel(barrier_dist_mat_islanders, PCA_distances_coast)
+
+mantel_plot(Dist_geo_isl, PCA_distances_coast)
+```
+
 
 # Figures
 
@@ -586,6 +770,7 @@ source(here("functions", "plot_functions.R"))
 ### Prepare all data
 ```{r}
 #| label: ManhattanDataPrep
+#| echo: false
 
 chromosome_names <- EJA_lcwgs_vcf |>
   getFIX() |>
@@ -603,9 +788,6 @@ labs_pos <- chromosome_names |>
 
 chromosome_names <- chromosome_names |>
   mutate(
-    pvalues_all    = Get_pvalues(pcadapt_lcwgs),
-    pvalues_coast  = Get_pvalues(pcadapt_lcwgs_coast),
-    pvalues_island = Get_pvalues(pcadapt_lcwgs_islands),
     lab_position   = if_else(row_number() %in% labs_pos, TRUE, FALSE),
     coloured       = CHROM |>
       {\(x) factor(x, levels = unique(x))}() |>
@@ -613,7 +795,13 @@ chromosome_names <- chromosome_names |>
       (`%%`)(2)
   )
 
+chromosome_names |> saveRDS(file = here("data", "lcwgs", "manhattan_metadata.rds"))
+
 rm(labs_pos)
+```
+
+```{r}
+chromosome_names <- readRDS(file = here("data", "lcwgs", "manhattan_metadata.rds"))
 ```
 
 ### Plot every populations
@@ -621,6 +809,7 @@ rm(labs_pos)
 #| label: ManhattanPlot
 
 manhattan_plot_lcwgs <- chromosome_names |>
+    mutate(pvalues_all = Get_pvalues(pcadapt_lcwgs)) |> 
   manhattan_plot_custom_2(pvalues = pvalues_all)
 
 ggsave(
@@ -637,6 +826,7 @@ ggsave(
 #| label: ManhattanPlotCoast
 
 manhattan_plot_lcwgs_coast <- chromosome_names |>
+  mutate(pvalues_coast= Get_pvalues(pcadapt_lcwgs_coast)) |> 
   manhattan_plot_custom_2(pvalues = pvalues_coast)
 
 ggsave(
@@ -648,11 +838,46 @@ ggsave(
 )
 ```
 
+#### Descending chromosome length
+
+```{r}
+chromosome_names_pvalues <- chromosome_names |> 
+  mutate(pvalues_SD_SC = Get_pvalues(pcadapt_lcwgs_coast))
+
+chromosome_length <- chromosome_names |>
+  count(CHROM) |>
+  arrange(desc(n))
+
+chromosome_names_desc_order <- chromosome_names_pvalues |>
+  mutate(CHROM = factor(CHROM, levels = chromosome_length$CHROM)) |>
+  arrange(CHROM) |> 
+  mutate(
+    CHROM    = as.character(CHROM),
+    # rank     = row_number(),
+    coloured = CHROM |>
+      {\(x) factor(x, levels = unique(x))}() |>
+      as.integer() |>
+      (`%%`)(2)
+  )
+
+test_manhattan <- manhattan_plot_custom_2(chromosome_names_desc_order, chromosome_names_desc_order$pvalues_SD_SC)
+
+ggsave(
+  here("output", "plots", "lcwgs", "manhattan_plot_custom_lcwgs_arranged_coast.png"),
+  plot   = test_manhattan,
+  width  = 6000,
+  height = 2000,
+  units  = "px"
+)
+```
+
+
 ### Plot island populations
 ```{r}
 #| label: ManhattanPlotIsl
 
 manhattan_plot_lcwgs_islands <- chromosome_names |>
+  mutate(pvalues_island = Get_pvalues(pcadapt_lcwgs_islands)) |>
   manhattan_plot_custom_2(pvalues = pvalues_island)
 
 ggsave(
@@ -664,7 +889,60 @@ ggsave(
 )
 ```
 
+### Plot SD vs SCH
+
+#### Regular
+```{r}
+#| label: ManhattanPlotSDSC
+
+manhattan_plot_lcwgs_SD_SC <- chromosome_names |>
+  mutate(pvalues_SD_SC = Get_pvalues(pcadapt_lcwgs_SD_SC)) |>
+  manhattan_plot_custom_2(pvalues = pvalues_SD_SC)
+
+ggsave(
+  here("output", "plots", "lcwgs", "manhattan_plot_custom_lcwgs_SC_SD.png"),
+  plot   = manhattan_plot_lcwgs_SD_SC,
+  width  = 6000,
+  height = 2000,
+  units  = "px"
+)
+```
+
+#### Descending chromosome length
+
+```{r}
+chromosome_names_pvalues <- chromosome_names |> 
+  mutate(pvalues_SD_SC = Get_pvalues(pcadapt_lcwgs_SD_SC))
+
+chromosome_length <- chromosome_names |>
+  count(CHROM) |>
+  arrange(desc(n))
+
+chromosome_names_desc_order <- chromosome_names_pvalues |>
+  mutate(CHROM = factor(CHROM, levels = chromosome_length$CHROM)) |>
+  arrange(CHROM) |> 
+  mutate(
+    CHROM    = as.character(CHROM),
+    rank     = row_number(),
+    coloured = CHROM |>
+      {\(x) factor(x, levels = unique(x))}() |>
+      as.integer() |>
+      (`%%`)(2)
+  )
+
+test_manhattan <- manhattan_plot_custom_2(chromosome_names_desc_order, chromosome_names_desc_order$pvalues_SD_SC)
+
+ggsave(
+  here("output", "plots", "lcwgs", "manhattan_plot_custom_lcwgs_arranged_SC_SD.png"),
+  plot   = test_manhattan,
+  width  = 6000,
+  height = 2000,
+  units  = "px"
+)
+```
+
 ### Clean memory
+
 ```{r}
 #| label: ManhattanMemClean
 
@@ -803,7 +1081,7 @@ time(SST_maps) <- seq(as.Date("2023-01-01"), as.Date("2023-12-31"), by = "days")
 SST_maps |>
   mean() |>
   (`-`)(273.15) |>
-  writeRaster(file = here("data", "Copernicus", "annual_average_SST.tif"))
+  saveRDS(file = here("data", "Copernicus", "annual_average_SST.rds"))
 
 rm(SST_maps)
 ```
@@ -815,7 +1093,7 @@ currents_tibble_annual_mean_lres <- read_rds(
   file = here("data", "Copernicus", "annual_average_currents_tb.RDS")
 )
 
-SST_annual_mean <- read_rds(
+SST_annual_mean <- readRDS(
   file = here("data", "Copernicus", "annual_average_SST.RDS")
 )
 ```
@@ -838,13 +1116,19 @@ sample_sites <- read.csv2(
   select(Longitude, Latitude, Sampling_sites) |> 
   mutate( # Add offsets
     Sampling_sites = gsub("\\n", "\n", Sampling_sites, fixed = TRUE),
-    lab_lon = Longitude + .15 + rep(0, 5),
-    lab_lat = Latitude + .25 + rep(0, 5)
+    lab_lon = Longitude +
+      c(1.0, .8,  .6, .62, .87,
+        .73, .8, 1.1, .98,  -1,
+        1.0, -1, .62,  .7, .79),
+    lab_lat = Latitude +
+      c(-.08, .22, .25,  .1, -.15,
+         .10,  .2, .06,  .05,  .10,
+        -.17, -.27,  .1, .15,  .25)
   )
 
 states_labels <- data.frame(
-  "long" = c(-117.5, -115.5, -113.7, -115.2),
-  "lat"  = c(35.5, 36.6, 35, 30.75),
+  "long" = c(-117.5, -115.5, -113.7, -115.4),
+  "lat"  = c(35.5, 37, 35, 30.75),
   "lab"  = c("CA", "NV", "AZ", "BC")
 )
 city_labels <- data.frame(
@@ -906,9 +1190,11 @@ lcwgs_map <- ggplot() +
     shape       = 21,
     show.legend = FALSE
   ) +
-  geom_label_repel(
+  geom_label(
     sample_sites,
-    mapping = aes(x = Longitude, y = Latitude, label = Sampling_sites)
+    mapping = aes(x = lab_lon, y = lab_lat, label = Sampling_sites),
+    label.r = unit(0, "lines"),
+    alpha   = .6
   ) +
   # Extra cities points and labels
   geom_point(
@@ -928,40 +1214,51 @@ lcwgs_map <- ggplot() +
   geom_text(
     states_labels,
     mapping = aes(x = long, y = lat, label = lab),
-    size = 5.5
+    size    = 5.5
   ) +
   geom_text(
     ocean_labels[2, ],
-    mapping = aes(x = long, y = lat, label = lab),
-    colour  = "ivory",
-    size    = 5
+    mapping  = aes(x = long, y = lat, label = lab),
+    colour   = "ivory",
+    size     = 5,
+    fontface = "bold"
   ) +
   geom_label(
     ocean_labels[1, ],
     mapping       = aes(x = long, y = lat, label = lab),
     colour        = "black",
     size          = 5,
-    label.padding = unit(0.5, "lines")
+    label.padding = unit(0.2, "lines"),
+    label.r       = unit(0, "lines"),
+    fontface      = "bold"
   ) +
   # Vector scale
   geom_label(
-    aes(x = -122, y = 29.5, label = ".25 m/s\n"),
+    aes(x = -122, y = 29.425, label = ".25 m/s\n"),
     size          = 4.5,
-    label.padding = unit(0.5, "lines")
+    label.padding = unit(0.5, "lines"),
+    label.r       = unit(0, "lines")
   ) +
   geom_segment(
     aes(x = -122.25, y = 29.25, xend = -121.75, yend = 29.25),
     size     = .5,
-    arrow = arrow(angle = 20, length = unit(0.035, "inches"), type = "closed"),
+    arrow    = arrow(
+      angle  = 20,
+      length = unit(0.035, "inches"),
+      type   = "closed"
+    ),
     linejoin = "mitre"
   ) +
   # Cartographic scale
-  geom_label(aes(x = -119.1, y = 28.71, label = "        ")) +
+  geom_label(
+    aes(x = -119.14, y = 28.69, label = "        "),
+    label.r = unit(0, "lines")
+  ) +
   annotation_scale(location = "bl", width_hint = 0.4) +
   # Orientation
   annotation_north_arrow(
     location = "tr",
-    style = north_arrow_fancy_orienteering()
+    style    = north_arrow_fancy_orienteering()
   ) +
   # Axes
   labs(x = "Longitude", y = "Latitude") +
