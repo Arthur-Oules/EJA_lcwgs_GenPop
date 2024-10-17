@@ -1,6 +1,16 @@
-Get_window <- function(position) {
-  if (position < 500) 0:(1000 - position)
-  else (position - 500):(position + 500)
+here_d_lcwgs <- function(...) here("data", "lcwgs", ... = ...)
+
+Get_window <- function(chromosome, position) {
+  chromosome_length <- chromosomes_length |>
+    filter(accession == chromosome) |>
+    pull(length)
+  if (chromosome_length - position < 500) {
+    (chromosome_length - 1000):chromosome_length
+  } else if (position < 500) {
+     0:1000
+  } else {
+    (position - 500):(position + 500)
+  }
 }
 
 XML_to_df <- function(xml_file) {
@@ -20,7 +30,11 @@ XML_to_df <- function(xml_file) {
     filter((Search_id == "query-title") | (Search_id == "hits")) |>
     select(c(Search, Search_id)) |>
     mutate(
-      Rank = ifelse(Search_id == "hits", rep(Search[Search_id == "query-title"], each = 2), NA)
+      Rank = ifelse(
+        Search_id == "hits",
+        rep(Search[Search_id == "query-title"], each = 2),
+        NA
+      )
     ) |>
     filter(Search_id == "hits") |>
     select(-Search_id) |>
@@ -45,10 +59,25 @@ XML_to_df <- function(xml_file) {
     unnest_wider(Search) |>
     select(num, bit_score = "bit-score", evalue, Rank, Hit) |>
     unnest(cols = c(num, bit_score, evalue)) |> 
-    left_join(x = _, y = metadata, by = join_by(Rank == Rank, Hit == Hit), relationship = "many-to-many") |> 
-    select(Rank, Hit, Hits = num, accession_number, title, sciname, bit_score, evalue) |>
-    mutate_at(vars(Rank, Hit, Hits, bit_score, evalue), as.numeric) |> 
+    left_join(
+      x = _,
+      y = metadata,
+      by = join_by(Rank == Rank, Hit == Hit),
+      relationship = "many-to-many"
+    ) |> 
+    select(
+      Rank,
+      Hit,
+      Hits = num,
+      accession_number,
+      title,
+      sciname,
+      bit_score,
+      evalue
+    ) |>
+    mutate_at(vars(Hit, Hits, bit_score, evalue), as.numeric) |> 
     unnest(cols = c(accession_number, title, sciname))
+  
   xml_tib
 }
 
