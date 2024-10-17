@@ -41,7 +41,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: PreAnalysis
 
 EJA_lcwgs <- read.pcadapt(
-  here("data", "lcwgs", "8-Embiotoca_filtered.bed"),
+  here_d_lcwgs("8-Embiotoca_filtered.bed"),
   type = "bed"
 )
 
@@ -101,12 +101,12 @@ pcadapt_lcwgs$pvalues |> hist(
 #| label: Whitelist
 #| eval: false
 
-Indiv_list <- here("data", "lcwgs", "EJA_lcwgs_gt.RDS") |>
+Indiv_list <- here_d_lcwgs("EJA_lcwgs_gt.RDS") |>
   read_rds() |>
   _$Indiv
 
 Indiv_list |>
-  write_rds(file = here("data", "lcwgs", "Individual_list.rds"))
+  write_rds(file = here_d_lcwgs("Individual_list.rds"))
 ```
 
 ```{r}
@@ -137,7 +137,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 ```{r}
 #| label: CoastPreAnalysis
 EJA_lcwgs_coast <- read.pcadapt(
-  here("data", "lcwgs", "8-Embiotoca_filtered_whitelisted.bed"),
+  here_d_lcwgs("8-Embiotoca_filtered_whitelisted.bed"),
   type = "bed"
 )
 
@@ -234,7 +234,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: IslPreAnalysis
 
 EJA_lcwgs_islands <- read.pcadapt(
-  here("data", "lcwgs", "8-Embiotoca_filtered_blacklisted.bed"),
+  here_d_lcwgs("8-Embiotoca_filtered_blacklisted.bed"),
   type = "bed"
 )
 
@@ -299,7 +299,7 @@ pcadapt_lcwgs_islands$pvalues |> hist(
 #| label: SaveWhitelist
 #| eval: false
 
-Indiv_list <- read_rds(file = here("data", "lcwgs", "Individual_list.rds"))
+Indiv_list <- read_rds(file = here_d_lcwgs("Individual_list.rds"))
 
 Indiv_list |> 
   unique() |>
@@ -362,10 +362,45 @@ pcadapt_lcwgs_SD_SC$pvalues |> hist(
 
 # Outliers
 
-## Read genome
+## Get outliers sequences
+
+### Prepare all data
+```{r}
+#| label: ManhattanDataPrep
+#| echo: false
+
+chromosome_metadata <- EJA_lcwgs_vcf |>
+  getFIX() |>
+  as_tibble() |>
+  select(CHROM, POS) |>
+  mutate(
+    POS  = as.numeric(POS),
+    rank = row_number()
+  )
+
+labs_pos <- chromosome_metadata |>
+  mutate(labs_pos = row_number()) |>
+  distinct(CHROM, .keep_all = TRUE) |>
+  pull(var = labs_pos)
+
+chromosome_metadata <- chromosome_metadata |>
+  mutate(
+    lab_position   = if_else(row_number() %in% labs_pos, TRUE, FALSE),
+    coloured       = CHROM |>
+      {\(x) factor(x, levels = unique(x))}() |>
+      as.integer() |>
+      (`%%`)(2)
+  )
+
+chromosome_metadata |> saveRDS(file = here_d_lcwgs("manhattan_metadata.rds"))
+
+rm(labs_pos)
+```
+
+### Read genome
 ```{r}
 lcwgs_catalog <- read.dna(
-    here("data", "lcwgs", "JAKOON01_catalog", "catalog.fa"),
+    here_d_lcwgs("JAKOON01_catalog", "catalog.fa"),
     format = "fasta",
     as.character = TRUE
   )
@@ -376,10 +411,10 @@ names(lcwgs_catalog) <- names(lcwgs_catalog) |>
   unlist()
 ```
 
-## Get pvalues map from coastal individuals analysis
+### Get pvalues map from coastal individuals analysis
 ```{r}
 pvalues_positions <- readRDS(
-  file = here("data", "lcwgs", "manhattan_metadata.rds")
+  file = here_d_lcwgs("manhattan_metadata.rds")
 ) |> 
   select(-c(lab_position, coloured, rank)) |> 
   mutate(
@@ -390,15 +425,23 @@ pvalues_positions <- readRDS(
 pvalues_positions_filtered <- pvalues_positions |> 
   filter(is.na(pvalues) == FALSE) |> 
   filter(logpvalues >= 200)
+
+pvalues_positions_filtered_dup <- pvalues_positions_filtered |> 
+  mutate(dist = c(0, diff(POS))) |> 
+  filter(dist >= 500) |>
+  select(-c(dist))
+  
 ```
 
-## Get corresponding read windows
+### Get corresponding read windows
 ```{r}
-pvalues_positions_filtered_sequences <- pvalues_positions_filtered |>
+chromosomes_length <- read_tsv(here_d_lcwgs("JAKOON01_catalog", "JAKOON01_contigs.tsv"))
+
+pvalues_positions_filtered_dup_sequences <- pvalues_positions_filtered_dup |>
   mutate(
     sequences = row_number() |>
       map(
-        \(x) lcwgs_catalog[[CHROM[[x]]]][Get_window(POS[[x]])] |>
+        \(x) lcwgs_catalog[[CHROM[[x]]]][Get_window(CHROM[[x]], POS[[x]])] |>
           paste(collapse = "") |>
           toupper()
       ) |> 
@@ -406,13 +449,91 @@ pvalues_positions_filtered_sequences <- pvalues_positions_filtered |>
     )
 ```
 
-## Write to fasta file
+### Write to fasta file
 ```{r}
-pvalues_positions_filtered_sequences |>
+pvalues_positions_filtered_dup_sequences |>
   mutate(seq_name = paste0(">", CHROM, " POS: ", as.character(POS))) |>
   select(seq_name, sequences) |> 
+  filter(row_number() %in% 1:200) |> 
   write.table(
-    file      = here("output", "lcwgs_outliers_sequences.fa"),
+    file      = here("output", "lcwgs_outliers_sequences_1.fa"),
+    sep       = "\n",
+    row.names = FALSE,
+    col.names = FALSE,
+    quote     = FALSE
+  )
+
+pvalues_positions_filtered_dup_sequences |>
+  mutate(seq_name = paste0(">", CHROM, " POS: ", as.character(POS))) |>
+  select(seq_name, sequences) |> 
+  filter(row_number() %in% 201:400) |> 
+  write.table(
+    file      = here("output", "lcwgs_outliers_sequences_2.fa"),
+    sep       = "\n",
+    row.names = FALSE,
+    col.names = FALSE,
+    quote     = FALSE
+  )
+
+pvalues_positions_filtered_dup_sequences |>
+  mutate(seq_name = paste0(">", CHROM, " POS: ", as.character(POS))) |>
+  select(seq_name, sequences) |> 
+  filter(row_number() %in% 401:456) |> 
+  write.table(
+    file      = here("output", "lcwgs_outliers_sequences_3.fa"),
+    sep       = "\n",
+    row.names = FALSE,
+    col.names = FALSE,
+    quote     = FALSE
+  )
+```
+
+```{r}
+rm(chromosomes_length,
+   pvalues_positions, pvalues_positions_filtered,
+   pvalues_positions_filtered_dup, pvalues_positions_filtered_dup_sequences)
+gc()
+```
+
+## Get BLAST results
+
+```{r}
+lcwgs_EJA_outliers_blast_tib <- c("GZSEDPGT016-Alignment.xml",
+                                  "GZSJHA6W016-Alignment.xml",
+                                  "GZSMYB0J016-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
+  here_d_lcwgs() |>
+  map( \(x) read_xml(x) |> XML_to_df()) |> 
+  bind_rows()
+```
+### Filter BLAST results
+
+```{r}
+lcwgs_EJA_outliers_blast_tib_filtered <- lcwgs_EJA_outliers_blast_tib |>
+  filter(bit_score >= 80) |> 
+  filter(!grepl("genome assembly", title)) |> 
+  filter(!duplicated(Rank)) |> # Keep the first match for each locus
+  filter(!duplicated(accession_number))
+```
+
+```{r}
+write_csv2(
+  lcwgs_EJA_outliers_blast_tib_filtered,
+  file = here("output", "lcwgs_outliers_match.csv")
+)
+```
+
+### Get protein sequences from GenBank
+```{r}
+lcwgs_protein_sequences <- lcwgs_EJA_outliers_blast_tib_filtered |> Get_protein_sequences()
+```
+
+### Save output as fasta file which can be sent to [blast KOALA](https://www.kegg.jp/blastkoala/).
+
+```{r}
+lcwgs_protein_sequences |> 
+  mutate(accession_number = paste0("> ", accession_number)) |>
+  write.table(
+    file      = here("output", "lwcgs_EJA_outliers_protein_sequences.fa"),
     sep       = "\n",
     row.names = FALSE,
     col.names = FALSE,
@@ -433,18 +554,18 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: VcfConvert
 #| eval: false
 
-EJA_lcwgs_vcf <- here("data", "lcwgs", "8-Embiotoca_filtered.vcf.gz") |>
+EJA_lcwgs_vcf <- here_d_lcwgs("8-Embiotoca_filtered.vcf.gz") |>
   read.vcfR()
 
-EJA_lcwgs_vcf |> write_rds(here("data", "lcwgs", "EJA_lcwgs_vcfR.RDS"))
+EJA_lcwgs_vcf |> write_rds(here_d_lcwgs("EJA_lcwgs_vcfR.RDS"))
 
 EJA_lcwgs_vcf |>
   extract_gt_tidy() |>
-  write_rds(here("data", "lcwgs", "EJA_lcwgs_gt.RDS"))
+  write_rds(here_d_lcwgs("EJA_lcwgs_gt.RDS"))
 
 ped2geno(
   input.file  = here("plink2", "8-Embiotoca_filtered.ped"),
-  output.file = here("data", "lcwgs", "8-Embiotoca_filtered.geno")
+  output.file = here_d_lcwgs("8-Embiotoca_filtered.geno")
 )
 
 rm(EJA_lcwgs_vcf)
@@ -453,9 +574,9 @@ rm(EJA_lcwgs_vcf)
 ```{r}
 #| label: LoadData
 
-EJA_lcwgs_vcf <- read_rds(here("data", "lcwgs", "EJA_lcwgs_vcfR.RDS"))
+EJA_lcwgs_vcf <- read_rds(here_d_lcwgs("EJA_lcwgs_vcfR.RDS"))
 
-EJA_lcwgs_gt <- read_rds(here("data", "lcwgs", "EJA_lcwgs_gt.RDS"))
+EJA_lcwgs_gt <- read_rds(here_d_lcwgs("EJA_lcwgs_gt.RDS"))
 ```
 
 ## Run analysis
@@ -463,7 +584,7 @@ EJA_lcwgs_gt <- read_rds(here("data", "lcwgs", "EJA_lcwgs_gt.RDS"))
 #| label: snmfAnalysisSingle
 
 snmf_analysis <- snmf(
-  here("data", "lcwgs", "8-Embiotoca_filtered.geno"),
+  here_d_lcwgs("8-Embiotoca_filtered.geno"),
   project = "continue",
   K       = 5:8,
   entropy = TRUE
@@ -483,7 +604,7 @@ K = 6 has the minimum cross-entropy.
 #| label: snmfAnalysisMulti
 
 snmf_analysis <- snmf(
-  here("data", "lcwgs", "8-Embiotoca_filtered.geno"),
+  here_d_lcwgs("8-Embiotoca_filtered.geno"),
   project     = "continue",
   repetitions = 100,
   K           = 6,
@@ -505,106 +626,45 @@ barchart(
 ```
 
 # Isolation by Distance
-### Test with plink
-#### plink script
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
-./plink --vcf 8-Embiotoca_filtered.vcf.gz --out Embiotoca_filtered_dist_matrix --allow-extra-chr --autosome-num 95 --distance square --const-fid
-```
+## Euclidean distance
 
-#### Plink import
-```{r}
-EJA_lcwgs_dist_IBS <- here("plink2", "Embiotoca_filtered_dist_matrix.dist") |> 
-  read_table(col_names = FALSE) |> 
-  as.matrix()
-
-IDs <- here("plink2", "Embiotoca_filtered_dist_matrix.dist.id") |> 
-  read_table(col_names = FALSE) |> pull(X2)
-
-colnames(EJA_lcwgs_dist_IBS) <- IDs
-rownames(EJA_lcwgs_dist_IBS) <- IDs
-```
-
-#### NJ tree computing
-```{r}
-NJ_Tree_lcwgs_IBS <- EJA_lcwgs_dist_IBS |> as.dist() |> nj()
-
-NJ_Tree_lcwgs_IBS_annotations <- tibble(
-  Indiv = NJ_Tree_lcwgs_IBS$tip.label,
-  pop   = popmap_lcwgs
-)
-
-NJ_Tree_lcwgs_IBS_plot <- NJ_Tree_lcwgs_IBS |>
-  ggtree(layout = "circular") %<+% NJ_Tree_lcwgs_IBS_annotations +
-  geom_tiplab(aes(color = pop), size = 2.8) +
-  geom_treescale(x = 800000, y = 0)
-
-save_open_plot(
-  path   = here("output", "plots", "lcwgs", "dist_tree.pdf"),
-  plot   = NJ_Tree_lcwgs_IBS_plot,
-  width  = 12,
-  height = 9
-)
-```
-
-#### Formating for plot
-```{r}
-geo_dist_mat <- left_join(
-  x = NJ_Tree_lcwgs_IBS_annotations,
-  y = geo_dist
-) |> 
-  select(Indiv, Longitude, Latitude) |> 
-  dist() |>
-  as.matrix()
-
-colnames(geo_dist_mat) <- IDs
-rownames(geo_dist_mat) <- IDs
-
-rm(IDs)
-```
-
-#### Mantel test
-```{r}
-vegan::mantel(geo_dist_mat, EJA_lcwgs_dist_IBS)
-plot(geo_dist_mat)
-plot(EJA_lcwgs_dist_IBS)
-plot(geo_dist_mat/max(geo_dist_mat), EJA_lcwgs_dist_IBS/max(EJA_lcwgs_dist_IBS))
-```
-
-### From R computing
-#### Euclidean distance
-##### Convert to genlight object for gl.ibd calculations
+### Convert to genlight object for gl.ibd calculations
 ```{r}
 #| echo: false
 
-lcwgs_gl <- here("data", "lcwgs", "8-Embiotoca_filtered.vcf.gz") |>
+lcwgs_gl <- here_d_lcwgs("8-Embiotoca_filtered.vcf.gz") |>
   gl.read.vcf()
 
-lcwgs_gl@other$latlon <- left_join(x = NJ_Tree_lcwgs_IBS_annotations,
-                                   y = geo_dist) |>
-  select(Longitude, Latitude) |>
+lcwgs_gl@other$latlon <- tibble(
+  Indiv = lcwgs_gl@ind.names,
+  Pop   = lcwgs_gl@pop
+  ) |> 
+  left_join(
+    y = read_csv2(here_d_lcwgs("low_coverage_sampling.csv")) |>
+      select(Popmap, Latitude, Longitude)
+  ) |>
   rename(lat = Latitude, lon = Longitude) |> 
   as.data.frame()
 
-lcwgs_gl@pop <- factor(NJ_Tree_lcwgs_IBS_annotations$pop)
+lcwgs_gl@pop <- factor(popmap_lcwgs)
 
-lcwgs_gl |> saveRDS(file = here("data", "lcwgs", "Embiotoca_lcwgs_gl.rds"))
+lcwgs_gl |> saveRDS(file = here_d_lcwgs("Embiotoca_lcwgs_gl.rds"))
 ```
 
-##### Loading data from IBD.R analysis on cluster
+### Loading data from IBD.R analysis on cluster
 ```{r}
 IBD <- readRDS(here("output", "Embiotocidae_lcwgs_IBD.rds"))
 ```
 
-##### Plot results
+### Results
 ```{r}
 vegan::mantel(IBD$Dgen, IBD$Dgeo)
 
 mantel_plot(IBD$Dgeo, IBD$Dgen)
 ```
 
-##### Plot with PCA distances
+## PCA distances
 ```{r}
 PCA_distance <- tibble(
   PCA1 = pcadapt_lcwgs$scores[, 1],
@@ -627,8 +687,9 @@ vegan::mantel(PCA_distance, IBD$Dgeo)
 mantel_plot(IBD$Dgeo, PCA_distance)
 ```
 
-#### Manual barrier distance computing
-##### Computing barrier distance matrix
+## Manual geographic barrier distance computing
+
+### Computing barrier distance matrix
 ```{r}
 water <- ne_states(
   country     = c("united states of america", "mexico"),
@@ -647,7 +708,7 @@ barrier_distance <- function(from, to) {
   extract(grid_map, to) |> as.numeric()
 }
 
-geo_dist_cells <- here("data", "low_coverage_sampling.csv") |> 
+geo_dist_cells <- here_d_lcwgs("low_coverage_sampling.csv") |> 
   read_csv2(show_col_types = FALSE) |> 
   select(c(Code, Longitude, Latitude, Popmap)) |> 
   rename(pop = Popmap) |> 
@@ -666,32 +727,33 @@ barrier_dist_mat <- proxy::dist(geo_dist_cells, method = barrier_distance)
 rm(water, geo_dist_cells)
 ```
 
-##### Testing correlation between euclidean and barrier distances
+### Test if Euclidean and barrrier geographic distances are different
 ```{r}
 mantel_plot(IBD$Dgeo, barrier_dist_mat)
 ```
 
-##### Plot with gl.ibd distance
+### Correlation btw gl.ibd and barrier distances
 ```{r}
 vegan::mantel(barrier_dist_mat, IBD$Dgen)
 mantel_plot(barrier_dist_mat, IBD$Dgen)
 ```
 
-##### Plot with pca distance
+### Correlation btw PCA and barrier distances
 ```{r}
 vegan::mantel(barrier_dist_mat, PCA_distance)
 mantel_plot(barrier_dist_mat, PCA_distance)
 ```
 
-#### Excluding islanders
+## Excluding islanders
 ```{r}
 lcwgs_IBD_islanders <- readRDS(
   file = here("output", "Embiotocidae_lcwgs_islanders_IBD.rds")
 )
 ```
 
+### Compute geographic barrier distance
 ```{r}
-geo_dist_cells_islanders <- here("data", "low_coverage_sampling.csv") |> 
+geo_dist_cells_islanders <- here_d_lcwgs("low_coverage_sampling.csv") |> 
   read_csv2(show_col_types = FALSE) |> 
   select(c(Code, Longitude, Latitude, Popmap)) |>
   rename(pop = Popmap) |> 
@@ -710,8 +772,9 @@ geo_dist_cells_islanders <- here("data", "low_coverage_sampling.csv") |>
 barrier_dist_mat_islanders <- proxy::dist(geo_dist_cells_islanders, method = barrier_distance)
 ```
 
+### Compute geographic euclidean distance
 ```{r}
-Dist_geo_isl <- here("data", "low_coverage_sampling.csv") |> 
+Dist_geo_isl <- here_d_lcwgs("low_coverage_sampling.csv") |> 
   read_csv2(show_col_types = FALSE) |> 
   select(c(Code, Longitude, Latitude, Popmap)) |>
   rename(pop = Popmap) |> 
@@ -726,16 +789,20 @@ rownames(Dist_geo_isl) <- Dist_geo_isl$pop
 Dist_geo_isl <- Dist_geo_isl[, 2:3] |> dist()
 ```
 
+### Test if Euclidean and barrier geographic distances are different
 ```{r}
 vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgeo)
 ```
 
+### Correlation btw gl.ubd and barrier distances
 ```{r}
 vegan::mantel(barrier_dist_mat_islanders, lcwgs_IBD_islanders$Dgen)
 vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgen)
 
 mantel_plot(barrier_dist_mat_islanders, lcwgs_IBD_islanders$Dgen)
 ```
+
+### Correlation btw PCA and barrier distances
 ```{r}
 PCA_distances_coast <- tibble(
   PCA1 = pcadapt_lcwgs_coast$scores[, 1],
@@ -755,7 +822,6 @@ vegan::mantel(barrier_dist_mat_islanders, PCA_distances_coast)
 mantel_plot(Dist_geo_isl, PCA_distances_coast)
 ```
 
-
 # Figures
 
 ## Load plotting functions
@@ -767,41 +833,9 @@ source(here("functions", "plot_functions.R"))
 ```
 
 ## Figure 1 - Manhattan plot home-made
-### Prepare all data
-```{r}
-#| label: ManhattanDataPrep
-#| echo: false
-
-chromosome_names <- EJA_lcwgs_vcf |>
-  getFIX() |>
-  as_tibble() |>
-  select(CHROM, POS) |>
-  mutate(
-    POS  = as.numeric(POS),
-    rank = row_number()
-  )
-
-labs_pos <- chromosome_names |>
-  mutate(labs_pos = row_number()) |>
-  distinct(CHROM, .keep_all = TRUE) |>
-  pull(var = labs_pos)
-
-chromosome_names <- chromosome_names |>
-  mutate(
-    lab_position   = if_else(row_number() %in% labs_pos, TRUE, FALSE),
-    coloured       = CHROM |>
-      {\(x) factor(x, levels = unique(x))}() |>
-      as.integer() |>
-      (`%%`)(2)
-  )
-
-chromosome_names |> saveRDS(file = here("data", "lcwgs", "manhattan_metadata.rds"))
-
-rm(labs_pos)
-```
 
 ```{r}
-chromosome_names <- readRDS(file = here("data", "lcwgs", "manhattan_metadata.rds"))
+chromosome_names <- readRDS(file = here_d_lcwgs("manhattan_metadata.rds"))
 ```
 
 ### Plot every populations
@@ -826,7 +860,7 @@ ggsave(
 #| label: ManhattanPlotCoast
 
 manhattan_plot_lcwgs_coast <- chromosome_names |>
-  mutate(pvalues_coast= Get_pvalues(pcadapt_lcwgs_coast)) |> 
+  mutate(pvalues_coast = Get_pvalues(pcadapt_lcwgs_coast)) |> 
   manhattan_plot_custom_2(pvalues = pvalues_coast)
 
 ggsave(
@@ -1010,6 +1044,11 @@ save_open_plot(
 )
 ```
 
+```{r}
+rm(PCA, PCA_crop)
+gc()
+```
+
 #### Interactive 3D PCA
 ```{r}
 #| label: PCAMapPCAInteractive
@@ -1110,7 +1149,7 @@ states <- ne_states(
 
 # Sampling site coordinates and misc info on map
 sample_sites <- read.csv2(
-    here("data","low_coverage_sampling.csv"),
+    here("data","lcwgs", "low_coverage_sampling.csv"),
     stringsAsFactors = FALSE
   ) |>
   select(Longitude, Latitude, Sampling_sites) |> 
@@ -1284,7 +1323,7 @@ save_open_plot(
 #| label: PCAMapMapMemClean
 
 rm(currents_tibble_annual_mean_lres, SST_annual_mean,
-   map, states,
+   states,
    sample_sites, states_labels, city_labels, ocean_labels,
    current_uv_scalar)
 gc()
@@ -1310,13 +1349,20 @@ save_open_plot(
 )
 ```
 
+```{r}
+rm(PCA_map, PCA_and_crop, lcwgs_map)
+gc()
+```
+
 ## Figure 5 - Admixture plot
 Change individuals order in the file `Individuals_plot_order.txt`
 ```{r}
 #| label: AdmPlot
 
+Indiv_list <- read_rds(file = here_d_lcwgs("Individual_list.rds"))
+
 admixture_plot <- read_table(
-  here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K6", "run65",
+  here_d_lcwgs("8-Embiotoca_filtered.snmf", "K6", "run65",
        "8-Embiotoca_filtered_r65.6.Q"),
   col_names = paste0("Pop ", seq(1, 6))
 ) |> 
@@ -1331,7 +1377,7 @@ admixture_plot <- read_table(
     aes(
       x    = factor(
         Individuals,
-        levels = here("data", "lcwgs", "Individuals_plot_order.txt") |> 
+        levels = here_d_lcwgs("Individuals_plot_order.txt") |> 
           read.table() |>
           unlist() |>
           as.vector() 
