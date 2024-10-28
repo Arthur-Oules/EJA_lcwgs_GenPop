@@ -86,7 +86,7 @@ ggsave(
 #| label: ManhattanPlotCoastDesc
 
 chromosome_names_pvalues <- chromosome_names |> 
-  mutate(pvalues_SD_SC = Get_pvalues(pcadapt_lcwgs_coast))
+  mutate(pvalues_coast = Get_pvalues(pcadapt_lcwgs_coast))
 
 chromosome_length <- chromosome_names |>
   count(CHROM) |>
@@ -97,21 +97,18 @@ chromosome_names_desc_order <- chromosome_names_pvalues |>
   arrange(CHROM) |> 
   mutate(
     CHROM    = as.character(CHROM),
-    # rank     = row_number(),
     coloured = CHROM |>
       {\(x) factor(x, levels = unique(x))}() |>
       as.integer() |>
-      (`%%`)(2)
+      (`%%`)(2),
+    rank = row_number()
   )
 
 rm(chromosome_names_pvalues)
 
-manhattan_lcwgs_coast_descending <- manhattan_plot_custom_2(
-  chromosome_names_desc_order,
-  chromosome_names_desc_order$pvalues_SD_SC
-)
+manhattan_lcwgs_coast_descending <- chromosome_names_desc_order |> 
+  manhattan_plot_custom_2(chromosome_names_desc_order$pvalues_coast)
 ```
-
 
 ```{r}
 #| label: SaveManhattanPlotCoastDesc
@@ -125,6 +122,37 @@ ggsave(
 )
 ```
 
+#### With outliers couloured
+
+```{r}
+outliers_pos <- readRDS(
+  file = here_d_lcwgs("manhattan_metadata.rds")
+) |> 
+  select(-c(lab_position, coloured, rank)) |> 
+  mutate(
+    CHROM      = factor(CHROM, levels = chromosome_length$CHROM),
+    pvalues    = pcadapt_lcwgs_coast$pvalues,
+    logpvalues = Get_pvalues(pcadapt_lcwgs_coast),
+  ) |> 
+  arrange(CHROM)|>
+  mutate(rank = row_number()) |> 
+  filter(is.na(pvalues) == FALSE) |> 
+  filter(logpvalues >= 200)
+
+manhattan_lcwgs_coast_descending_outliers <- chromosome_names_desc_order |> 
+  manhattan_plot_custom_2(
+    pvalues  = chromosome_names_desc_order$pvalues_coast,
+    outliers = outliers_pos
+  )
+
+ggsave(
+  here("output", "plots", "lcwgs", "manhattan_plot_custom_lcwgs_arranged_coast_outliers.png"),
+  plot   = manhattan_lcwgs_coast_descending_outliers,
+  width  = 6000,
+  height = 2000,
+  units  = "px"
+)
+```
 
 ### Plot island populations
 ```{r}

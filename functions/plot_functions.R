@@ -79,10 +79,15 @@ manhattan_plot_custom <- function(vcf_file,                # vcf file from ustac
   }
 }
 
-manhattan_plot_custom_2 <- function(df, pvalues) {
-  df |> ggplot() +
-    geom_point(aes(x = rank, y = {{pvalues}}, colour = factor(coloured))) +
-    scale_colour_manual(values = c("black", "grey")) +
+manhattan_plot_custom_2 <- function(df, pvalues, outliers = NULL) {
+  p <- df |> ggplot() +
+    geom_point(aes(x = rank, y = {{pvalues}}, colour = factor(coloured)))
+  
+  if (!is.null(outliers)) {
+    p <- p + geom_point(data = outliers, aes(x = rank, y = logpvalues), colour = "red")
+  }
+    
+  p + scale_colour_manual(values = c("black", "grey")) +
     scale_x_continuous(
       breaks = df$rank[df$lab_position],
       labels = df$CHROM[df$lab_position]
