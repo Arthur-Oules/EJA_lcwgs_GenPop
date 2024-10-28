@@ -12,8 +12,7 @@ editor: source
 
 c("here", "tidyverse",
   "pcadapt", "vcfR", "adegenet", "ape", "LEA", "dartR",
-  "rentrez", "xml2",
-  "patchwork", "plotly", "sf", "ggrepel", "ggspatial", "ggtree", "RColorBrewer", "viridis",  "scales", "ggnewscale", "terra", "tidyterra") |>
+  "rentrez", "xml2") |>
   lapply(library, character.only = TRUE)
 ```
 
@@ -149,7 +148,7 @@ EJA_lcwgs_coast <- read.pcadapt(
 pcadapt(input = EJA_lcwgs_coast, K = 20) |> plot(option = "screeplot")
 ```
 
-K = 4 seems correct
+K = 3 seems correct
 
 ### Analysis using K = 3
 ```{r}
@@ -411,7 +410,7 @@ chromosome_metadata <- chromosome_metadata |>
 
 chromosome_metadata |> saveRDS(file = here_d_lcwgs("manhattan_metadata.rds"))
 
-rm(labs_pos)
+rm(labs_pos, chromosome_metadata)
 ```
 
 ### Read genome
@@ -428,14 +427,24 @@ names(lcwgs_catalog) <- names(lcwgs_catalog) |>
   unlist()
 ```
 
+### Adjusted pvalues
+
+```{r}
+alpha <- 0.1
+outliers <- which(padj < alpha)
+length(outliers)
+```
+
 ### Get pvalues map from coastal individuals analysis
 ```{r}
+pcadapt_lcwgs_coast <- readRDS(here("output", "pcadapt_lcwgs_coast.rds"))
+
 pvalues_positions <- readRDS(
   file = here_d_lcwgs("manhattan_metadata.rds")
 ) |> 
   select(-c(lab_position, coloured, rank)) |> 
   mutate(
-    pvalues = pcadapt_lcwgs_coast$pvalues,
+    pvalues    = pcadapt_lcwgs_coast$pvalues,
     logpvalues = Get_pvalues(pcadapt_lcwgs_coast)
   )
 
@@ -466,7 +475,7 @@ pvalues_positions_filtered_dup_sequences <- pvalues_positions_filtered_dup |>
     )
 ```
 
-### Write to fasta file
+### Write to fasta files
 ```{r}
 pvalues_positions_filtered_dup_sequences |>
   mutate(seq_name = paste0(">", CHROM, " POS: ", as.character(POS))) |>
@@ -508,19 +517,164 @@ pvalues_positions_filtered_dup_sequences |>
 ```{r}
 rm(chromosomes_length,
    pvalues_positions, pvalues_positions_filtered,
-   pvalues_positions_filtered_dup, pvalues_positions_filtered_dup_sequences)
+   pvalues_positions_filtered_dup_sequences)
 gc()
+```
+
+## Extract outliers annotations from ncbi genome annotations
+
+### Load external info
+
+```{r}
+EJA_annotations <- here_d_lcwgs("EJA_annotations.gff") |>
+  read.gff() |>
+  as_tibble()
+
+chromosomes_info <- here_d_lcwgs("JAKOON01_catalog", "sequence_report.tsv") |> 
+  read_tsv() |>
+  select(c(`GenBank seq accession`, `RefSeq seq accession`))
+```
+
+### Get annotations
+
+```{r}
+pvalues_positions_filtered_dup_annotations <- pvalues_positions_filtered_dup |>
+  rename(`GenBank seq accession` = CHROM) |> 
+  left_join(chromosomes_info) |> 
+  rowwise() |> 
+  mutate(
+    annotation = (\(x, y) {
+      EJA_annotations |>
+        filter(seqid == x) |> 
+        filter(start <= y & y <= end) |>
+        pull(attributes)
+    })(`RefSeq seq accession`, POS) |>
+      list()
+  )
+```
+
+### Memory cleanup
+
+```{r}
+rm(EJA_annotations, chromosomes_info, pvalues_positions_filtered_dup)
+gc()
+```
+
+### Sort and filter info
+
+```{r}
+pvalues_positions_filtered_dup_annotations_genes <- pvalues_positions_filtered_dup_annotations |> 
+  unnest(annotation) |> 
+  filter(grepl("ID=gene", annotation)) |> 
+  mutate(
+    annotation_ID          = annotation |>
+      str_split_i(pattern = ";", i = 1) |> 
+      str_remove(pattern = "ID="),
+    annotation_description = annotation |>
+      str_split_i(pattern = ";", i = 4) |> 
+      str_remove(pattern = "description=")
+  ) |> 
+  select(-c(annotation)) |> 
+  distinct(annotation_ID, .keep_all = TRUE)
+
+pvalues_positions_filtered_dup_annotations_rnas <- pvalues_positions_filtered_dup_annotations |> 
+  unnest(annotation) |> 
+  filter(grepl("ID=rna", annotation)) |> 
+  mutate(
+    annotation_ID      = annotation |>
+      str_split_i(pattern = ";", i = 1) |> 
+      str_remove(pattern = "ID="),
+    annotation_product = annotation |>
+      str_match("product=\\s*(.*?)\\s*;") |> 
+      _[, 2]
+  ) |> 
+  select(-c(annotation)) |> 
+  distinct(annotation_ID, .keep_all = TRUE)
+
+pvalues_positions_filtered_dup_annotations_exons <- pvalues_positions_filtered_dup_annotations |> 
+  unnest(annotation) |> 
+  filter(grepl("ID=exon", annotation)) |> 
+  mutate(
+    annotation_ID      = annotation |>
+      str_split_i(pattern = ";", i = 1) |> 
+      str_remove(pattern = "ID="),
+    annotation_gene    = annotation |>
+      str_match("gene=\\s*(.*?)\\s*;") |> 
+      _[, 2],
+    annotation_product = annotation |>
+      str_match("product=\\s*(.*?)\\s*;") |> 
+      _[, 2]
+  ) |> 
+  select(-c(annotation)) |> 
+  distinct(annotation_ID, .keep_all = TRUE)
+
+pvalues_positions_filtered_dup_annotations_cds <- pvalues_positions_filtered_dup_annotations |> 
+  unnest(annotation) |> 
+  filter(grepl("ID=cds", annotation)) |> 
+  mutate(
+    annotation_ID      = annotation |>
+      str_split_i(pattern = ";", i = 1) |> 
+      str_remove(pattern = "ID="),
+    annotation_gene    = annotation |>
+      str_match("gene=\\s*(.*?)\\s*;") |> 
+      _[, 2],
+    annotation_product = annotation |>
+      str_match("product=\\s*(.*?)\\s*;") |> 
+      _[, 2]
+  ) |> 
+  select(-c(annotation)) |> 
+  distinct(annotation_ID, .keep_all = TRUE)
+
+pvalues_positions_filtered_dup_annotations_all <- bind_rows(
+  pvalues_positions_filtered_dup_annotations_genes,
+  pvalues_positions_filtered_dup_annotations_rnas,
+  pvalues_positions_filtered_dup_annotations_exons,
+  pvalues_positions_filtered_dup_annotations_cds
+) |> 
+  mutate(
+    annotation_type        = annotation_ID |> str_split_i(pattern = "-", i = 1),
+    annotation_ID          = annotation_ID |> str_split_i(pattern = "-", i = 2),
+    annotation_description = annotation_description |>
+      str_remove_all(pattern = "%2C"),
+    annotation_product     = annotation_product |>
+      str_remove_all(pattern = "%2C")
+  ) |>
+  select(
+    c("GenBank seq accession", "POS",
+      "RefSeq seq accession", "annotation_type", "annotation_ID",
+      "annotation_description", "annotation_product", "annotation_gene",
+      "pvalues", "logpvalues")
+  ) |> 
+  arrange(pvalues, `GenBank seq accession`, POS)
+```
+
+### Save as file and cleanup
+
+```{r}
+pvalues_positions_filtered_dup_annotations_all |>
+  write_csv2(here("output", "lcwgs_EJA_outliers_annotations.csv"))
+
+rm(pvalues_positions_filtered_dup_annotations_genes,
+   pvalues_positions_filtered_dup_annotations_rnas,
+   pvalues_positions_filtered_dup_annotations_exons,
+   pvalues_positions_filtered_dup_annotations_cds)
 ```
 
 ## Get BLAST results
 
 ```{r}
+pvalues_positions <- pvalues_positions |>
+  mutate(Rank = paste0(CHROM, " POS: ", as.character(POS)))
+
 lcwgs_EJA_outliers_blast_tib <- c("GZSEDPGT016-Alignment.xml",
                                   "GZSJHA6W016-Alignment.xml",
                                   "GZSMYB0J016-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
   here_d_lcwgs() |>
   map( \(x) read_xml(x) |> XML_to_df()) |> 
-  bind_rows()
+  bind_rows() |>
+  left_join(pvalues_positions)
+
+rm(pvalues_positions)
 ```
 ### Filter BLAST results
 
@@ -557,6 +711,44 @@ lcwgs_protein_sequences |>
     quote     = FALSE
   )
 ```
+
+## Get BLAST results A. ocellaris
+
+```{r}
+pvalues_positions <- readRDS(
+  file = here_d_lcwgs("manhattan_metadata.rds")
+) |> 
+  select(-c(lab_position, coloured, rank)) |> 
+  mutate(
+    pvalues = pcadapt_lcwgs_coast$pvalues,
+    logpvalues = Get_pvalues(pcadapt_lcwgs_coast)
+  ) |>
+  mutate(Rank = paste0(CHROM, " POS: ", as.character(POS)))
+```
+
+
+```{r}
+lcwgs_EJA_outliers_blast_A_ocellaris_tib <- c("HFHS4UE9013-Alignment.xml",
+                                              "HFHRYX38013-Alignment.xml",
+                                              "HFHSG8SF016-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
+  here_d_lcwgs() |>
+  map( \(x) read_xml(x) |> XML_to_df()) |> 
+  bind_rows() |>
+  left_join(pvalues_positions)
+
+rm(pvalues_positions)
+```
+
+```{r}
+lcwgs_EJA_outliers_blast_A_ocellaris_tib_filtered <- lcwgs_EJA_outliers_blast_A_ocellaris_tib |>
+  filter(bit_score >= 80) |> 
+  filter(!grepl("genome assembly", title)) |> 
+  filter(!duplicated(Rank)) |> # Keep the first match for each locus
+  filter(!duplicated(accession_number))
+
+lcwgs_EJA_outliers_blast_A_ocellaris_tib_filtered |> write.csv2(here("output", "lcwgs_outliers_match_A_ocellaris.csv"))
+```
+
 
 # Admixture analysis
 
