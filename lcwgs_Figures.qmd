@@ -241,7 +241,7 @@ pcadapt_lcwgs <- read_rds(file = here("output", "pcadapt_lcwgs.rds"))
 
 popmap_lcwgs <- c(
   rep("bodega_bay", 5), # BB
-  rep("big_creek", 13), # BIGC -> BCR
+  rep("big_sur", 13), # BIGC -> BCR
   rep("catalina_island", 11), # CAT
   rep("elkhorn", 6), # ELK
   rep("guadalupe_island", 10), # GUA
@@ -286,7 +286,7 @@ PCA_plot(
 ```{r}
 #| label: PCAMapPlotCrop
 
-PCA_crop <- PCA + xlim(-.065, -.05) + ylim(.1125, .1275) +
+PCA_crop <- PCA + xlim(-.065, -.0325) + ylim(.095, .1275) + # old crop = xlim(-.065, -.05) + ylim(.1125, .1275) +
   coord_fixed(ratio = 1) +
   theme(
     legend.position = "none",
@@ -301,8 +301,8 @@ PCA_crop$layers[[2]] <- NULL
 
 PCA_and_crop <- PCA + annotate(
   "rect",
-  xmin  = -.07, xmax = -.04,
-  ymin  = .1075, ymax = .1325,
+  xmin  = -.07, xmax = -.0190,
+  ymin  = .09, ymax = .1325,
   alpha = 0, colour = "black", linetype = "longdash"
 ) + 
 theme(legend.position = "none") +
@@ -432,14 +432,16 @@ sample_sites <- read.csv2(
   mutate( # Add offsets
     Sampling_sites = gsub("\\n", "\n", Sampling_sites, fixed = TRUE),
     lab_lon = Longitude +
-      c(1.0, .8,  .6, .62, .87,
-        .73, .8, 1.1, .98,  -1,
+      c(.8, .9,  .6, .62, .9,
+        .63, .8, 1.1, .98,  -1,
         1.0, -1, .62,  .7, .79),
     lab_lat = Latitude +
-      c(-.08, .22, .25,  .1, -.15,
-         .10,  .2, .06,  .05,  .10,
-        -.17, -.27,  .1, .15,  .25)
+      c( .3, -.13, .25,  .1, -.15,
+        .10,   .2, .06, .05,  .10,
+       -.17, -.27,  .1, .15,  .25)
   )
+
+sample_sites$Sampling_sites[6] <- "Big Sur"
 
 states_labels <- data.frame(
   "long" = c(-117.5, -115.5, -113.7, -115.4),
@@ -449,8 +451,8 @@ states_labels <- data.frame(
 city_labels <- data.frame(
   "lat"      = c(37.773972, 34.448113),
   "long"     = c(-122.431297, -120.471439),
-  "lat_lab"  = c(37.7, 34.8),
-  "long_lab" = c(-122.28, -120.535),
+  "lat_lab"  = c(37.7, 34.7),
+  "long_lab" = c(-122.28, -120.435),
   "lab"      = c("San Francisco", "Point\nConception")
 )
 ocean_labels <- data.frame(
