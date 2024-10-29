@@ -1,5 +1,17 @@
 here_d_lcwgs <- function(...) here("data", "lcwgs", ... = ...)
 
+order_descencing <- function(df) {
+  chromosomes_desc_length <- df |> count(CHROM) |> arrange(desc(n)) |> pull(CHROM)
+  
+  df |>
+    mutate(CHROM = factor(CHROM, levels = chromosomes_desc_length)) |>
+    arrange(CHROM)
+}
+
+order_map <- function(df, map) {
+  df |> mutate(CHROM = factor(CHROM, levels = map)) |> arrange(CHROM)
+}
+
 Get_window <- function(chromosome, position) {
   chromosome_length <- chromosomes_length |>
     filter(accession == chromosome) |>
@@ -117,6 +129,22 @@ Get_pvalues <- function(pcadapt) {
       log.p      = TRUE
     )/log(10)
   )
+}
+
+Get_annotations <- function(positions, chrom_info, gff_annotation) {
+  positions |>
+    rename(`GenBank seq accession` = CHROM) |> 
+    left_join(chrom_info) |> 
+    rowwise() |> 
+    mutate(
+      annotation = (\(x, y) {
+        gff_annotation |>
+          filter(seqid == x) |> 
+          filter(start <= y & y <= end) |>
+          pull(attributes)
+      })(`RefSeq seq accession`, POS) |>
+        list()
+    )
 }
 
 lm_eqn <- function(df, r = manteltest$statistic, pp = manteltest$signif) {
