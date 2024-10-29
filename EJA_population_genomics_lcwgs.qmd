@@ -382,35 +382,22 @@ pcadapt_lcwgs_SD_SC$pvalues |> hist(
 
 ### Prepare all data
 ```{r}
-#| label: ManhattanDataPrep
+EJA_lcwgs_vcf <- read_rds(here_d_lcwgs("EJA_lcwgs_vcfR.RDS"))
+```
+
+```{r}
+#| label: GenomeMap
 #| echo: false
 
-chromosome_metadata <- EJA_lcwgs_vcf |>
+SNP_positions <- EJA_lcwgs_vcf |>
   getFIX() |>
   as_tibble() |>
   select(CHROM, POS) |>
-  mutate(
-    POS  = as.numeric(POS),
-    rank = row_number()
-  )
+  mutate(POS = as.numeric(POS))
 
-labs_pos <- chromosome_metadata |>
-  mutate(labs_pos = row_number()) |>
-  distinct(CHROM, .keep_all = TRUE) |>
-  pull(var = labs_pos)
+saveRDS(SNP_positions, file = here_d_lcwgs("SNP_positions.rds"))
 
-chromosome_metadata <- chromosome_metadata |>
-  mutate(
-    lab_position   = if_else(row_number() %in% labs_pos, TRUE, FALSE),
-    coloured       = CHROM |>
-      {\(x) factor(x, levels = unique(x))}() |>
-      as.integer() |>
-      (`%%`)(2)
-  )
-
-chromosome_metadata |> saveRDS(file = here_d_lcwgs("manhattan_metadata.rds"))
-
-rm(labs_pos, chromosome_metadata)
+rm(EJA_lcwgs_vcf, SNP_positions)
 ```
 
 ### Read genome
@@ -440,7 +427,7 @@ length(outliers)
 pcadapt_lcwgs_coast <- readRDS(here("output", "pcadapt_lcwgs_coast.rds"))
 
 pvalues_positions <- readRDS(
-  file = here_d_lcwgs("manhattan_metadata.rds")
+  file = here_d_lcwgs("SNP_positions.rds")
 ) |> 
   select(-c(lab_position, coloured, rank)) |> 
   mutate(
@@ -539,17 +526,9 @@ chromosomes_info <- here_d_lcwgs("JAKOON01_catalog", "sequence_report.tsv") |>
 
 ```{r}
 pvalues_positions_filtered_dup_annotations <- pvalues_positions_filtered_dup |>
-  rename(`GenBank seq accession` = CHROM) |> 
-  left_join(chromosomes_info) |> 
-  rowwise() |> 
-  mutate(
-    annotation = (\(x, y) {
-      EJA_annotations |>
-        filter(seqid == x) |> 
-        filter(start <= y & y <= end) |>
-        pull(attributes)
-    })(`RefSeq seq accession`, POS) |>
-      list()
+  Get_annotations(
+    chrom_info     = chromosomes_info,
+    gff_annotation = EJA_annotations
   )
 ```
 
@@ -716,9 +695,8 @@ lcwgs_protein_sequences |>
 
 ```{r}
 pvalues_positions <- readRDS(
-  file = here_d_lcwgs("manhattan_metadata.rds")
+  file = here_d_lcwgs("SNP_positions.rds")
 ) |> 
-  select(-c(lab_position, coloured, rank)) |> 
   mutate(
     pvalues = pcadapt_lcwgs_coast$pvalues,
     logpvalues = Get_pvalues(pcadapt_lcwgs_coast)
@@ -763,10 +741,9 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: VcfConvert
 #| eval: false
 
-EJA_lcwgs_vcf <- here_d_lcwgs("8-Embiotoca_filtered.vcf.gz") |>
-  read.vcfR()
+EJA_lcwgs_vcf <- here_d_lcwgs("8-Embiotoca_filtered.vcf.gz") |> read.vcfR()
 
-EJA_lcwgs_vcf |> write_rds(here_d_lcwgs("EJA_lcwgs_vcfR.RDS"))
+EJA_lcwgs_vcf |> here_d_lcwgs("EJA_lcwgs_vcfR.RDS") |> write_rds()
 
 EJA_lcwgs_vcf |>
   extract_gt_tidy() |>

@@ -29,18 +29,39 @@ source(here("functions", "plot_functions.R"))
 ```{r}
 #| label: LoadMetadata
 
-chromosome_names <- readRDS(file = here_d_lcwgs("manhattan_metadata.rds"))
+SNP_positions <- readRDS(file = here_d_lcwgs("SNP_positions.rds"))
+
+chromosome_map <- here_d_lcwgs("JAKOON01_catalog", "sequence_report.tsv") |> 
+  read_tsv() |> 
+  select(`GenBank seq accession`, `Sequence name`, `Seq length`) |> 
+  filter(`GenBank seq accession` %in% (SNP_positions_pvalues
+                                  |> distinct(CHROM)
+                                  |> pull(CHROM))) |> 
+  add_row(
+    `GenBank seq accession` = "JAKOON010000230.1",
+    `Sequence name`         = NA,
+    `Seq length`            = NA
+  )
 ```
 
 ### Plot every populations
+
+#### vcf order
+
 ```{r}
 #| label: ManhattanPlot
 
-pcadapt_lcwgs <- read_rds(file = here("output", "pcadapt_lcwgs.rds"))
+SNP_positions_pvalues <- SNP_positions |>
+  mutate(
+    pvalues_all = here("output", "pcadapt_lcwgs.rds") |>
+      read_rds() |>
+      Get_pvalues()
+  )
 
-manhattan_plot_lcwgs <- chromosome_names |>
-  mutate(pvalues_all = Get_pvalues(pcadapt_lcwgs)) |>
-  manhattan_plot_custom_2(pvalues = pvalues_all)
+manhattan_plot_lcwgs <- manhattan_plot_custom_2(
+  SNP_positions_pvalues,
+  pvalues = pvalues_all
+)
 ```
 
 ```{r}
@@ -57,15 +78,46 @@ ggsave(
 rm(pcadapt_lcwgs)
 ```
 
+#### NCBI Chromosomes Order
+
+```{r}
+#| label: ManhattanPlotNCBI
+
+manhattan_lcwgs_NCBI <- SNP_positions_pvalues |>
+  order_map(map = chromosome_map$`GenBank seq accession`) |> 
+  manhattan_plot_custom_2(pvalues = pvalues_all)
+```
+
+```{r}
+#| label: SaveManhattanPlotNCBI
+
+ggsave(
+  here("output", "plots", "lcwgs",
+       "manhattan_plot_custom_lcwgs_ncbi.png"),
+  plot   = manhattan_lcwgs_NCBI,
+  width  = 6000,
+  height = 2000,
+  units  = "px"
+)
+
+rm(manhattan_lcwgs_NCBI)
+```
+
 ### Plot coastal populations
 ```{r}
 #| label: ManhattanPlotCoast
 
-pcadapt_lcwgs_coast <- read_rds(file = here("output", "pcadapt_lcwgs_coast.rds"))
+SNP_positions_pvalues <- SNP_positions_pvalues |>
+  mutate(
+    pvalues_coast = here("output", "pcadapt_lcwgs_coast.rds") |>
+      read_rds() |>
+      Get_pvalues()
+  )
 
-manhattan_plot_lcwgs_coast <- chromosome_names |>
-  mutate(pvalues_coast = Get_pvalues(pcadapt_lcwgs_coast)) |> 
-  manhattan_plot_custom_2(pvalues = pvalues_coast)
+manhattan_plot_lcwgs_coast <- manhattan_plot_custom_2(
+  SNP_positions_pvalues,
+  pvalues = pvalues_coast
+)
 ```
 
 ```{r}
@@ -85,48 +137,56 @@ ggsave(
 ```{r}
 #| label: ManhattanPlotCoastDesc
 
-chromosome_names_pvalues <- chromosome_names |> 
-  mutate(pvalues_coast = Get_pvalues(pcadapt_lcwgs_coast))
-
-chromosome_length <- chromosome_names |>
-  count(CHROM) |>
-  arrange(desc(n))
-
-chromosome_names_desc_order <- chromosome_names_pvalues |>
-  mutate(CHROM = factor(CHROM, levels = chromosome_length$CHROM)) |>
-  arrange(CHROM) |> 
-  mutate(
-    CHROM    = as.character(CHROM),
-    coloured = CHROM |>
-      {\(x) factor(x, levels = unique(x))}() |>
-      as.integer() |>
-      (`%%`)(2),
-    rank = row_number()
-  )
-
-rm(chromosome_names_pvalues)
-
-manhattan_lcwgs_coast_descending <- chromosome_names_desc_order |> 
-  manhattan_plot_custom_2(chromosome_names_desc_order$pvalues_coast)
+manhattan_lcwgs_coast_descending <- SNP_positions_pvalues |>
+  order_descencing() |> 
+  manhattan_plot_custom_2(pvalues = pvalues_coast)
 ```
 
 ```{r}
 #| label: SaveManhattanPlotCoastDesc
 
 ggsave(
-  here("output", "plots", "lcwgs", "manhattan_plot_custom_lcwgs_arranged_coast.png"),
+  here("output", "plots", "lcwgs",
+       "manhattan_plot_custom_lcwgs_arranged_coast.png"),
   plot   = manhattan_lcwgs_coast_descending,
   width  = 6000,
   height = 2000,
   units  = "px"
 )
+
+rm(manhattan_lcwgs_coast_descending)
+```
+
+#### NCBI Chromosomes Order
+
+```{r}
+#| label: ManhattanPlotCoastNCBI
+
+manhattan_lcwgs_coast_NCBI <- SNP_positions_pvalues |>
+  order_map(map = chromosome_map$`GenBank seq accession`) |> 
+  manhattan_plot_custom_2(pvalues = pvalues_coast)
+```
+
+```{r}
+#| label: SaveManhattanPlotCoastNCBI
+
+ggsave(
+  here("output", "plots", "lcwgs",
+       "manhattan_plot_custom_lcwgs_ncbi_coast.png"),
+  plot   = manhattan_lcwgs_islands_mapped,
+  width  = 6000,
+  height = 2000,
+  units  = "px"
+)
+
+rm(manhattan_lcwgs_islands_mapped)
 ```
 
 #### With outliers couloured
 
 ```{r}
 outliers_pos <- readRDS(
-  file = here_d_lcwgs("manhattan_metadata.rds")
+  file = here_d_lcwgs("SNP_positions.rds")
 ) |> 
   select(-c(lab_position, coloured, rank)) |> 
   mutate(
@@ -139,14 +199,15 @@ outliers_pos <- readRDS(
   filter(is.na(pvalues) == FALSE) |> 
   filter(logpvalues >= 200)
 
-manhattan_lcwgs_coast_descending_outliers <- chromosome_names_desc_order |> 
+manhattan_lcwgs_coast_descending_outliers <- SNP_positions_desc_order |> 
   manhattan_plot_custom_2(
-    pvalues  = chromosome_names_desc_order$pvalues_coast,
+    pvalues  = SNP_positions_desc_order$pvalues_coast,
     outliers = outliers_pos
   )
 
 ggsave(
-  here("output", "plots", "lcwgs", "manhattan_plot_custom_lcwgs_arranged_coast_outliers.png"),
+  here("output", "plots", "lcwgs",
+       "manhattan_plot_custom_lcwgs_arranged_coast_outliers.png"),
   plot   = manhattan_lcwgs_coast_descending_outliers,
   width  = 6000,
   height = 2000,
@@ -154,29 +215,36 @@ ggsave(
 )
 ```
 
-### Plot island populations
+### Plot island populations NCBI
+
 ```{r}
-#| label: ManhattanPlotIsl
+#| label: ManhattanPlotIslNCBI
 
-pcadapt_lcwgs_islands <- read_rds(file = here("output", "pcadapt_lcwgs_islands.rds"))
+SNP_positions_pvalues <- SNP_positions_pvalues |>
+  mutate(
+    pvalues_islands = here("output", "pcadapt_lcwgs_islands.rds") |>
+      read_rds() |>
+      Get_pvalues()
+  )
 
-manhattan_plot_lcwgs_islands <- chromosome_names |>
-  mutate(pvalues_island = Get_pvalues(pcadapt_lcwgs_islands)) |>
+
+manhattan_plot_lcwgs_islands <- SNP_positions_pvalues |> 
+  order_map(map = chromosome_map$`GenBank seq accession`) |> 
   manhattan_plot_custom_2(pvalues = pvalues_island)
 ```
 
 ```{r}
-#| label: SaveManhattanPlosIsl
+#| label: SaveManhattanPlotIslNCBI
 
 ggsave(
-  here("output", "plots", "lcwgs", "manhattan_plot_custom_lcwgs_islands.png"),
+  here("output", "plots", "lcwgs", "manhattan_plot_custom_lcwgs_ncbi_islands.png"),
   plot   = manhattan_plot_lcwgs_islands,
   width  = 6000,
   height = 2000,
   units = "px"
 )
 
-rm(pcadapt_lcwgs_islands)
+rm(manhattan_plot_lcwgs_islands)
 ```
 
 ### Plot SD vs SCH
@@ -187,8 +255,9 @@ rm(pcadapt_lcwgs_islands)
 
 pcadapt_lcwgs_SD_SC <- read_rds(file = here("output", "pcadapt_lcwgs_SD_SC.rds"))
 
-manhattan_plot_lcwgs_SD_SC <- chromosome_names |>
+manhattan_plot_lcwgs_SD_SC <- SNP_positions |>
   mutate(pvalues_SD_SC = Get_pvalues(pcadapt_lcwgs_SD_SC)) |>
+  order_map(map = chromosome_map$`GenBank seq accession`) |> 
   manhattan_plot_custom_2(pvalues = pvalues_SD_SC)
 ```
 
@@ -209,14 +278,14 @@ ggsave(
 ```{r}
 #| label: ManhattanPlotSDSCDesc
 
-chromosome_names_pvalues <- chromosome_names |> 
+SNP_positions_pvalues <- SNP_positions |> 
   mutate(pvalues_SD_SC = Get_pvalues(pcadapt_lcwgs_SD_SC))
 
-chromosome_length <- chromosome_names |>
+chromosome_length <- SNP_positions |>
   count(CHROM) |>
   arrange(desc(n))
 
-chromosome_names_desc_order <- chromosome_names_pvalues |>
+SNP_positions_desc_order <- SNP_positions_pvalues |>
   mutate(CHROM = factor(CHROM, levels = chromosome_length$CHROM)) |>
   arrange(CHROM) |> 
   mutate(
@@ -228,11 +297,11 @@ chromosome_names_desc_order <- chromosome_names_pvalues |>
       (`%%`)(2)
   )
 
-rm(chromosome_names_pvalues)
+rm(SNP_positions_pvalues)
 
 manhattan_lcwgs_SD_SC_descending <- manhattan_plot_custom_2(
-  chromosome_names_desc_order,
-  chromosome_names_desc_order$pvalues_SD_SC
+  SNP_positions_desc_order,
+  SNP_positions_desc_order$pvalues_SD_SC
 )
 ```
 
@@ -255,7 +324,7 @@ rm(pcadapt_lcwgs_SD_SC)
 ```{r}
 #| label: ManhattanMemClean
 
-rm(EJA_lcwgs_vcf, chromosome_names,
+rm(EJA_lcwgs_vcf, SNP_positions,
    manhattan_plot_lcwgs, manhattan_plot_lcwgs_coast, manhattan_plot_lcwgs_islands,
    manhattan_lcwgs_coast_descending, manhattan_lcwgs_SD_SC_descending)
 ```
