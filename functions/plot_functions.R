@@ -79,7 +79,23 @@ manhattan_plot_custom <- function(vcf_file,                # vcf file from ustac
   }
 }
 
-manhattan_plot_custom_2 <- function(df, pvalues, outliers = NULL) {
+manhattan_plot_custom_2 <- function(genome_mapping, pvalues, outliers = NULL) {
+  
+  labs_rank <- genome_mapping |>
+    mutate(labs_rank = row_number()) |>
+    distinct(CHROM, .keep_all = TRUE) |>
+    pull(var = labs_rank)
+  
+  df <- genome_mapping |>
+    mutate(
+      rank         = row_number(),
+      lab_position = if_else(row_number() %in% labs_rank, TRUE, FALSE),
+      coloured     = CHROM |>
+        {\(x) factor(x, levels = unique(x))}() |>
+        as.integer() |>
+        (`%%`)(2)
+    )
+  
   p <- df |> ggplot() +
     geom_point(aes(x = rank, y = {{pvalues}}, colour = factor(coloured)))
   
