@@ -777,7 +777,7 @@ snmf_analysis <- snmf(
 )
 ```
 
-## Plot cross entropy to chose value of K
+## Plot cross entropy to chose optimal value of K
 ```{r}
 #| label: snmfSinglePlot
 
