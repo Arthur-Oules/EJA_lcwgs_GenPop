@@ -231,7 +231,7 @@ pcadapt_lcwgs_coast$pvalues |> hist(
 rm(EJA_lcwgs_coast)
 ```
 
-## Using only islanders
+## Only insular
 ### Generating bed file
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
@@ -851,6 +851,28 @@ mantel_plot(IBD$Dgeo, IBD$Dgen)
 ```
 
 ## PCA distances
+
+```{r}
+pcadapt_lcwgs <- read_rds(here("output", "pcadapt_lcwgs.rds"))
+popmap_lcwgs <- popmap_lcwgs <- c(
+  rep("bodega_bay", 5), # BB
+  rep("big_creek", 13), # BIGC -> BCR
+  rep("catalina_island", 11), # CAT
+  rep("elkhorn", 6), # ELK
+  rep("guadalupe_island", 10), # GUA
+  rep("pacific_grove", 13), # HOP -> Pacific Grove PGR 
+  rep("isla_san_jeronimo", 11), # ISJ
+  rep("laguna_beach", 13), # LB
+  rep("point_dume", 5), # PD
+  rep("santa_barbara_island", 13), # SB
+  rep("san_clemente_island", 10), # SCL
+  rep("la_jolla_san_diego", 13), # SD
+  rep("tomales_bay", 1), # TB
+  rep("redondo_beach", 10), # RB
+  rep("santa_cruz_harbour", 10) # SCH
+)
+```
+
 ```{r}
 PCA_distance <- tibble(
   PCA1 = pcadapt_lcwgs$scores[, 1],
@@ -910,7 +932,7 @@ geo_dist_cells <- here_d_lcwgs("low_coverage_sampling.csv") |>
 
 barrier_dist_mat <- proxy::dist(geo_dist_cells, method = barrier_distance)
 
-rm(water, geo_dist_cells)
+rm(geo_dist_cells)
 ```
 
 ### Test if Euclidean and barrrier geographic distances are different
@@ -955,7 +977,10 @@ geo_dist_cells_islanders <- here_d_lcwgs("low_coverage_sampling.csv") |>
                cell_id = cellFromXY(water, as.matrix(x[, 2:3]))))() |> 
   pull(cell_id, name = pop)
 
-barrier_dist_mat_islanders <- proxy::dist(geo_dist_cells_islanders, method = barrier_distance)
+barrier_dist_mat_islanders <- proxy::dist(geo_dist_cells_islanders,
+                                          method = barrier_distance)
+
+rm(water)
 ```
 
 ### Compute geographic euclidean distance
@@ -989,6 +1014,25 @@ mantel_plot(barrier_dist_mat_islanders, lcwgs_IBD_islanders$Dgen)
 ```
 
 ### Correlation btw PCA and barrier distances
+
+```{r}
+pcadapt_lcwgs_coast <- read_rds(here("output", "pcadapt_lcwgs_coast.rds"))
+popmap_lcwgs_coast <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("elkhorn",               6), # ELK
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+  rep("isla_san_jeronimo",    11), # ISJ
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara_island", 13), # SB
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10)  # SCH
+)
+```
+
 ```{r}
 PCA_distances_coast <- tibble(
   PCA1 = pcadapt_lcwgs_coast$scores[, 1],
