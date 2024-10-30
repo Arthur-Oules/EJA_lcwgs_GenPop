@@ -79,12 +79,17 @@ manhattan_plot_custom <- function(vcf_file,                # vcf file from ustac
   }
 }
 
-manhattan_plot_custom_2 <- function(genome_mapping, pvalues, outliers = NULL) {
+manhattan_plot_custom_2 <- function(genome_mapping,
+                                    pvalues,
+                                    outliers_cutoff = NULL) {
   
   labs_rank <- genome_mapping |>
     mutate(labs_rank = row_number()) |>
     distinct(CHROM, .keep_all = TRUE) |>
-    pull(var = labs_rank)
+    left_join(genome_mapping |> count(CHROM)) |> 
+    mutate(midranks = round(labs_rank + n/2)) |> 
+    filter(row_number() <= 25) |> 
+    pull(midranks)
   
   df <- genome_mapping |>
     mutate(
@@ -99,75 +104,90 @@ manhattan_plot_custom_2 <- function(genome_mapping, pvalues, outliers = NULL) {
   p <- df |> ggplot() +
     geom_point(aes(x = rank, y = {{pvalues}}, colour = factor(coloured)))
   
-  if (!is.null(outliers)) {
-    p <- p + geom_point(data = outliers, aes(x = rank, y = logpvalues), colour = "red")
+  if (!is.null(outliers_cutoff)) {
+    p <- p + geom_point(
+      data   = df |> filter({{pvalues}} >= outliers_cutoff),
+      aes(x = rank, y = {{pvalues}}),
+      colour = "red"
+    ) +
+      geom_hline(
+        yintercept = outliers_cutoff,
+        colour     = "red",
+        linetype   = "dashed"
+      )
   }
     
   p + scale_colour_manual(values = c("black", "grey")) +
     scale_x_continuous(
       breaks = df$rank[df$lab_position],
-      labels = df$CHROM[df$lab_position]
+      labels = df$CHROM[df$lab_position],
+      guide  = guide_axis(angle = 45)
     ) +
-    labs(x = "chromosome", y = "-log10(p-value)") +
+    labs(x = "chromosome", y = bquote(-log[10]~("p-value"))) +
     theme_classic() +
-    theme(
-      axis.text.x     = element_text(angle = 90),
-      legend.position = "none"
-    )
+    theme(legend.position = "none")
 }
 
 PCA_plot <- function(pcadapt_output,
                      popmap,
+                     axis_one  = 1,
+                     axis_two  = 2,
                      x_offsets = NULL,
                      y_offsets = NULL) {
   # Format data frame
   PCA_df <- tibble(
-    x   = -pcadapt_output$scores[, 1],
-    y   = -pcadapt_output$scores[, 2],
-    pop = popmap
+    x      = -pcadapt_output$scores[, axis_one],
+    y      = -pcadapt_output$scores[, axis_two],
+    pop    = popmap$short_names,
+    labels = popmap$long_names
   )
   
   # Compute coords averages by populations
   PCA_average <- PCA_df |>
-    group_by(pop) |>
-    summarise(average_x = mean(x), average_y = mean(y)) |>
+    group_by(labels) |>
+    summarise(average_x = mean(x), average_y = mean(y)) |> 
+    ungroup() |>
     mutate(
-      pop = pop |>
+      labels = labels |>
         gsub(pattern = "_", x = _, replacement = " ") |>
         str_to_title()
     )
   
   # Compute axes percentages
-  PCA_percentages <- pcadapt_output$singular.values^2 |> percent()
+  PCA_percentages <- percent(pcadapt_output$singular.values^2)
   
-  PCA <- ggplot() +
-    geom_point(
-      PCA_df,
-      mapping = aes(x = y, y = x, fill = pop),
-      size    = 3,
-      shape   = 21
+  PCA <- PCA_df |> ggplot() +
+    geom_text(
+      mapping = aes(x = y, y = x, label = pop, colour = pop),
+      size    = 4
     ) +
+    # scale_color_hue() +
     labs(
-      x = paste0("-PC2: ", PCA_percentages[2]),
-      y = paste0("-PC1: ", PCA_percentages[1])
+      x = paste0("-PC", as.character(axis_two), ": ", PCA_percentages[axis_two]),
+      y = paste0("-PC", as.character(axis_one)," : ", PCA_percentages[axis_one])
     ) +
     coord_fixed(ratio = 1.2) +
-    theme_minimal()
+    theme_minimal() +
+    theme(legend.position = "none")
   
-  if (is.null(x_offsets) | is.null(y_offsets) == TRUE) {
+  PCA
+  if (is.null(x_offsets) || is.null(y_offsets) == TRUE) {
     PCA + geom_text_repel(
       PCA_average,
-      mapping = aes(x = average_y, y = average_x, label = pop)
+      mapping = aes(x = average_y, y = average_x, label = labels)
     )
   } else {
     # Add offsets
-    PCA_average <- PCA_average |> mutate(average_x = average_x + x_offsets)
-    PCA_average <- PCA_average |> mutate(average_y = average_y + y_offsets)
-    
+    PCA_average <- mutate(
+      PCA_average,
+      average_x = average_x + x_offsets,
+      average_y = average_y + y_offsets
+    )
+
     PCA +
     geom_text(
       PCA_average,
-      mapping = aes(x = average_y, y = average_x, label = pop)
+      mapping = aes(x = average_y, y = average_x, label = labels)
     ) +
     theme(legend.position = "none")
   }
