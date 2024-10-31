@@ -218,40 +218,40 @@ pcadapt_lcwgs <- read_rds(file = here("output", "pcadapt_lcwgs.rds"))
 popmap_lcwgs <- tibble(
   long_names = factor(
     c(
-      rep("bodega_bay", 5), # BB
-      rep("big_sur", 13), # BIGC -> BCR -> BS
-      rep("catalina_island", 11), # CAT
-      rep("elkhorn", 6), # ELK
-      rep("guadalupe_island", 10), # GUA
-      rep("pacific_grove", 13), # HOP -> Pacific Grove PGR 
-      rep("isla_san_jeronimo", 11), # ISJ
-      rep("laguna_beach", 13), # LB
-      rep("point_dume", 5), # PD
+      rep("bodega_bay",            5), # BB
+      rep("big_sur",              13), # BIGC -> BCR -> BS
+      rep("catalina_island",      11), # CAT
+      rep("elkhorn",               6), # ELK
+      rep("guadalupe_island",     10), # GUA
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
+      rep("isla_san_jeronimo",    11), # ISJ
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
       rep("santa_barbara_island", 13), # SB
-      rep("san_clemente_island", 10), # SCL
-      rep("la_jolla_san_diego", 13), # SD
-      rep("tomales_bay", 1), # TB
-      rep("redondo_beach", 10), # RB
-      rep("santa_cruz_harbour", 10) # SCH
+      rep("san_clemente_island",  10), # SCL
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz_harbour",   10) # SCH
     ),
     ordered = TRUE
   ),
   short_names = factor(
     c(
-      rep("BB", 5), # BB
-      rep("BS", 13), # BIGC -> BCR
+      rep("BB",   5), # BB
+      rep("BS",  13), # BIGC -> BCR
       rep("CAT", 11), # CAT
-      rep("ELK", 6), # ELK
+      rep("ELK",  6), # ELK
       rep("GUA", 10), # GUA
-      rep("PG", 13), # HOP -> Pacific Grove PGR 
+      rep("PG",  13), # HOP -> Pacific Grove PGR 
       rep("ISJ", 11), # ISJ
-      rep("LB", 13), # LB
-      rep("PD", 5), # PD
-      rep("SB", 13), # SB
+      rep("LB",  13), # LB
+      rep("PD",   5), # PD
+      rep("SB",  13), # SB
       rep("SCL", 10), # SCL
-      rep("SD", 13), # SD
-      rep("TB", 1), # TB
-      rep("RB", 10), # RB
+      rep("SD",  13), # SD
+      rep("TB",   1), # TB
+      rep("RB",  10), # RB
       rep("SCH", 10) # SCH
     ),
     ordered = TRUE
