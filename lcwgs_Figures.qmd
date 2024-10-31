@@ -263,6 +263,10 @@ popmap_lcwgs <- tibble(
 #| label: PCAMapPCAPlot
 
 PCA <- PCA_plot(pcadapt_output = pcadapt_lcwgs, popmap = popmap_lcwgs)
+```
+
+```{r}
+#| label: PCAMapPCASave
 
 save_open_plot(
   path   = here("output", "plots", "lcwgs", "PCA.pdf"),
@@ -308,6 +312,11 @@ PCA_and_crop <- PCA + annotate(
 ) + 
 theme(legend.position = "none") +
 inset_element(PCA_crop, left = 0.6, bottom = 0.6, right = 1, top = 1)
+```
+
+
+```{r}
+#| label: PCAMapPCASave
 
 save_open_plot(
   path   = here("output", "plots", "lcwgs", "pca_crop.pdf"),
@@ -415,7 +424,7 @@ SST_annual_mean <- readRDS(
 
 #### Landmass
 ```{r}
-#| label: PCAMapMapMetadata
+#| label: PCAMapMapPrep
 
 # Setting up landmass map from naturalearth
 states <- ne_states(
@@ -593,6 +602,11 @@ lcwgs_map <- ggplot() +
     breaks = c(30, 35),
     labels = unit_format(suffix = "°N", sep = "")
   )
+```
+
+### Memory cleanup
+```{r}
+#| label: PCAMapMapSave
 
 save_open_plot(
   here("output", "plots", "lcwgs", "temp_current_map_lres.pdf"),
@@ -600,11 +614,6 @@ save_open_plot(
   width  = 9,
   height = 9
 )
-```
-
-### Memory cleanup
-```{r}
-#| label: PCAMapMapMemClean
 
 rm(currents_tibble_annual_mean_lres, SST_annual_mean,
    states,
@@ -624,6 +633,10 @@ PCA_map <- PCA_and_crop + lcwgs_map +
     axis.text = element_text(size = 12),
     plot.tag  = element_text(face = "bold")
     )
+```
+
+```{r}
+#| label: PCAMapSave
 
 save_open_plot(
   here("output", "plots", "lcwgs", "pca_map.png"),
@@ -631,10 +644,6 @@ save_open_plot(
   width  = 17.5,
   height = 11.25
 )
-```
-
-```{r}
-#| label: PCAMapMemClean
 
 rm(PCA_map, PCA_and_crop, lcwgs_map)
 gc()
@@ -645,6 +654,8 @@ gc()
 ### Data
 
 ```{r}
+#| label: BathyPrep
+
 currents_tibble_annual_mean <- left_join(
   rast(
     x     = here("data", "Copernicus", "merged_uv",
@@ -665,9 +676,7 @@ currents_tibble_annual_mean <- left_join(
     as_tibble() |> 
     rename(v_mean = mean),
 )
-```
 
-```{r}
 catalina_df <- getNOAA.bathy(
     lon1 = -121, lon2 = -116,
     lat1 = 32,   lat2 = 35,
@@ -680,12 +689,13 @@ states <- ne_states(
   country     = c("united states of america", "mexico"),
   returnclass = "sf"
 )
-
 ```
 
 ### Map
 
 ```{r}
+#| label: BathyPrep
+
 bathy <- ggplot() +
   # Plot bathymetry
   geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
@@ -735,6 +745,10 @@ bathy <- ggplot() +
     legend.position = c(.93, .73),
     plot.margin     = margin(t = 0, r = 1, b = 0, l = .5, unit = "cm")
   )
+```
+
+```{r}
+#| label: BathySave
 
 save_open_plot(
   here("output", "plots", "lcwgs", "bathy.pdf"),
@@ -742,16 +756,15 @@ save_open_plot(
   width  = 9,
   height = 7
 )
-```
 
-```{r}
 rm(currents_tibble_annual_mean, catalina_df, states, bathy)
 ```
 
 ## Figure 5 - Admixture plot
 Change individuals order in the file `Individuals_plot_order.txt`
+
 ```{r}
-#| label: AdmPlot
+#| label: AdmPlotPrep
 
 Indiv_list <- read_rds(file = here_d_lcwgs("Individual_list.rds"))
 
@@ -767,6 +780,11 @@ admixture_data <- read_table(
     names_to  = "Populations",
     values_to = "Ancestry proportions"
   )
+
+```
+
+```{r}
+#| label: AdmPlot
 
 admixture_plot <- admixture_data |>
   ggplot(
@@ -789,13 +807,17 @@ admixture_plot <- admixture_data |>
   theme(
     axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
   )
-  
-  save_open_plot(
-    path   = here("output", "plots", "lcwgs", "admixture_plot_K=6.pdf"),
-    plot   = admixture_plot,
-    width  = 16,
-    height = 6
-    )
+```
+
+```{r}
+#| label: AdmSave
+
+save_open_plot(
+  path   = here("output", "plots", "lcwgs", "admixture_plot_K=6.pdf"),
+  plot   = admixture_plot,
+  width  = 16,
+  height = 6
+  )
 
 rm(Indiv_list, admixture_data, admixture_plot)
 ```
