@@ -11,8 +11,7 @@ editor: source
 #| echo: false
 
 c("here", "tidyverse",
-  "pcadapt", "vcfR", "adegenet", "ape", "LEA",
-  "rentrez", "xml2") |>
+  "pcadapt", "vcfR", "adegenet", "ape", "LEA") |>
   lapply(library, character.only = TRUE)
 ```
 
@@ -39,7 +38,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: PreAnalysis
 
 EJA_lcwgs <- read.pcadapt(
-  here_d_lcwgs("8-Embiotoca_filtered.bed"),
+  here("data", "8-Embiotoca_filtered.bed"),
   type = "bed"
 )
 
@@ -105,12 +104,12 @@ pcadapt_lcwgs$pvalues |> hist(
 #| label: Whitelist
 #| eval: false
 
-Indiv_list <- here_d_lcwgs("EJA_lcwgs_gt.RDS") |>
+Indiv_list <- here("data", "EJA_lcwgs_gt.RDS") |>
   read_rds() |>
   _$Indiv
 
 Indiv_list |>
-  write_rds(file = here_d_lcwgs("Individual_list.rds"))
+  write_rds(file = here("data", "Individual_list.rds"))
 ```
 
 ```{r}
@@ -141,7 +140,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 ```{r}
 #| label: CoastPreAnalysis
 EJA_lcwgs_coast <- read.pcadapt(
-  here_d_lcwgs("8-Embiotoca_filtered_whitelisted.bed"),
+  here("data", "8-Embiotoca_filtered_whitelisted.bed"),
   type = "bed"
 )
 
@@ -244,7 +243,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: IslPreAnalysis
 
 EJA_lcwgs_islands <- read.pcadapt(
-  here_d_lcwgs("8-Embiotoca_filtered_blacklisted.bed"),
+  here("data", "8-Embiotoca_filtered_blacklisted.bed"),
   type = "bed"
 )
 
@@ -315,7 +314,7 @@ pcadapt_lcwgs_islands$pvalues |> hist(
 #| label: SaveWhitelist
 #| eval: false
 
-Indiv_list <- read_rds(file = here_d_lcwgs("Individual_list.rds"))
+Indiv_list <- read_rds(file = here("data", "Individual_list.rds"))
 
 Indiv_list |> 
   unique() |>
@@ -382,7 +381,7 @@ pcadapt_lcwgs_SD_SC$pvalues |> hist(
 
 ### Prepare all data
 ```{r}
-EJA_lcwgs_vcf <- read_rds(here_d_lcwgs("EJA_lcwgs_vcfR.RDS"))
+EJA_lcwgs_vcf <- read_rds(here("data", "EJA_lcwgs_vcfR.RDS"))
 ```
 
 ```{r}
@@ -395,7 +394,7 @@ SNP_positions <- EJA_lcwgs_vcf |>
   select(CHROM, POS) |>
   mutate(POS = as.numeric(POS))
 
-saveRDS(SNP_positions, file = here_d_lcwgs("SNP_positions.rds"))
+saveRDS(SNP_positions, file = here("data", "SNP_positions.rds"))
 
 rm(EJA_lcwgs_vcf, SNP_positions)
 ```
@@ -403,7 +402,7 @@ rm(EJA_lcwgs_vcf, SNP_positions)
 ### Read genome
 ```{r}
 lcwgs_catalog <- read.dna(
-    here_d_lcwgs("JAKOON01_catalog", "catalog.fa"),
+    here("data", "JAKOON01_catalog", "catalog.fa"),
     format = "fasta",
     as.character = TRUE
   )
@@ -427,7 +426,7 @@ length(outliers)
 pcadapt_lcwgs_coast <- readRDS(here("output", "pcadapt_lcwgs_coast.rds"))
 
 pvalues_positions <- readRDS(
-  file = here_d_lcwgs("SNP_positions.rds")
+  file = here("data", "SNP_positions.rds")
 ) |> 
   select(-c(lab_position, coloured, rank)) |> 
   mutate(
@@ -448,7 +447,7 @@ pvalues_positions_filtered_dup <- pvalues_positions_filtered |>
 
 ### Get corresponding read windows
 ```{r}
-chromosomes_length <- read_tsv(here_d_lcwgs("JAKOON01_catalog", "JAKOON01_contigs.tsv"))
+chromosomes_length <- read_tsv(here("data", "JAKOON01_catalog", "JAKOON01_contigs.tsv"))
 
 pvalues_positions_filtered_dup_sequences <- pvalues_positions_filtered_dup |>
   mutate(
@@ -513,11 +512,11 @@ gc()
 ### Load external info
 
 ```{r}
-EJA_annotations <- here_d_lcwgs("EJA_annotations.gff") |>
+EJA_annotations <- here("data", "EJA_annotations.gff") |>
   read.gff() |>
   as_tibble()
 
-chromosomes_info <- here_d_lcwgs("JAKOON01_catalog", "sequence_report.tsv") |> 
+chromosomes_info <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |> 
   read_tsv() |>
   select(c(`GenBank seq accession`, `RefSeq seq accession`))
 ```
@@ -648,7 +647,7 @@ pvalues_positions <- pvalues_positions |>
 lcwgs_EJA_outliers_blast_tib <- c("GZSEDPGT016-Alignment.xml",
                                   "GZSJHA6W016-Alignment.xml",
                                   "GZSMYB0J016-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
-  here_d_lcwgs() |>
+  here("data", ) |>
   map( \(x) read_xml(x) |> XML_to_df()) |> 
   bind_rows() |>
   left_join(pvalues_positions)
@@ -695,7 +694,7 @@ lcwgs_protein_sequences |>
 
 ```{r}
 pvalues_positions <- readRDS(
-  file = here_d_lcwgs("SNP_positions.rds")
+  file = here("data", "SNP_positions.rds")
 ) |> 
   mutate(
     pvalues = pcadapt_lcwgs_coast$pvalues,
@@ -709,7 +708,7 @@ pvalues_positions <- readRDS(
 lcwgs_EJA_outliers_blast_A_ocellaris_tib <- c("HFHS4UE9013-Alignment.xml",
                                               "HFHRYX38013-Alignment.xml",
                                               "HFHSG8SF016-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
-  here_d_lcwgs() |>
+  here("data", ) |>
   map( \(x) read_xml(x) |> XML_to_df()) |> 
   bind_rows() |>
   left_join(pvalues_positions)
@@ -741,13 +740,13 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: VcfConvert
 #| eval: false
 
-EJA_lcwgs_vcf <- here_d_lcwgs("8-Embiotoca_filtered.vcf.gz") |> read.vcfR()
+EJA_lcwgs_vcf <- here("data", "8-Embiotoca_filtered.vcf.gz") |> read.vcfR()
 
-EJA_lcwgs_vcf |> write_rds(here_d_lcwgs("EJA_lcwgs_vcfR.RDS"))
+EJA_lcwgs_vcf |> write_rds(here("data", "EJA_lcwgs_vcfR.RDS"))
 
 ped2geno(
   input.file  = here("plink2", "8-Embiotoca_filtered.ped"),
-  output.file = here_d_lcwgs("8-Embiotoca_filtered.geno")
+  output.file = here("data", "8-Embiotoca_filtered.geno")
 )
 
 rm(EJA_lcwgs_vcf)
@@ -758,7 +757,7 @@ rm(EJA_lcwgs_vcf)
 #| label: snmfAnalysisSingle
 
 snmf_analysis <- snmf(
-  here_d_lcwgs("8-Embiotoca_filtered.geno"),
+  here("data", "8-Embiotoca_filtered.geno"),
   K           = 4:8,
   project     = "continue",
   repetitions = 50,

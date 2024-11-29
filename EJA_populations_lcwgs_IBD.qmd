@@ -30,7 +30,7 @@ source(here("functions", "plot_functions.R"))
 ```{r}
 #| echo: false
 
-lcwgs_gl <- here_d_lcwgs("8-Embiotoca_filtered.vcf.gz") |>
+lcwgs_gl <- here("data", ("8-Embiotoca_filtered.vcf.gz") |>
   gl.read.vcf()
 
 lcwgs_gl@other$latlon <- tibble(
@@ -38,7 +38,7 @@ lcwgs_gl@other$latlon <- tibble(
   Pop   = lcwgs_gl@pop
   ) |> 
   left_join(
-    y = read_csv2(here_d_lcwgs("low_coverage_sampling.csv")) |>
+    y = read_csv2(here("data", ("low_coverage_sampling.csv")) |>
       select(Popmap, Latitude, Longitude)
   ) |>
   rename(lat = Latitude, lon = Longitude) |> 
@@ -46,7 +46,7 @@ lcwgs_gl@other$latlon <- tibble(
 
 lcwgs_gl@pop <- factor(popmap_lcwgs)
 
-lcwgs_gl |> saveRDS(file = here_d_lcwgs("Embiotoca_lcwgs_gl.rds"))
+lcwgs_gl |> saveRDS(file = here("data", ("Embiotoca_lcwgs_gl.rds"))
 ```
 
 ### Send-away code
@@ -144,7 +144,7 @@ barrier_distance <- function(from, to) {
   extract(grid_map, to) |> as.numeric()
 }
 
-geo_dist_cells <- here_d_lcwgs("low_coverage_sampling.csv") |> 
+geo_dist_cells <- here("data", ("low_coverage_sampling.csv") |> 
   read_csv2(show_col_types = FALSE) |> 
   select(c(Code, Longitude, Latitude, Popmap)) |> 
   rename(pop = Popmap) |> 
@@ -236,7 +236,7 @@ lcwgs_IBD_islanders <- readRDS(
 
 ## Compute geographic barrier distance
 ```{r}
-geo_dist_cells_islanders <- here_d_lcwgs("low_coverage_sampling.csv") |> 
+geo_dist_cells_islanders <- here("data", ("low_coverage_sampling.csv") |> 
   read_csv2(show_col_types = FALSE) |> 
   select(c(Code, Longitude, Latitude, Popmap)) |>
   rename(pop = Popmap) |> 
@@ -260,7 +260,7 @@ rm(water)
 
 ## Compute geographic euclidean distance
 ```{r}
-Dist_geo_isl <- here_d_lcwgs("low_coverage_sampling.csv") |> 
+Dist_geo_isl <- here("data", ("low_coverage_sampling.csv") |> 
   read_csv2(show_col_types = FALSE) |> 
   select(c(Code, Longitude, Latitude, Popmap)) |>
   rename(pop = Popmap) |> 

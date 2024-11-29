@@ -31,9 +31,9 @@ source(here("functions", "plot_functions.R"))
 ```{r}
 #| label: LoadMetadata
 
-SNP_positions <- readRDS(file = here_d_lcwgs("SNP_positions.rds"))
+SNP_positions <- readRDS(file = here("data", "SNP_positions.rds"))
 
-chromosome_map <- here_d_lcwgs("JAKOON01_catalog", "sequence_report.tsv") |> 
+chromosome_map <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |> 
   read_tsv() |> 
   select(`GenBank seq accession`, `Sequence name`, `Seq length`) |> 
   filter(
@@ -778,10 +778,10 @@ Change individuals order in the file `Individuals_plot_order.txt`
 ```{r}
 #| label: AdmPlotPrep
 
-Indiv_list <- read_rds(file = here_d_lcwgs("Individual_list.rds"))
+Indiv_list <- read_rds(file = here("data", "Individual_list.rds"))
 
 admixture_data_6 <- read_table(
-  here_d_lcwgs("8-Embiotoca_filtered.snmf", "K6", "run16",
+  here("data", "8-Embiotoca_filtered.snmf", "K6", "run16",
        "8-Embiotoca_filtered_r16.6.Q"),
   col_names = paste0("Pop ", seq(1, 6))
 ) |> 
@@ -803,7 +803,7 @@ admixture_plot_6 <- admixture_data_6 |>
     aes(
       x    = factor(
         Individuals,
-        levels = here_d_lcwgs("Individuals_plot_order.txt") |> 
+        levels = here("data", "Individuals_plot_order.txt") |> 
           read.table() |>
           unlist() |>
           as.vector() 
@@ -837,7 +837,7 @@ rm(Indiv_list, admixture_data, admixture_plot)
 ### K = 7 populations
 ```{r}
 admixture_data_7 <- read_table(
-  here_d_lcwgs("8-Embiotoca_filtered.snmf", "K7", "run46",
+  here("data", "8-Embiotoca_filtered.snmf", "K7", "run46",
        "8-Embiotoca_filtered_r46.7.Q"),
   col_names = paste0("Pop ", seq(1, 7))
 ) |> 
@@ -854,7 +854,7 @@ admixture_plot_7 <- admixture_data_7 |>
     aes(
       x    = factor(
         Individuals,
-        levels = here_d_lcwgs("Individuals_plot_order.txt") |> 
+        levels = here("data", "Individuals_plot_order.txt") |> 
           read.table() |>
           unlist() |>
           as.vector() 
@@ -885,14 +885,14 @@ library(tess3r)
 
 ```{r}
 geno2lfmm(
-  here_d_lcwgs("8-Embiotoca_filtered.geno"),
-  here_d_lcwgs("8-Embiotoca_filtered.lfmm")
+  here("data", "8-Embiotoca_filtered.geno"),
+  here("data", "8-Embiotoca_filtered.lfmm")
 )
 ```
 ```{r}
-indiv <- here_d_lcwgs("Individual_list.rds") |> read_rds() |> unique()
+indiv <- here("data", "Individual_list.rds") |> read_rds() |> unique()
 
-coords <- read_csv2(here_d_lcwgs("low_coverage_sampling.csv")) |> 
+coords <- read_csv2(here("data", "low_coverage_sampling.csv")) |> 
   select(Longitude, Latitude, Code)
 
 coordinates <- tibble(Indiv = indiv) |>
@@ -904,17 +904,17 @@ coordinates <- tibble(Indiv = indiv) |>
 
 coordinates <- left_join(coordinates, coords)
 
-coordinates |> write_csv2(file = here_d_lcwgs("individuals_coordinates.csv"))
+coordinates |> write_csv2(file = here("data", "individuals_coordinates.csv"))
 rm(indiv, coords, coordinates)
 ```
 
 ```{r}
-genotype <- here_d_lcwgs("8-Embiotoca_filtered.geno") |>
+genotype <- here("data", "8-Embiotoca_filtered.geno") |>
   read.geno()
 
 genotype[genotype == 9] <- NA
 
-coordinates <- here_d_lcwgs("individuals_coordinates.csv") |>
+coordinates <- here("data", "individuals_coordinates.csv") |>
   read_csv2() |>
   select(Longitude, Latitude) |> 
   as.matrix()
@@ -926,7 +926,7 @@ tess_obj <- tess3(X = genotype, coord = coordinates, K = 5:8, ploidy = 2, openMP
 
 ```{r}
 q_matrix <- read_table(
-  here_d_lcwgs("8-Embiotoca_filtered.snmf", "K7", "run46",
+  here("data", "8-Embiotoca_filtered.snmf", "K7", "run46",
        "8-Embiotoca_filtered_r46.7.Q"),
   col_names = paste0("Pop ", seq(1, 7))
 ) |> as.matrix()
@@ -942,7 +942,7 @@ ne_states(
   subst(from = NA, to = 2) |> 
   subst(from = 1, to = NA) |> 
   subst(from = 2, to = 1) |> 
-  writeRaster(here_d_lcwgs("ocean_map.tif"))
+  writeRaster(here("data", "ocean_map.tif"))
 ```
 
 ```{r}
@@ -1027,7 +1027,7 @@ gg_obj <- ggtess3Q(
   resolution      = c(1000, 1000),
   window          = c(-124, -113, 28.5, 38.5),
   background      = TRUE,
-  raster.filename = here_d_lcwgs("ocean_map.tif"),
+  raster.filename = here("data", "ocean_map.tif"),
   col.palette     = CreatePalette(turbo(n = 7), 25)
 )
 

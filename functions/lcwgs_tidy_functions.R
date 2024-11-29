@@ -1,5 +1,3 @@
-here_d_lcwgs <- function(...) here("data", "lcwgs", ... = ...)
-
 order_descencing <- function(df) {
   chromosomes_desc_length <- df |>
     count(CHROM) |>
