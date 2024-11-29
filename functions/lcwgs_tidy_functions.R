@@ -1,7 +1,10 @@
 here_d_lcwgs <- function(...) here("data", "lcwgs", ... = ...)
 
 order_descencing <- function(df) {
-  chromosomes_desc_length <- df |> count(CHROM) |> arrange(desc(n)) |> pull(CHROM)
+  chromosomes_desc_length <- df |>
+    count(CHROM) |>
+    arrange(desc(n)) |>
+    pull(CHROM)
   
   df |>
     mutate(CHROM = factor(CHROM, levels = chromosomes_desc_length)) |>
@@ -29,7 +32,7 @@ XML_to_df <- function(xml_file) {
   xml_tib <- xml_file |>
     as_list() |>
     as_tibble() |> 
-    mutate(BlastXML2 = map(BlastXML2, ~if(is.list(.x)) .x else list(.x))) |>
+    mutate(BlastXML2 = map(BlastXML2, ~if(is.list(.x)) .x else list(.x))) |> 
     unnest_longer(BlastXML2) |>
     filter(BlastXML2_id == "report") |>
     unnest_wider(BlastXML2) |> 
@@ -93,7 +96,7 @@ XML_to_df <- function(xml_file) {
   xml_tib
 }
 
-Get_protein_sequences <- function(df, silent = TRUE) {
+Get_protein_sequences <- function(df) {
   df |>
     select(accession_number) |>
     mutate(
