@@ -232,9 +232,13 @@ popmap_lcwgs <- tibble(
       rep("la_jolla_san_diego",   13), # SD
       rep("tomales_bay",           1), # TB
       rep("redondo_beach",        10), # RB
-      rep("santa_cruz_harbour",   10) # SCH
+      rep("santa_cruz",   10) # SCH
     ),
-    ordered = TRUE
+    levels = c("big_sur", "bodega_bay", "catalina_island", "santa_cruz",
+               "guadalupe_island", "isla_san_jeronimo", "la_jolla_san_diego",
+               "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
+               "san_clemente_island", "santa_barbara_island",
+               "elkhorn", "redondo_beach")
   ),
   short_names = factor(
     c(
@@ -254,7 +258,9 @@ popmap_lcwgs <- tibble(
       rep("RB",  10), # RB
       rep("SCH", 10) # SCH
     ),
-    ordered = TRUE
+    levels = c("BS", "BB", "CAT", "ELK", "GUA",
+               "ISJ", "SD", "LB", "PG", "PD",
+               "TB", "SCL", "SB", "SCH", "RB")
   )
 )
 ```
@@ -262,7 +268,10 @@ popmap_lcwgs <- tibble(
 ```{r}
 #| label: PCAMapPCAPlot
 
-PCA <- PCA_plot(pcadapt_output = pcadapt_lcwgs, popmap = popmap_lcwgs)
+PCA <- PCA_plot(
+  pcadapt_output = pcadapt_lcwgs,
+  popmap         = popmap_lcwgs,
+)
 ```
 
 ```{r}
@@ -291,7 +300,8 @@ PCA_plot(
 ```{r}
 #| label: PCAMapPlotCrop
 
-PCA_crop <- PCA + xlim(-.065, -.0325) + ylim(.095, .1275) + # old crop = xlim(-.065, -.05) + ylim(.1125, .1275) +
+PCA_crop <- PCA + xlim(-.065, -.0325) + ylim(.095, .1275) +
+  # old crop = xlim(-.065, -.05) + ylim(.1125, .1275) +
   coord_fixed(ratio = 1) +
   theme(
     legend.position = "none",
@@ -308,7 +318,7 @@ PCA_and_crop <- PCA + annotate(
   "rect",
   xmin  = -.07, xmax = -.0190,
   ymin  = .09, ymax = .1325,
-  alpha = 0, colour = "black", linetype = "longdash"
+  alpha = 0, colour = "black", linetype = "longdash", linewidth = .3
 ) + 
 theme(legend.position = "none") +
 inset_element(PCA_crop, left = 0.6, bottom = 0.6, right = 1, top = 1)
@@ -410,6 +420,7 @@ SST_maps |>
 rm(SST_maps)
 ```
 
+#### Import map data
 ```{r}
 #| label: PCAMapMapLoad
 
@@ -437,8 +448,7 @@ sample_sites <- read_csv2(here("data","lcwgs", "low_coverage_sampling.csv")) |>
   mutate(
     Popmap  = factor(
       Popmap,
-      levels  = levels(popmap_lcwgs$long_names),
-      ordered = TRUE
+      levels  = levels(popmap_lcwgs$long_names)
     ),
     lab_lon = Longitude + c(.85, .9, .60, .62, .90,
                             .63, .8, 1.1, .98,  -1,
@@ -448,13 +458,10 @@ sample_sites <- read_csv2(here("data","lcwgs", "low_coverage_sampling.csv")) |>
                            -.17, -.27, .10, .15,  .25)
   ) |>
   arrange(Popmap) |> 
-  select(Longitude, Latitude, Sampling_sites, lab_lon, lab_lat) |> 
+  select(Longitude, Latitude, Sampling_sites, Popmap, lab_lon, lab_lat) |> 
   mutate(
-    Sampling_sites = gsub("\\n", "\n", Sampling_sites, fixed = TRUE) |>
-      factor(ordered = TRUE)
+    Sampling_sites = gsub("\\n", "\n", Sampling_sites, fixed = TRUE)
   )
-
-popmap_lcwgs$long_names
 
 states_labels <- data.frame(
   "long" = c(-117.5, -115.5, -113.7, -115.4),
@@ -516,7 +523,7 @@ lcwgs_map <- ggplot() +
     mapping     = aes(
       x    = Longitude,
       y    = Latitude,
-      fill = Sampling_sites,
+      fill = Popmap,
       size = 1.3
     ),
     shape       = 21,
@@ -524,10 +531,12 @@ lcwgs_map <- ggplot() +
   ) +
   geom_label(
     sample_sites,
-    mapping = aes(x = lab_lon, y = lab_lat, label = Sampling_sites),
+    mapping = aes(x = lab_lon, y = lab_lat,
+                  label = Sampling_sites, fontface = "bold"),
     label.r = unit(0, "lines"),
     alpha   = .6
   ) +
+  scale_fill_hue() +
   # Extra cities points and labels
   geom_point(
     city_labels,
@@ -538,7 +547,7 @@ lcwgs_map <- ggplot() +
   ) +
   geom_text(
     city_labels,
-    mapping    = aes(x = long_lab, y = lat_lab, label = lab),
+    mapping    = aes(x = long_lab, y = lat_lab, label = lab, fontface = "bold"),
     lineheight = .7,
     hjust      = 0
   ) +
@@ -763,14 +772,17 @@ rm(currents_tibble_annual_mean, catalina_df, states, bathy)
 ## Figure 5 - Admixture plot
 Change individuals order in the file `Individuals_plot_order.txt`
 
+### K = 6 populations
+
+#### Load data
 ```{r}
 #| label: AdmPlotPrep
 
 Indiv_list <- read_rds(file = here_d_lcwgs("Individual_list.rds"))
 
-admixture_data <- read_table(
-  here_d_lcwgs("8-Embiotoca_filtered.snmf", "K6", "run65",
-       "8-Embiotoca_filtered_r65.6.Q"),
+admixture_data_6 <- read_table(
+  here_d_lcwgs("8-Embiotoca_filtered.snmf", "K6", "run16",
+       "8-Embiotoca_filtered_r16.6.Q"),
   col_names = paste0("Pop ", seq(1, 6))
 ) |> 
   mutate(Individuals = Indiv_list |> unique()) |> 
@@ -780,13 +792,13 @@ admixture_data <- read_table(
     names_to  = "Populations",
     values_to = "Ancestry proportions"
   )
-
 ```
 
+#### plot
 ```{r}
 #| label: AdmPlot
 
-admixture_plot <- admixture_data |>
+admixture_plot_6 <- admixture_data_6 |>
   ggplot(
     aes(
       x    = factor(
@@ -814,12 +826,263 @@ admixture_plot <- admixture_data |>
 
 save_open_plot(
   path   = here("output", "plots", "lcwgs", "admixture_plot_K=6.pdf"),
-  plot   = admixture_plot,
+  plot   = admixture_plot_6,
   width  = 16,
   height = 6
   )
 
 rm(Indiv_list, admixture_data, admixture_plot)
+```
+
+### K = 7 populations
+```{r}
+admixture_data_7 <- read_table(
+  here_d_lcwgs("8-Embiotoca_filtered.snmf", "K7", "run46",
+       "8-Embiotoca_filtered_r46.7.Q"),
+  col_names = paste0("Pop ", seq(1, 7))
+) |> 
+  mutate(Individuals = Indiv_list |> unique()) |> 
+  relocate(Individuals) |> 
+  pivot_longer(
+    -c(Individuals),
+    names_to  = "Populations",
+    values_to = "Ancestry proportions"
+  )
+
+admixture_plot_7 <- admixture_data_7 |>
+  ggplot(
+    aes(
+      x    = factor(
+        Individuals,
+        levels = here_d_lcwgs("Individuals_plot_order.txt") |> 
+          read.table() |>
+          unlist() |>
+          as.vector() 
+      ),
+      y    = `Ancestry proportions`,
+      fill = Populations
+    )
+  ) +
+  geom_col(position = "stack", width = 1) +
+  scale_fill_viridis(discrete = TRUE, option = "turbo") +
+  labs(x = "Individuals") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "lcwgs", "admixture_plot_K=7.pdf"),
+  plot   = admixture_plot_7,
+  width  = 16,
+  height = 6
+)
+```
+### Tests with `tess3r`
+```{r}
+library(tess3r)
+```
+
+```{r}
+geno2lfmm(
+  here_d_lcwgs("8-Embiotoca_filtered.geno"),
+  here_d_lcwgs("8-Embiotoca_filtered.lfmm")
+)
+```
+```{r}
+indiv <- here_d_lcwgs("Individual_list.rds") |> read_rds() |> unique()
+
+coords <- read_csv2(here_d_lcwgs("low_coverage_sampling.csv")) |> 
+  select(Longitude, Latitude, Code)
+
+coordinates <- tibble(Indiv = indiv) |>
+  mutate(
+    Code = Indiv |>
+      map(\(x)(x |> str_split("_") |> unlist() |> _[2])) |>
+      unlist()
+  )
+
+coordinates <- left_join(coordinates, coords)
+
+coordinates |> write_csv2(file = here_d_lcwgs("individuals_coordinates.csv"))
+rm(indiv, coords, coordinates)
+```
+
+```{r}
+genotype <- here_d_lcwgs("8-Embiotoca_filtered.geno") |>
+  read.geno()
+
+genotype[genotype == 9] <- NA
+
+coordinates <- here_d_lcwgs("individuals_coordinates.csv") |>
+  read_csv2() |>
+  select(Longitude, Latitude) |> 
+  as.matrix()
+```
+
+```{r}
+tess_obj <- tess3(X = genotype, coord = coordinates, K = 5:8, ploidy = 2, openMP.core.num = 4)
+```
+
+```{r}
+q_matrix <- read_table(
+  here_d_lcwgs("8-Embiotoca_filtered.snmf", "K7", "run46",
+       "8-Embiotoca_filtered_r46.7.Q"),
+  col_names = paste0("Pop ", seq(1, 7))
+) |> as.matrix()
+
+library(rworldmap)
+
+ne_states(
+  country     = c("united states of america", "mexico"),
+  returnclass = "sv"
+) |>
+  crop(y = ext(-124,-113, 28.5, 38.5)) |>
+  rasterize(y = rast(ext(-124, -113, 28.5, 38.5), ncols = 2200, nrows = 2000)) |> 
+  subst(from = NA, to = 2) |> 
+  subst(from = 1, to = NA) |> 
+  subst(from = 2, to = 1) |> 
+  writeRaster(here_d_lcwgs("ocean_map.tif"))
+```
+
+```{r}
+popmap_lcwgs <- tibble(
+  long_names = factor(
+    c(
+      rep("bodega_bay",            5), # BB
+      rep("big_sur",              13), # BIGC -> BCR -> BS
+      rep("catalina_island",      11), # CAT
+      rep("elkhorn",               6), # ELK
+      rep("guadalupe_island",     10), # GUA
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
+      rep("isla_san_jeronimo",    11), # ISJ
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara_island", 13), # SB
+      rep("san_clemente_island",  10), # SCL
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz",   10) # SCH
+    ),
+    levels = c("big_sur", "bodega_bay", "catalina_island", "santa_cruz",
+               "guadalupe_island", "isla_san_jeronimo", "la_jolla_san_diego",
+               "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
+               "san_clemente_island", "santa_barbara_island",
+               "elkhorn", "redondo_beach")
+  ),
+  short_names = factor(
+    c(
+      rep("BB",   5), # BB
+      rep("BS",  13), # BIGC -> BCR
+      rep("CAT", 11), # CAT
+      rep("ELK",  6), # ELK
+      rep("GUA", 10), # GUA
+      rep("PG",  13), # HOP -> Pacific Grove PGR 
+      rep("ISJ", 11), # ISJ
+      rep("LB",  13), # LB
+      rep("PD",   5), # PD
+      rep("SB",  13), # SB
+      rep("SCL", 10), # SCL
+      rep("SD",  13), # SD
+      rep("TB",   1), # TB
+      rep("RB",  10), # RB
+      rep("SCH", 10) # SCH
+    ),
+    levels = c("BS", "BB", "CAT", "ELK", "GUA",
+               "ISJ", "SD", "LB", "PG", "PD",
+               "TB", "SCL", "SB", "SCH", "RB")
+  )
+)
+
+sample_sites <- read_csv2(here("data","lcwgs", "low_coverage_sampling.csv")) |>
+  mutate(
+    Popmap  = factor(
+      Popmap,
+      levels  = levels(popmap_lcwgs$long_names)
+    ),
+    lab_lon = Longitude + c(.85, .9, .60, .62, .90,
+                            .63, .8, 1.1, .98,  -1,
+                              1, -1, .62, .70, .79),
+    lab_lat = Latitude + c( .09, -.13, .25, .10, -.15,
+                            .10,  .20, .06, .05,  .10,
+                           -.17, -.27, .10, .15,  .25)
+  ) |>
+  arrange(Popmap) |>
+  select(Longitude, Latitude, Sampling_sites, Popmap, lab_lon, lab_lat) |> 
+  mutate(
+    Sampling_sites = gsub("\\n", "\n", Sampling_sites, fixed = TRUE)
+  )
+
+states <- ne_states(
+  country     = c("united states of america", "mexico"),
+  returnclass = "sf"
+)
+```
+
+```{r}
+gg_obj <- ggtess3Q(
+  q_matrix,
+  coordinates,
+  resolution      = c(1000, 1000),
+  window          = c(-124, -113, 28.5, 38.5),
+  background      = TRUE,
+  raster.filename = here_d_lcwgs("ocean_map.tif"),
+  col.palette     = CreatePalette(turbo(n = 7), 25)
+)
+
+pop_area <- gg_obj +
+  geom_sf(data = states) +
+  coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
+  geom_point(
+    sample_sites,
+    mapping     = aes(
+      x    = Longitude,
+      y    = Latitude,
+      size = 1
+    ),
+    shape       = 21,
+    show.legend = FALSE
+  ) +
+  geom_label(
+    sample_sites,
+    mapping = aes(x = lab_lon, y = lab_lat,
+                  label = Sampling_sites, fontface = "bold"),
+    label.r = unit(0, "lines"),
+    alpha   = .6
+  ) +
+  geom_label(
+    aes(x = -119.14, y = 28.69, label = "        "),
+    label.r = unit(0, "lines")
+  ) +
+  annotation_scale(location = "bl", width_hint = 0.4) +
+  annotation_north_arrow(
+    location = "tr",
+    style    = north_arrow_fancy_orienteering()
+  ) +
+  labs(
+    title = "Population repartition for K = 7 populations",
+    x     = "Longitude",
+    y     = "Latitude"
+  ) +
+  scale_x_continuous(
+    breaks = c(-120, -115),
+    labels = c("120°W", "115°W")
+  ) +
+  scale_y_continuous(
+    breaks = c(30, 35),
+    labels = unit_format(suffix = "°N", sep = "")
+  ) +
+  theme_classic()
+```
+
+```{r}
+save_open_plot(
+  here("output", "plots", "lcwgs", "pop_areas_K=7.png"),
+  plot   = pop_area,
+  width  = 9,
+  height = 9
+)
 ```
 
 ## Figure 6 - IBD
