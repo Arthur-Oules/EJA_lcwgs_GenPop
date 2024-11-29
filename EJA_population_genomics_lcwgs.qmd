@@ -38,7 +38,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: PreAnalysis
 
 EJA_lcwgs <- read.pcadapt(
-  here("data", "8-Embiotoca_filtered.bed"),
+  here("data", "SNPs", "8-Embiotoca_filtered.bed"),
   type = "bed"
 )
 
@@ -140,7 +140,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 ```{r}
 #| label: CoastPreAnalysis
 EJA_lcwgs_coast <- read.pcadapt(
-  here("data", "8-Embiotoca_filtered_whitelisted.bed"),
+  here("data", "SNPs", "8-Embiotoca_filtered_whitelisted.bed"),
   type = "bed"
 )
 
@@ -243,7 +243,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: IslPreAnalysis
 
 EJA_lcwgs_islands <- read.pcadapt(
-  here("data", "8-Embiotoca_filtered_blacklisted.bed"),
+  here("data", "SNPs", "8-Embiotoca_filtered_blacklisted.bed"),
   type = "bed"
 )
 
@@ -338,7 +338,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: PreAnalysisSDSC
 
 EJA_lcwgs_SD_SC <- read.pcadapt(
-  here("plink2", "8-Embiotoca_filtered_SD_SC.bed"),
+  here("plink2", "SNPs", "8-Embiotoca_filtered_SD_SC.bed"),
   type = "bed"
 )
 
@@ -703,7 +703,6 @@ pvalues_positions <- readRDS(
   mutate(Rank = paste0(CHROM, " POS: ", as.character(POS)))
 ```
 
-
 ```{r}
 lcwgs_EJA_outliers_blast_A_ocellaris_tib <- c("HFHS4UE9013-Alignment.xml",
                                               "HFHRYX38013-Alignment.xml",
@@ -740,13 +739,13 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: VcfConvert
 #| eval: false
 
-EJA_lcwgs_vcf <- here("data", "8-Embiotoca_filtered.vcf.gz") |> read.vcfR()
+EJA_lcwgs_vcf <- here("data", "SNPs", "8-Embiotoca_filtered.vcf.gz") |> read.vcfR()
 
 EJA_lcwgs_vcf |> write_rds(here("data", "EJA_lcwgs_vcfR.RDS"))
 
 ped2geno(
-  input.file  = here("plink2", "8-Embiotoca_filtered.ped"),
-  output.file = here("data", "8-Embiotoca_filtered.geno")
+  input.file  = here("plink2", "SNPs", "8-Embiotoca_filtered.ped"),
+  output.file = here("data", "SNPs", "8-Embiotoca_filtered.geno")
 )
 
 rm(EJA_lcwgs_vcf)
@@ -757,7 +756,7 @@ rm(EJA_lcwgs_vcf)
 #| label: snmfAnalysisSingle
 
 snmf_analysis <- snmf(
-  here("data", "8-Embiotoca_filtered.geno"),
+  here("data", "SNPs", "8-Embiotoca_filtered.geno"),
   K           = 4:8,
   project     = "continue",
   repetitions = 50,
