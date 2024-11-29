@@ -884,12 +884,6 @@ library(tess3r)
 ```
 
 ```{r}
-geno2lfmm(
-  here("data", "8-Embiotoca_filtered.geno"),
-  here("data", "8-Embiotoca_filtered.lfmm")
-)
-```
-```{r}
 indiv <- here("data", "Individual_list.rds") |> read_rds() |> unique()
 
 coords <- read_csv2(here("data", "low_coverage_sampling.csv")) |> 
