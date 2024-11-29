@@ -11,7 +11,7 @@ editor: source
 #| echo: false
 
 c("here", "tidyverse",
-  "pcadapt", "vcfR", "adegenet", "ape", "LEA", "dartR",
+  "pcadapt", "vcfR", "adegenet", "ape", "LEA",
   "rentrez", "xml2") |>
   lapply(library, character.only = TRUE)
 ```
@@ -743,11 +743,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 EJA_lcwgs_vcf <- here_d_lcwgs("8-Embiotoca_filtered.vcf.gz") |> read.vcfR()
 
-EJA_lcwgs_vcf |> here_d_lcwgs("EJA_lcwgs_vcfR.RDS") |> write_rds()
-
-EJA_lcwgs_vcf |>
-  extract_gt_tidy() |>
-  write_rds(here_d_lcwgs("EJA_lcwgs_gt.RDS"))
+EJA_lcwgs_vcf |> write_rds(here_d_lcwgs("EJA_lcwgs_vcfR.RDS"))
 
 ped2geno(
   input.file  = here("plink2", "8-Embiotoca_filtered.ped"),
@@ -757,23 +753,16 @@ ped2geno(
 rm(EJA_lcwgs_vcf)
 ```
 
-```{r}
-#| label: LoadData
-
-EJA_lcwgs_vcf <- read_rds(here_d_lcwgs("EJA_lcwgs_vcfR.RDS"))
-
-EJA_lcwgs_gt <- read_rds(here_d_lcwgs("EJA_lcwgs_gt.RDS"))
-```
-
 ## Run analysis
 ```{r}
 #| label: snmfAnalysisSingle
 
 snmf_analysis <- snmf(
   here_d_lcwgs("8-Embiotoca_filtered.geno"),
-  project = "continue",
-  K       = 5:8,
-  entropy = TRUE
+  K           = 4:8,
+  project     = "continue",
+  repetitions = 50,
+  entropy     = TRUE
 )
 ```
 
@@ -782,32 +771,47 @@ snmf_analysis <- snmf(
 #| label: snmfSinglePlot
 
 plot(snmf_analysis)
-```
 
-K = 6 has the minimum cross-entropy.
+snmf_tb <- tibble(K = as.numeric(unique(snmf_analysis@K)))
 
-## Rerun multiple times with K = 6
-```{r}
-#| label: snmfAnalysisMulti
+cross_entropy <- rep(0, dim(snmf_tb)[1])
 
-snmf_analysis <- snmf(
-  here_d_lcwgs("8-Embiotoca_filtered.geno"),
-  project     = "continue",
-  repetitions = 100,
-  K           = 6,
-  entropy     = TRUE
+for (i in 1:length(snmf_tb$K)) {
+  cross_entropy[i] <- min(cross.entropy(snmf_analysis, K = snmf_tb$K[i]))
+}
+
+snmf_plot <- snmf_tb |> mutate(cross_entropy = cross_entropy) |> 
+  ggplot() +
+  geom_point(aes(x = K, y = cross_entropy)) +
+  theme_classic()
+
+ggsave(
+  filename = here("output", "plots", "lcwgs", "snmf_cross_entropy.png"),
+  plot     = snmf_plot,
+  width    = 8,
+  height   = 5
 )
 ```
 
+K = 7 has the minimum cross-entropy. Previous results converged to K = 6 so this is confusing.
+
 ## Plot results for K = 6
 ```{r}
-#| label: snmfAnalysisMultiMplot
+#| label: snmfAnalysisMultiPlot
+
+# barchart(
+#   snmf_analysis,
+#   K         = 6,
+#   run       = which.min(cross.entropy(snmf_analysis, K = 6)),
+#   col       = turbo(n = 6),
+#   sort.by.Q = FALSE
+# )
 
 barchart(
   snmf_analysis,
-  K         = 6,
-  run       = which.min(cross.entropy(snmf_analysis, K = 6)),
-  col       = viridis(n = 6, option = "turbo"),
+  K         = 7,
+  run       = which.min(cross.entropy(snmf_analysis, K = 7)),
+  col       = viridis::turbo(n = 6),
   sort.by.Q = FALSE
 )
 ```
