@@ -28,6 +28,8 @@ Get_window <- function(chromosome, position) {
   }
 }
 
+library("xml2")
+
 XML_to_df <- function(xml_file) {
   xml_tib <- xml_file |>
     as_list() |>
@@ -95,6 +97,8 @@ XML_to_df <- function(xml_file) {
   
   xml_tib
 }
+
+library("rentrez")
 
 Get_protein_sequences <- function(df) {
   df |>
