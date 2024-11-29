@@ -138,9 +138,9 @@ PCA_plot <- function(pcadapt_output,
   PCA_df <- tibble(
     x      = -pcadapt_output$scores[, axis_one],
     y      = -pcadapt_output$scores[, axis_two],
-    pop    = popmap$short_names,
     labels = popmap$long_names
-  )
+  ) |> 
+    arrange(labels)
   
   # Compute coords averages by populations
   PCA_average <- PCA_df |>
@@ -157,11 +157,12 @@ PCA_plot <- function(pcadapt_output,
   PCA_percentages <- percent(pcadapt_output$singular.values^2)
   
   PCA <- PCA_df |> ggplot() +
-    geom_text(
-      mapping = aes(x = y, y = x, label = pop, colour = pop),
-      size    = 4
+    geom_point(
+      mapping = aes(x = y, y = x, fill = labels),
+      size    = 4,
+      shape   = 21
     ) +
-    # scale_color_hue() +
+    scale_fill_hue() +
     labs(
       x = paste0("-PC", as.character(axis_two), ": ", PCA_percentages[axis_two]),
       y = paste0("-PC", as.character(axis_one)," : ", PCA_percentages[axis_one])
@@ -174,7 +175,9 @@ PCA_plot <- function(pcadapt_output,
   if (is.null(x_offsets) || is.null(y_offsets) == TRUE) {
     PCA + geom_text_repel(
       PCA_average,
-      mapping = aes(x = average_y, y = average_x, label = labels)
+      mapping = aes(x = average_y, y = average_x, label = labels, fontface = "bold"),
+      point.size = 10,
+      min.segment.length = 0.3
     )
   } else {
     # Add offsets
