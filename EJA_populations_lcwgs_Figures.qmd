@@ -11,7 +11,7 @@ editor: source
 c("here", "tidyverse",
   "ncdf4", "rnaturalearth", "rnaturalearthdata", "rnaturalearthhires", "marmap",
   "patchwork", "plotly", "sf", "ggrepel", "ggspatial", "ggtree", "RColorBrewer", "viridis", 
-  "scales", "ggnewscale", "terra", "tidyterra") |>
+  "scales", "ggnewscale", "terra", "tidyterra", "tess3r") |>
   lapply(library, character.only = TRUE)
 ```
 
@@ -67,7 +67,7 @@ manhattan_lcwgs_NCBI <- SNP_positions_pvalues |>
 #| label: SaveManhattanPlotNCBI
 
 ggsave(
-  here("output", "plots", "lcwgs",
+  here("output", "plots",
        "manhattan_plot_custom_lcwgs_ncbi.png"),
   plot   = manhattan_lcwgs_NCBI,
   width  = 6000,
@@ -101,7 +101,7 @@ manhattan_lcwgs_coast_NCBI <- SNP_positions_pvalues |>
 #| label: SaveManhattanPlotCoastNCBI
 
 ggsave(
-  here("output", "plots", "lcwgs",
+  here("output", "plots",
        "manhattan_plot_custom_lcwgs_ncbi_coast.png"),
   plot   = manhattan_lcwgs_coast_NCBI,
   width  = 6000,
@@ -126,7 +126,7 @@ manhattan_lcwgs_coast_ncbi_outliers <- SNP_positions_pvalues |>
 #| label: SaveManhattanPlotCoastNCBIOutliers
 
 ggsave(
-  here("output", "plots", "lcwgs",
+  here("output", "plots",
        "manhattan_plot_custom_lcwgs_ncbi_coast_outliers.png"),
   plot   = manhattan_lcwgs_coast_ncbi_outliers,
   width  = 6000,
@@ -158,7 +158,7 @@ manhattan_plot_lcwgs_islands <- SNP_positions_pvalues |>
 #| label: SaveManhattanPlotIslNCBI
 
 ggsave(
-  here("output", "plots", "lcwgs", "manhattan_plot_custom_lcwgs_ncbi_islands.png"),
+  here("output", "plots", "manhattan_plot_custom_lcwgs_ncbi_islands.png"),
   plot   = manhattan_plot_lcwgs_islands,
   width  = 6000,
   height = 2000,
@@ -189,7 +189,7 @@ manhattan_plot_lcwgs_SD_SC <- SNP_positions_pvalues |>
 #| label: SaveManhattanSDSCIslNCBI
 
 ggsave(
-  here("output", "plots", "lcwgs", "manhattan_plot_custom_lcwgs_ncbi_SD_SC.png"),
+  here("output", "plots", "manhattan_plot_custom_lcwgs_ncbi_SD_SC.png"),
   plot   = manhattan_plot_lcwgs_SD_SC,
   width  = 6000,
   height = 2000,
@@ -278,7 +278,7 @@ PCA <- PCA_plot(
 #| label: PCAMapPCASave
 
 save_open_plot(
-  path   = here("output", "plots", "lcwgs", "PCA.pdf"),
+  path   = here("output", "plots", "PCA.pdf"),
   plot   = PCA,
   width  = 9,
   height = 9
@@ -329,7 +329,7 @@ inset_element(PCA_crop, left = 0.6, bottom = 0.6, right = 1, top = 1)
 #| label: PCAMapPCASave
 
 save_open_plot(
-  path   = here("output", "plots", "lcwgs", "pca_crop.pdf"),
+  path   = here("output", "plots", "pca_crop.pdf"),
   plot   = PCA_and_crop,
   width  = 9,
   height = 9
@@ -351,9 +351,9 @@ TD_PCA_plot <- pcadapt_lcwgs$scores |>
   ) |>
   add_markers(size = 12)
 
-setwd(here("output", "plots", "lcwgs"))
+setwd(here("output", "plots"))
 as_widget(TD_PCA_plot) |> saveWidget(
-  file = here("output", "plots", "lcwgs", "3D_PCA.html"),
+  file = here("output", "plots", "3D_PCA.html"),
   selfcontained = TRUE)
 setwd(here())
 
@@ -618,7 +618,7 @@ lcwgs_map <- ggplot() +
 #| label: PCAMapMapSave
 
 save_open_plot(
-  here("output", "plots", "lcwgs", "temp_current_map_lres.pdf"),
+  here("output", "plots", "temp_current_map_lres.pdf"),
   plot   = lcwgs_map,
   width  = 9,
   height = 9
@@ -648,7 +648,7 @@ PCA_map <- PCA_and_crop + lcwgs_map +
 #| label: PCAMapSave
 
 save_open_plot(
-  here("output", "plots", "lcwgs", "pca_map.png"),
+  here("output", "plots", "pca_map.png"),
   plot   = PCA_map,
   width  = 17.5,
   height = 11.25
@@ -658,7 +658,7 @@ rm(PCA_map, PCA_and_crop, lcwgs_map)
 gc()
 ```
 
-## Figure ? - Islandes Bathymétry
+## Figure ? - Islands Bathymetry
 
 ### Data
 
@@ -760,7 +760,7 @@ bathy <- ggplot() +
 #| label: BathySave
 
 save_open_plot(
-  here("output", "plots", "lcwgs", "bathy.pdf"),
+  here("output", "plots", "bathy.pdf"),
   plot   = bathy,
   width  = 9,
   height = 7
@@ -825,7 +825,7 @@ admixture_plot_6 <- admixture_data_6 |>
 #| label: AdmSave
 
 save_open_plot(
-  path   = here("output", "plots", "lcwgs", "admixture_plot_K=6.pdf"),
+  path   = here("output", "plots", "admixture_plot_K=6.pdf"),
   plot   = admixture_plot_6,
   width  = 16,
   height = 6
@@ -872,18 +872,20 @@ admixture_plot_7 <- admixture_data_7 |>
   )
 
 save_open_plot(
-  path   = here("output", "plots", "lcwgs", "admixture_plot_K=7.pdf"),
+  path   = here("output", "plots", "admixture_plot_K=7.pdf"),
   plot   = admixture_plot_7,
   width  = 16,
   height = 6
 )
 ```
-### Tests with `tess3r`
-```{r}
-library(tess3r)
-```
+
+## Figure 6 - Repartition range inference with `tess3r`
+
+### Data prep
 
 ```{r}
+#| eval: false
+
 indiv <- here("data", "Individual_list.rds") |> read_rds() |> unique()
 
 coords <- read_csv2(here("data", "low_coverage_sampling.csv")) |> 
@@ -903,11 +905,6 @@ rm(indiv, coords, coordinates)
 ```
 
 ```{r}
-genotype <- here("data", "8-Embiotoca_filtered.geno") |>
-  read.geno()
-
-genotype[genotype == 9] <- NA
-
 coordinates <- here("data", "individuals_coordinates.csv") |>
   read_csv2() |>
   select(Longitude, Latitude) |> 
@@ -915,7 +912,12 @@ coordinates <- here("data", "individuals_coordinates.csv") |>
 ```
 
 ```{r}
-tess_obj <- tess3(X = genotype, coord = coordinates, K = 5:8, ploidy = 2, openMP.core.num = 4)
+# genotype <- here("data", "8-Embiotoca_filtered.geno") |>
+#   read.geno()
+# 
+# genotype[genotype == 9] <- NA
+# 
+# tess_obj <- tess3(X = genotype, coord = coordinates, K = 5:8, ploidy = 2, openMP.core.num = 4)
 ```
 
 ```{r}
@@ -924,8 +926,6 @@ q_matrix <- read_table(
        "8-Embiotoca_filtered_r46.7.Q"),
   col_names = paste0("Pop ", seq(1, 7))
 ) |> as.matrix()
-
-library(rworldmap)
 
 ne_states(
   country     = c("united states of america", "mexico"),
@@ -1014,6 +1014,8 @@ states <- ne_states(
 )
 ```
 
+### Plot map
+
 ```{r}
 gg_obj <- ggtess3Q(
   q_matrix,
@@ -1072,11 +1074,11 @@ pop_area <- gg_obj +
 
 ```{r}
 save_open_plot(
-  here("output", "plots", "lcwgs", "pop_areas_K=7.png"),
+  here("output", "plots", "pop_areas_K=7.png"),
   plot   = pop_area,
   width  = 9,
   height = 9
 )
 ```
 
-## Figure 6 - IBD
+## Figure 7 - IBD
