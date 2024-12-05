@@ -11,7 +11,8 @@ editor: source
 #| echo: false
 
 c("here", "tidyverse",
-  "pcadapt", "vcfR", "adegenet", "ape", "LEA") |>
+  "pcadapt", "vcfR", "adegenet", "ape", "LEA", "triangulaR",
+  "viridisLite") |>
   lapply(library, character.only = TRUE)
 ```
 
@@ -128,14 +129,14 @@ pcadapt_lcwgs$pvalues |> hist(
 #| label: SaveWhitelist
 #| eval: false
 
-Indiv_list |> 
-  unique() |>
+read_csv2(here("data", "individuals_coordinates.csv")) |>
+  pull(Indiv) |> 
   {\(x) {
     x[!(grepl(pattern = "SCL", x = x) |
         grepl(pattern = "GUA", x = x) |
         grepl(pattern = "CAT", x = x))]
     }}() |> 
-  write_lines(here("plink2", "whitelist.txt"))
+  write_lines(here("plink2", "whitelist_coastal.txt"))
 ```
 
 ## Coastal populations
@@ -143,14 +144,14 @@ Indiv_list |>
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
-./plink2 --bfile 8-Embiotoca_filtered --keep whitelist.txt --make-bed --out 8-Embiotoca_filtered_whitelisted
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal.txt --make-bed --out 8-Embiotoca_filtered_coastal
 ```
 
 ### Preanalysis to determine optimal K value
 ```{r}
 #| label: CoastPreAnalysis
 EJA_lcwgs_coast <- read.pcadapt(
-  here("data", "SNPs", "8-Embiotoca_filtered_whitelisted.bed"),
+  here("data", "SNPs", "8-Embiotoca_filtered_coastal.bed"),
   type = "bed"
 )
 
@@ -220,7 +221,7 @@ coast_manhattan <- pcadapt_lcwgs_coast |>
   theme_minimal()
 
 save_open_plot(
-  here("output", "plots", "coast_manhattan.pdf"),
+  here("output", "plots", "coast_manhattan.png"),
   plot   = coast_manhattan,
   width  = 16,
   height = 4
@@ -237,7 +238,267 @@ pcadapt_lcwgs_coast$pvalues |> hist(
 ```{r}
 #| label: CoastMemclean
 
-rm(EJA_lcwgs_coast)
+rm(EJA_lcwgs_coast, coast_PCA_1_2, coast_PCA_2_3, coast_manhattan)
+```
+
+## Coastal populations -ISJ
+### Generating bed file
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal-isj.txt --make-bed --out 8-Embiotoca_filtered_coastal-isj
+```
+
+### Preanalysis to determine optimal K value
+```{r}
+#| label: CoastPreAnalysis
+EJA_lcwgs_coast_isj <- read.pcadapt(
+  here("data", "SNPs", "8-Embiotoca_filtered_coastal-isj.bed"),
+  type = "bed"
+)
+
+pcadapt(input = EJA_lcwgs_coast_isj, K = 20) |> plot(option = "screeplot")
+```
+
+K = 2 seems correct
+
+### Analysis using K = 2
+```{r}
+#| label: Coastpcadapt
+
+popmap_lcwgs_coast_isj <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("elkhorn",               6), # ELK
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara_island", 13), # SB
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10)  # SCH
+)
+
+pcadapt_lcwgs_coast_isj <- pcadapt(EJA_lcwgs_coast_isj, K = 2)
+```
+
+```{r}
+#| eval: false
+
+write_rds(pcadapt_lcwgs_coast_isj, file = here("output", "pcadapt_lcwgs_coast-isj.rds"))
+```
+
+### Associated exploratory plots
+```{r}
+#| label: CoastExploPlots
+
+coast_isj_PCA_1_2 <- pcadapt_lcwgs_coast_isj |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 1, j = 2) +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "coast-isj_PCA_1_2.pdf"),
+  plot   = coast_isj_PCA_1_2,
+  width  = 10,
+  height = 8
+)
+
+plot(pcadapt_lcwgs_coast_isj, option = "qqplot") + theme_minimal()
+
+coast_isj_manhattan <- pcadapt_lcwgs_coast_isj |>
+  plot(option = "manhattan") +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "coast_manhattan-isj.png"),
+  plot   = coast_isj_manhattan,
+  width  = 16,
+  height = 4
+)
+
+pcadapt_lcwgs_coast_isj$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
+```
+
+```{r}
+#| label: CoastMemclean
+
+rm(EJA_lcwgs_coast_isj, coast_isj_PCA_1_2, coast_isj_manhattan)
+```
+
+## North Coastal populations
+### Generating bed file
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_north.txt --make-bed --out 8-Embiotoca_filtered_north
+```
+
+### Preanalysis to determine optimal K value
+```{r}
+#| label: CoastPreAnalysis
+EJA_lcwgs_north <- read.pcadapt(
+  here("plink2", "8-Embiotoca_filtered_north.bed"),
+  type = "bed"
+)
+
+pcadapt(input = EJA_lcwgs_north, K = 20) |> plot(option = "screeplot")
+```
+
+K = 3 seems correct
+
+### Analysis using K = 3
+```{r}
+#| label: Coastpcadapt
+
+popmap_lcwgs_north <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("elkhorn",               6), # ELK
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+  rep("santa_barbara_island", 13), # SB
+  rep("tomales_bay",           1), # TB
+  rep("santa_cruz_harbour",   10)  # SCH
+)
+
+pcadapt_lcwgs_north <- pcadapt(EJA_lcwgs_north, K = 3)
+```
+
+```{r}
+#| eval: false
+
+# write_rds(pcadapt_lcwgs_coast_isj, file = here("output", "pcadapt_lcwgs_coast-isj.rds"))
+```
+
+### Associated exploratory plots
+```{r}
+#| label: CoastExploPlots
+
+north_PCA_1_2 <- pcadapt_lcwgs_north |>
+  plot(option = "scores", pop = popmap_lcwgs_north, i = 1, j = 2) +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "north_PCA_1_2.pdf"),
+  plot   = north_PCA_1_2,
+  width  = 10,
+  height = 8
+)
+
+plot(pcadapt_lcwgs_north, option = "qqplot") + theme_minimal()
+
+north_manhattan <- pcadapt_lcwgs_north |>
+  plot(option = "manhattan") +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "north_manhattan.png"),
+  plot   = north_manhattan,
+  width  = 16,
+  height = 4
+)
+
+pcadapt_lcwgs_north$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
+```
+
+```{r}
+#| label: CoastMemclean
+
+rm(EJA_lcwgs_coast_isj, coast_isj_PCA_1_2, coast_isj_manhattan)
+```
+
+## South Coastal populations
+### Generating bed file
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_south.txt --make-bed --out 8-Embiotoca_filtered_south
+```
+
+### Preanalysis to determine optimal K value
+```{r}
+#| label: CoastPreAnalysis
+EJA_lcwgs_south <- read.pcadapt(
+  here("plink2", "8-Embiotoca_filtered_south.bed"),
+  type = "bed"
+)
+
+pcadapt(input = EJA_lcwgs_south, K = 20) |> plot(option = "screeplot")
+```
+
+K = 2 seems correct
+
+### Analysis using K = 2
+```{r}
+#| label: Coastpcadapt
+
+popmap_lcwgs_south <- c(
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara_island", 13), # SB
+  rep("la_jolla_san_diego",   13), # SD
+  rep("redondo_beach",        10) # RB
+)
+
+pcadapt_lcwgs_south <- pcadapt(EJA_lcwgs_south, K = 2)
+```
+
+```{r}
+#| eval: false
+
+# write_rds(pcadapt_lcwgs_coast_isj, file = here("output", "pcadapt_lcwgs_coast-isj.rds"))
+```
+
+### Associated exploratory plots
+```{r}
+#| label: CoastExploPlots
+
+south_PCA_1_2 <- pcadapt_lcwgs_south |>
+  plot(option = "scores", pop = popmap_lcwgs_south, i = 1, j = 2) +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "south_PCA_1_2.pdf"),
+  plot   = south_PCA_1_2,
+  width  = 10,
+  height = 8
+)
+
+plot(pcadapt_lcwgs_south, option = "qqplot") + theme_minimal()
+
+south_manhattan <- pcadapt_lcwgs_south |>
+  plot(option = "manhattan") +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "south_manhattan.png"),
+  plot   = south_manhattan,
+  width  = 16,
+  height = 4
+)
+
+pcadapt_lcwgs_south$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
+```
+
+```{r}
+#| label: CoastMemclean
+
+rm(EJA_lcwgs_coast_isj, coast_isj_PCA_1_2, coast_isj_manhattan)
 ```
 
 ## Only insular
@@ -316,83 +577,7 @@ pcadapt_lcwgs_islands$pvalues |> hist(
 )
 ```
 
-## Generating whitelist for SD *vs.* SC
-
-```{r}
-#| label: SDSCSaveWhitelist
-#| eval: false
-
-Indiv_list <- read_rds(file = here("data", "Individual_list.rds"))
-
-Indiv_list |> 
-  unique() |>
-  {\(x) {
-    x[
-      (grepl(pattern = "SCH", x = x) |
-       grepl(pattern = "SD", x = x))
-    ]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_SD_SC.txt"))
-rm(Indiv_list)
-```
-
-## San Diego vs Santa Cruz
-
-### Generating bed file
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
-
-./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_SD_SC.txt --make-bed --out 8-Embiotoca_filtered_SD_SC
-```
-
-### Preanalysis to determine optimal K value
-
-```{r}
-#| label: SDSCPreAnalysis
-
-EJA_lcwgs_SD_SC <- read.pcadapt(
-  here("plink2", "8-Embiotoca_filtered_SD_SC.bed"),
-  type = "bed"
-)
-
-pcadapt(input = EJA_lcwgs_SD_SC, K = 20) |>
-  plot(option = "screeplot")
-```
-
-K = 4 seems correct
-
-### Analysis using K = 1
-
-```{r}
-#| label: SDSCpcadapt
-
-popmap_lcwgs_SD_SC <- c(
-  rep("la_jolla_san_diego", 13), # SD
-  rep("santa_cruz_harbour", 10) # SCH
-)
-
-pcadapt_lcwgs_SD_SC <- EJA_lcwgs_SD_SC |> pcadapt(K = 1)
-```
-
-### Associated exploratory plots
-
-```{r}
-#| label: SDSCExploPlots
-
-pcadapt_lcwgs_SD_SC |> plot(option = "qqplot")
-
-pcadapt_lcwgs_SD_SC |> plot(option = "manhattan")
-
-pcadapt_lcwgs_SD_SC$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-# Outliers
+# Outliers Coast + ISJ
 
 ## Get outliers sequences and positions
 
@@ -413,6 +598,7 @@ names(lcwgs_catalog) <- names(lcwgs_catalog) |>
 ### Adjusted pvalues
 
 ```{r}
+padj <- p.adjust(pcadapt_lcwgs_coast$pvalues, method = "bonferroni")
 alpha <- 0.1
 outliers <- which(padj < alpha)
 length(outliers)
@@ -717,6 +903,162 @@ lcwgs_EJA_outliers_blast_A_ocellaris_tib_filtered |>
   write.csv2(here("output", "lcwgs_outliers_match_A_ocellaris.csv"))
 ```
 
+# Outliers Coast - ISJ
+
+## Get outliers
+
+### Adjusted pvalues
+
+```{r}
+padj <- p.adjust(pcadapt_lcwgs_coast$pvalues, method = "bonferroni")
+alpha <- 0.1
+outliers <- which(padj < alpha)
+length(outliers)
+```
+
+### Get pvalues map from coastal individuals analysis
+```{r}
+pcadapt_lcwgs_coast <- readRDS(here("output", "pcadapt_lcwgs_coast.rds"))
+
+outliers_positions_coast <- readRDS(file = here("data", "SNP_positions.rds")) |> 
+  mutate(
+    padj = p.adjust(pcadapt_lcwgs_coast$pvalues, method = "bonferroni")
+  ) |> # Extract pvalues
+  filter(padj < .1)
+```
+
+## Extract outliers annotations from ncbi genome annotations
+
+### Load external info
+
+```{r}
+EJA_annotations <- here("data", "EJA_annotations.gff") |>
+  read.gff() |>
+  as_tibble()
+
+chromosomes_info <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |> 
+  read_tsv() |>
+  select(c(`GenBank seq accession`, `RefSeq seq accession`))
+```
+
+### Get annotations
+
+```{r}
+outliers_positions_coast_annotations <- outliers_positions_coast |>
+  Get_annotations(
+    chrom_info     = chromosomes_info,
+    gff_annotation = EJA_annotations
+  )
+```
+
+### Memory cleanup
+
+```{r}
+rm(EJA_annotations, chromosomes_info)
+gc()
+```
+
+### Sort and filter info
+
+```{r}
+outliers_positions_coast_annotations_genes <- outliers_positions_coast_annotations |>
+  unnest(annotation) |>
+  filter(grepl("ID=gene", annotation)) |>
+  mutate(
+    annotation_ID          = annotation |>
+      str_split_i(pattern = ";", i = 1) |>
+      str_remove(pattern = "ID="),
+    annotation_description = annotation |>
+      str_split_i(pattern = ";", i = 4) |>
+      str_remove(pattern = "description=")
+  ) |> 
+  select(-c(annotation)) |>
+  distinct(annotation_ID, .keep_all = TRUE)
+
+outliers_positions_coast_annotations_rnas <- outliers_positions_coast_annotations |>
+  unnest(annotation) |>
+  filter(grepl("ID=rna", annotation)) |>
+  mutate(
+    annotation_ID      = annotation |>
+      str_split_i(pattern = ";", i = 1) |>
+      str_remove(pattern = "ID="),
+    annotation_product = annotation |>
+      str_match("product=\\s*(.*?)\\s*;") |>
+      _[, 2]
+  ) |>
+  select(-c(annotation)) |>
+  distinct(annotation_ID, .keep_all = TRUE)
+
+outliers_positions_coast_annotations_exons <- outliers_positions_coast_annotations |>
+  unnest(annotation) |>
+  filter(grepl("ID=exon", annotation)) |>
+  mutate(
+    annotation_ID      = annotation |>
+      str_split_i(pattern = ";", i = 1) |>
+      str_remove(pattern = "ID="),
+    annotation_gene    = annotation |>
+      str_match("gene=\\s*(.*?)\\s*;") |>
+      _[, 2],
+    annotation_product = annotation |>
+      str_match("product=\\s*(.*?)\\s*;") |>
+      _[, 2]
+  ) |>
+  select(-c(annotation)) |>
+  distinct(annotation_ID, .keep_all = TRUE)
+
+outliers_positions_coast_annotations_cds <- outliers_positions_coast_annotations |>
+  unnest(annotation) |>
+  filter(grepl("ID=cds", annotation)) |>
+  mutate(
+    annotation_ID      = annotation |>
+      str_split_i(pattern = ";", i = 1) |>
+      str_remove(pattern = "ID="),
+    annotation_gene    = annotation |>
+      str_match("gene=\\s*(.*?)\\s*;") |>
+      _[, 2],
+    annotation_product = annotation |>
+      str_match("product=\\s*(.*?)\\s*;") |>
+      _[, 2]
+  ) |>
+  select(-c(annotation)) |>
+  distinct(annotation_ID, .keep_all = TRUE)
+
+outliers_positions_coast_annotations_all <- bind_rows(
+  outliers_positions_coast_annotations_genes,
+  outliers_positions_coast_annotations_rnas,
+  outliers_positions_coast_annotations_exons,
+  outliers_positions_coast_annotations_cds
+) |> 
+  mutate(
+    annotation_type        = annotation_ID |> str_split_i(pattern = "-", i = 1),
+    annotation_ID          = annotation_ID |> str_split_i(pattern = "-", i = 2),
+    annotation_description = annotation_description |>
+      str_remove_all(pattern = "%2C"),
+    annotation_product     = annotation_product |>
+      str_remove_all(pattern = "%2C")
+  ) |>
+  select(
+    c("GenBank seq accession", "POS",
+      "RefSeq seq accession", "annotation_type", "annotation_ID",
+      "annotation_description", "annotation_product", "annotation_gene",
+      "padj")
+  ) |> 
+  arrange(padj, `GenBank seq accession`, POS)
+```
+
+### Save as file and cleanup
+
+```{r}
+outliers_positions_coast_annotations_all |>
+  write_csv2(here("output", "lcwgs_EJA_coast-isj_outliers_annotations.csv"))
+
+rm(outliers_positions_coast_annotations_genes,
+   outliers_positions_coast_annotations_rnas,
+   outliers_positions_coast_annotations_exons,
+   outliers_positions_coast_annotations_cds)
+```
+
+
 # Admixture analysis
 
 ## Convert data to ped format for LEA import using plink2
@@ -777,19 +1119,11 @@ ggsave(
 )
 ```
 
-K = 7 has the minimum cross-entropy. Previous results converged to K = 6 so this is confusing.
+K = 7 has the minimum cross-entropy.
 
-## Plot results for K = 6
+## Plot results for K = 7
 ```{r}
 #| label: snmfAnalysisMultiPlot
-
-# barchart(
-#   snmf_analysis,
-#   K         = 6,
-#   run       = which.min(cross.entropy(snmf_analysis, K = 6)),
-#   col       = turbo(n = 6),
-#   sort.by.Q = FALSE
-# )
 
 barchart(
   snmf_analysis,
@@ -798,4 +1132,348 @@ barchart(
   col       = viridis::turbo(n = 6),
   sort.by.Q = FALSE
 )
+```
+
+# Triangular plots
+
+## For North-South Gradient
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered_coastal-isj --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal-isj
+```
+
+```{r}
+EJA_lcwgs_coast_isj_vcf <- read.vcfR(here("data", "SNPS", "8-Embiotoca_filtered_coastal-isj.vcf"))
+
+popmap_lcwgs_coast_isj <- read_csv2(here("data", "individuals_coordinates.csv")) |> 
+  select(Indiv, Localisation) |>
+  rename(id = Indiv, pop = Localisation) |> 
+  filter(pop != c("CAT")) |> 
+  filter(pop != c("ISJ")) |>
+  filter(pop != c("SCL")) |> 
+  filter(pop != c("GUA")) |> 
+  data.frame()
+```
+
+```{r}
+EJA_lcwgs_coast_isj_vcf_diffs <- vector(mode='list', length=3)
+parameters <- c(.5, .75, 1)
+
+for (i in 1:3) {
+  EJA_lcwgs_coast_isj_vcf_diffs[[i]] <- alleleFreqDiff(EJA_lcwgs_coast_isj_vcf,
+                                                       pm = popmap_lcwgs_coast_isj,
+                                                       p1 = "BBA", p2 = "SD",
+                                                       difference = parameters[i])
+}
+
+rm(EJA_lcwgs_coast_isj_vcf)
+```
+with 1 difference : "8456 sites passed allele frequency difference threshold"
+
+Difference = .75 76178
+
+Difference = .5 : 276405 sites
+
+```{r}
+hi_het_coast_isj <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_coast_isj[[i]] <- hybridIndex(EJA_lcwgs_coast_isj_vcf_diffs[[i]],
+                                       pm = popmap_lcwgs_coast_isj,
+                                       p1 = "BBA", p2 = "SD")
+}
+```
+
+```{r}
+#| eval: false
+
+write_rds(hi_het_coast_isj, here("output", "Triangle_analysis_coast_isj.rds"))
+```
+
+```{r}
+hi_het_coast_isj_plots <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_coast_isj_plots[[i]] <- hi_het_coast_isj[[i]] |>
+    mutate(
+      pop = factor(
+        pop,
+        levels = c("BBA", "TB", "SCH", "ELK", "HOP",
+                   "BIGC", "SB", "PD", "RB", "LAG", "SD")
+      )
+    ) |> 
+    arrange(pop) |>
+    triangle.plot(colors = turbo(n = 11)) +
+    labs(title = paste0("d = ", as.character(parameters[i])))
+}
+
+save_open_plot(
+  path   = here("output", "plots", "coast-isj_Triangle_plots.pdf"),
+  plot   = Reduce("+", hi_het_coast_isj_plots) +
+    plot_layout(axis_titles = "collect", guides = "collect"),
+  width  = 14,
+  height = 4
+)
+```
+
+```{r}
+rm(EJA_lcwgs_coast_isj_vcf_diffs, hi_het_coast_isj, hi_het_coast_isj_plots)
+gc()
+```
+
+
+## For Coastal + SJ
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered_coastal --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal
+```
+
+```{r}
+EJA_lcwgs_coast_vcf <- read.vcfR(here("plink2", "8-Embiotoca_filtered_coastal.vcf"))
+
+popmap_lcwgs_coast <- read_csv2(here("data", "individuals_coordinates.csv")) |> 
+  select(Indiv, Localisation) |>
+  rename(id = Indiv, pop = Localisation) |> 
+  filter(pop != c("CAT")) |> 
+  filter(pop != c("SCL")) |> 
+  filter(pop != c("GUA")) |> 
+  data.frame()
+```
+
+```{r}
+EJA_lcwgs_coast_vcf_diff <- vector(mode='list', length=3)
+parameters <- c(.5, .75, 1)
+
+for (i in 1:3) {
+  EJA_lcwgs_coast_vcf_diff[[i]] <- alleleFreqDiff(EJA_lcwgs_coast_vcf,
+                                                  pm = popmap_lcwgs_coast,
+                                                  p1 = "BBA", p2 = "ISJ",
+                                                  difference = parameters[i])
+}
+
+rm(EJA_lcwgs_coast_vcf)
+gc()
+```
+With 1 : "32484 sites passed allele frequency difference threshold"
+With .75 : "166077 sites passed allele frequency difference threshold"
+With .5 : "424389 sites passed allele frequency difference threshold"
+
+```{r}
+hi_het_coast <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_coast[[i]] <- hybridIndex(EJA_lcwgs_coast_vcf_diff[[i]],
+                                   pm = popmap_lcwgs_coast,
+                                   p1 = "BBA", p2 = "ISJ")
+}
+```
+
+```{r}
+#| eval: false
+
+write_rds(hi_het_coast, here("output", "Triangle_analysis_coast.rds"))
+```
+
+```{r}
+hi_het_coast_plots <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_coast_plots[[i]] <- hi_het_coast[[i]] |>
+    mutate(
+      pop = factor(
+        pop,
+        levels = c("BBA", "TB", "SCH", "ELK", "HOP", "BIGC", "SB", "PD", "RB", "LAG", "SD", "ISJ")
+      )
+    ) |> 
+    arrange(pop) |>
+    triangle.plot(colors = turbo(n = 12)) +
+    labs(title = paste0("d = ", as.character(parameters[i])))
+}
+
+save_open_plot(
+  path   = here("output", "plots", "coast_Triangle_plots.pdf"),
+  plot   = Reduce("+", hi_het_coast_plots) +
+    plot_layout(axis_titles = "collect", guides = "collect"),
+  width  = 14,
+  height = 4
+)
+```
+
+```{r}
+rm(EJA_lcwgs_coast_vcf_diff, hi_het_coast, hi_het_coast_plots)
+gc()
+```
+
+## For North
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered_north --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_north
+```
+
+```{r}
+EJA_lcwgs_north_vcf <- read.vcfR(here("plink2", "8-Embiotoca_filtered_north.vcf"))
+
+popmap_lcwgs_north <- read_csv2(here("data", "individuals_coordinates.csv")) |> 
+  select(Indiv, Localisation) |>
+  rename(id = Indiv, pop = Localisation) |> 
+  filter(pop %in% c("BBA", "BIGC", "ELK", "HOP", "SB", "TB", "SCH")) |> 
+  data.frame()
+```
+
+```{r}
+EJA_lcwgs_north_vcf_diff <- vector(mode='list', length=3)
+parameters <- c(.5, .75, 1)
+
+for (i in 1:3) {
+  EJA_lcwgs_north_vcf_diff[[i]] <- alleleFreqDiff(EJA_lcwgs_north_vcf,
+                                                  pm = popmap_lcwgs_north,
+                                                  p1 = "BBA", p2 = "SB",
+                                                  difference = parameters[i])
+}
+
+rm(EJA_lcwgs_north_vcf)
+gc()
+```
+
+Difference = 1.0 : 2348 sites
+Difference = 0.9 : 9364 sites
+Difference = 0.8 : 26991 sites (>1% SNPs)
+Difference = 0.75 : 38762
+Difference = 0.7 : 55736 sites
+Difference = 0.5 : 183805 sites
+
+```{r}
+hi_het_north <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_north[[i]] <- hybridIndex(EJA_lcwgs_north_vcf_diff[[i]],
+                                   pm = popmap_lcwgs_north,
+                                   p1 = "BBA", p2 = "SB")
+}
+```
+
+```{r}
+#| eval: false
+
+write_rds(hi_het_north, here("output", "Triangle_analysis_north.rds"))
+```
+
+```{r}
+hi_het_north_plots <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_north_plots[[i]] <- hi_het_north[[i]] |>
+    mutate(
+      pop = factor(
+        pop,
+        levels = c("BBA", "TB", "SCH", "ELK", "HOP", "BIGC", "SB")
+      )
+    ) |> 
+    arrange(pop) |>
+    triangle.plot(colors = turbo(n = 7)) +
+    labs(title = paste0("d = ", as.character(parameters[i])))
+}
+
+save_open_plot(
+  path   = here("output", "plots", "north_Triangle_plots.pdf"),
+  plot   = Reduce("+", hi_het_north_plots) +
+    plot_layout(axis_titles = "collect", guides = "collect"),
+  width  = 14,
+  height = 4
+)
+```
+
+
+```{r}
+rm(EJA_lcwgs_north_vcf_diff, hi_het_north, hi_het_north_plots)
+gc()
+```
+
+## For South
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered_south --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_south
+```
+
+```{r}
+EJA_lcwgs_south_vcf <- read.vcfR(here("plink2", "8-Embiotoca_filtered_south.vcf"))
+
+popmap_lcwgs_south <- read_csv2(here("data", "individuals_coordinates.csv")) |> 
+  select(Indiv, Localisation) |>
+  rename(id = Indiv, pop = Localisation) |> 
+  filter(pop %in% c("SB", "PD", "RB", "LAG", "SD")) |> 
+  data.frame()
+```
+
+```{r}
+EJA_lcwgs_south_vcf_diff <- vector(mode='list', length=3)
+parameters <- c(.5, .75, 1)
+
+for (i in 1:3) {
+  EJA_lcwgs_south_vcf_diff[[i]] <- alleleFreqDiff(EJA_lcwgs_south_vcf,
+                                                  pm = popmap_lcwgs_south,
+                                                  p1 = "SB", p2 = "SD",
+                                                  difference = parameters[i])
+}
+
+rm(EJA_lcwgs_south_vcf)
+gc()
+```
+
+With 1 : 234
+.75 : 3367
+.5 : 54787
+
+```{r}
+hi_het_south <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_south[[i]] <- hybridIndex(EJA_lcwgs_south_vcf_diff[[i]],
+                                   pm = popmap_lcwgs_south,
+                                   p1 = "SB", p2 = "SD")
+}
+```
+
+```{r}
+#| eval: false
+
+write_rds(hi_het_south, here("output", "Triangle_analysis_south.rds"))
+```
+
+```{r}
+hi_het_south_plots <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_south_plots[[i]] <- hi_het_south[[i]] |>
+    mutate(
+      pop = factor(
+        pop,
+        levels = c("SB", "PD", "RB", "LAG", "SD")
+      )
+    ) |> 
+    arrange(pop) |>
+    triangle.plot(colors = turbo(n = 5)) +
+    labs(title = paste0("d = ", as.character(parameters[i])))
+}
+
+save_open_plot(
+  path   = here("output", "plots", "south_Triangle_plots.pdf"),
+  plot   = Reduce("+", hi_het_south_plots) +
+    plot_layout(axis_titles = "collect", guides = "collect"),
+  width  = 14,
+  height = 4
+)
+```
+
+```{r}
+rm(EJA_lcwgs_south_vcf_diff, hi_het_south, hi_het_south_plots)
+gc()
 ```
