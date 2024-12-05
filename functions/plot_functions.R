@@ -129,7 +129,7 @@ PCA_plot <- function(pcadapt_output,
   }
 }
 
-mantel_plot <- function(Matx, Maty) {
+mantel_plot <- function(Matx, Maty, xlab = NULL, ylab = NULL) {
   
   mantel_result <- vegan::mantel(Matx, Maty)
   
@@ -138,7 +138,7 @@ mantel_plot <- function(Matx, Maty) {
     Dgen = as.numeric(Maty)
   )
   
-  ggplot(IBD_PCA_tb) +
+  p <- ggplot(IBD_PCA_tb) +
     geom_smooth(aes(x = Dgeo, y = Dgen), method = "lm", se = TRUE) +
     geom_point(aes(x = Dgeo, y = Dgen)) +
     annotate(
@@ -152,4 +152,13 @@ mantel_plot <- function(Matx, Maty) {
     ) +
     theme_classic() +
     theme(aspect.ratio = 1)
+  
+  if (!is.null(xlab) & !is.null(ylab)) {
+    p <- p + labs(
+      x = xlab,
+      y = ylab
+    )
+  }
+  
+  p
 }
