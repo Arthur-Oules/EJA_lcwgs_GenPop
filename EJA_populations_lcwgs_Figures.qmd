@@ -12,7 +12,7 @@ c("here", "tidyverse",
   "ncdf4", "rnaturalearth", "rnaturalearthdata", "rnaturalearthhires", "marmap",
   "patchwork", "plotly", "sf", "ggrepel", "ggspatial", "ggtree", "RColorBrewer", "viridis", 
   "scales", "ggnewscale", "terra", "tidyterra", "tess3r") |>
-  lapply(library, character.only = TRUE)
+  lapply(library, character.only = TRUE) |> invisible()
 ```
 
 # Load functions
@@ -227,7 +227,7 @@ popmap_lcwgs <- tibble(
       rep("isla_san_jeronimo",    11), # ISJ
       rep("laguna_beach",         13), # LB
       rep("point_dume",            5), # PD
-      rep("santa_barbara_island", 13), # SB
+      rep("santa_barbara", 13), # SB
       rep("san_clemente_island",  10), # SCL
       rep("la_jolla_san_diego",   13), # SD
       rep("tomales_bay",           1), # TB
@@ -237,7 +237,7 @@ popmap_lcwgs <- tibble(
     levels = c("big_sur", "bodega_bay", "catalina_island", "santa_cruz",
                "guadalupe_island", "isla_san_jeronimo", "la_jolla_san_diego",
                "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
-               "san_clemente_island", "santa_barbara_island",
+               "san_clemente_island", "santa_barbara",
                "elkhorn", "redondo_beach")
   ),
   short_names = factor(
@@ -952,7 +952,7 @@ popmap_lcwgs <- tibble(
       rep("isla_san_jeronimo",    11), # ISJ
       rep("laguna_beach",         13), # LB
       rep("point_dume",            5), # PD
-      rep("santa_barbara_island", 13), # SB
+      rep("santa_barbara", 13), # SB
       rep("san_clemente_island",  10), # SCL
       rep("la_jolla_san_diego",   13), # SD
       rep("tomales_bay",           1), # TB
@@ -962,7 +962,7 @@ popmap_lcwgs <- tibble(
     levels = c("big_sur", "bodega_bay", "catalina_island", "santa_cruz",
                "guadalupe_island", "isla_san_jeronimo", "la_jolla_san_diego",
                "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
-               "san_clemente_island", "santa_barbara_island",
+               "san_clemente_island", "santa_barbara",
                "elkhorn", "redondo_beach")
   ),
   short_names = factor(
@@ -989,7 +989,7 @@ popmap_lcwgs <- tibble(
   )
 )
 
-sample_sites <- read_csv2(here("data","lcwgs", "low_coverage_sampling.csv")) |>
+sample_sites <- read_csv2(here("data", "low_coverage_sampling_sites.csv")) |>
   mutate(
     Popmap  = factor(
       Popmap,
@@ -1007,7 +1007,7 @@ sample_sites <- read_csv2(here("data","lcwgs", "low_coverage_sampling.csv")) |>
   mutate(
     Sampling_sites = gsub("\\n", "\n", Sampling_sites, fixed = TRUE)
   )
-
+<
 states <- ne_states(
   country     = c("united states of america", "mexico"),
   returnclass = "sf"
