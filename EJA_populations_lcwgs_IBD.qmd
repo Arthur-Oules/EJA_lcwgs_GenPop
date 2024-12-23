@@ -1,5 +1,5 @@
 ---
-title: "Isolabtion by Distance"
+title: "Isolation by Distance"
 author: "Arthur Oulès"
 format: html
 editor: source
@@ -10,7 +10,7 @@ editor: source
 #| echo: false
 
 c("here", "tidyverse", "rnaturalearth", "terra", "vcfR", "dartR") |>
-  lapply(library, character.only = TRUE)
+  lapply(library, character.only = TRUE) |> invisible()
 ```
 
 # Load functions
@@ -92,7 +92,7 @@ popmap_lcwgs <- popmap_lcwgs <- c(
   rep("isla_san_jeronimo",    11), # ISJ
   rep("laguna_beach",         13), # LB
   rep("point_dume",            5), # PD
-  rep("santa_barbara_island", 13), # SB
+  rep("santa_barbara",        13), # SB
   rep("san_clemente_island",  10), # SCL
   rep("la_jolla_san_diego",   13), # SD
   rep("tomales_bay",           1), # TB
@@ -403,7 +403,7 @@ popmap_lcwgs_coast <- c(
   rep("isla_san_jeronimo",    11), # ISJ
   rep("laguna_beach",         13), # LB
   rep("point_dume",            5), # PD
-  rep("santa_barbara_island", 13), # SB
+  rep("santa_barbara", 13), # SB
   rep("la_jolla_san_diego",   13), # SD
   rep("tomales_bay",           1), # TB
   rep("redondo_beach",        10), # RB
