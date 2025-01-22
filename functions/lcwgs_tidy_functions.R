@@ -136,8 +136,49 @@ Get_pvalues <- function(pcadapt) {
   )
 }
 
+Get_outliers <- function(pcadapt,
+                         method           = "bonferroni",
+                         pvalue_threshold = .1,
+                         minimize_length  = TRUE) {
+  
+  if (method == "bonferroni") {
+    outliers_positions <- readRDS(file = here("data", "SNP_positions.rds")) |> 
+      mutate(
+        logpvalues = Get_pvalues(pcadapt),
+        padj       = p.adjust(pcadapt$pvalues, method = "bonferroni") # Extract adjusted pvalues
+      ) |>
+      filter(padj < pvalue_threshold)  # Get outliers from pvalues
+    
+  } else if (method == "manual") {
+    outliers_positions <- readRDS(file = here("data", "SNP_positions.rds")) |> 
+      mutate( 
+        pvalues    = pcadapt$pvalues,
+        logpvalues = Get_pvalues(pcadapt)
+      ) |> # Extract pvalues
+      filter(is.na(pvalues) == FALSE) |> # Remove NAs
+      filter(logpvalues >= pvalue_threshold)
+    
+  } else {
+    stop("Method not recognized.")
+  }
+  
+  print(paste0("There are ", as.character(dim(outliers_positions)[1]), " outliers SNPs."))
+  
+  if (isTRUE(minimize_length)&(dim(outliers_positions)[1]) > 10000) {
+    outliers_positions <- outliers_positions |>
+      arrange(desc(logpvalues), CHROM, POS) |> 
+      filter(row_number() <= 10000) |> 
+      arrange(CHROM, POS)
+    
+    print(paste0("Outliers number was reduced to 10.000 lowest pvalues."))
+  }
+  
+  outliers_positions
+}
+
 Get_annotations <- function(positions, chrom_info, gff_annotation) {
-  positions |>
+  
+  positions_annotations <- positions |>
     rename(`GenBank seq accession` = CHROM) |> 
     left_join(chrom_info) |> 
     rowwise() |> 
@@ -150,6 +191,127 @@ Get_annotations <- function(positions, chrom_info, gff_annotation) {
       })(`RefSeq seq accession`, POS) |>
         list()
     )
+  
+  print(paste0("There are ", as.character(dim(positions_annotations)[1]), " annotated outliers SNPs."))
+  
+  positions_annotations
+}
+
+Clean_annotations <- function(annotations) {
+  annotations_genes <- annotations |>
+    unnest(annotation) |>
+    filter(grepl("ID=gene", annotation)) |>
+    mutate(
+      annotation_ID          = annotation |>
+        str_split_i(pattern = ";", i = 1) |>
+        str_remove(pattern = "ID="),
+      annotation_description = annotation |>
+        str_split_i(pattern = ";", i = 4) |>
+        str_remove(pattern = "description=")
+    ) |> 
+    select(-c(annotation)) |>
+    distinct(annotation_ID, .keep_all = TRUE)
+  
+  print(paste("There are", as.character(dim(annotations_genes)[1]), "genes."))
+  
+  annotations_rnas <- annotations |>
+    unnest(annotation) |>
+    filter(grepl("ID=rna", annotation)) |>
+    mutate(
+      annotation_ID      = annotation |>
+        str_split_i(pattern = ";", i = 1) |>
+        str_remove(pattern = "ID="),
+      annotation_product = annotation |>
+        str_match("product=\\s*(.*?)\\s*;") |>
+        _[, 2]
+    ) |>
+    select(-c(annotation)) |>
+    distinct(annotation_ID, .keep_all = TRUE)
+  
+  print(paste("There are", as.character(dim(annotations_rnas)[1]), "rnas."))
+  
+  annotations_exons <- annotations |>
+    unnest(annotation) |>
+    filter(grepl("ID=exon", annotation)) |>
+    mutate(
+      annotation_ID      = annotation |>
+        str_split_i(pattern = ";", i = 1) |>
+        str_remove(pattern = "ID="),
+      annotation_gene    = annotation |>
+        str_match("gene=\\s*(.*?)\\s*;") |>
+        _[, 2],
+      annotation_product = annotation |>
+        str_match("product=\\s*(.*?)\\s*;") |>
+        _[, 2]
+    ) |>
+    select(-c(annotation)) |>
+    distinct(annotation_ID, .keep_all = TRUE)
+  
+  print(paste("There are", as.character(dim(annotations_exons)[1]), "exons."))
+  
+  annotations_cds <- annotations |>
+    unnest(annotation) |>
+    filter(grepl("ID=cds", annotation)) |>
+    mutate(
+      annotation_ID      = annotation |>
+        str_split_i(pattern = ";", i = 1) |>
+        str_remove(pattern = "ID="),
+      annotation_gene    = annotation |>
+        str_match("gene=\\s*(.*?)\\s*;") |>
+        _[, 2],
+      annotation_product = annotation |>
+        str_match("product=\\s*(.*?)\\s*;") |>
+        _[, 2]
+    ) |>
+    select(-c(annotation)) |>
+    distinct(annotation_ID, .keep_all = TRUE)
+  
+  print(paste("There are", as.character(dim(annotations_cds)[1]), "cds."))
+  
+  annotations_clean <- bind_rows(
+    annotations_genes,
+    annotations_rnas,
+    annotations_exons,
+    annotations_cds
+  ) |> 
+    mutate(
+      annotation_type        = annotation_ID |> str_split_i(pattern = "-", i = 1),
+      annotation_ID          = annotation_ID |> str_split_i(pattern = "-", i = 2),
+      annotation_description = annotation_description |>
+        str_remove_all(pattern = "%2C"),
+      annotation_product     = annotation_product |>
+        str_remove_all(pattern = "%2C")
+    )
+  
+  print(
+    paste(
+      "There are",
+      as.character(annotations_clean |>
+                     distinct(`GenBank seq accession`, POS) |>
+                     dim() |>
+                     _[1]),
+      "unique SNPs.")
+    )
+  
+  if ("padj" %in% colnames(annotations_clean)) {
+    annotations_clean |>
+      select(
+        c("GenBank seq accession", "POS",
+          "RefSeq seq accession", "annotation_type", "annotation_ID",
+          "annotation_description", "annotation_product", "annotation_gene",
+          "padj", "logpvalues")
+      ) |>
+      arrange(padj, `GenBank seq accession`, POS)
+  } else {
+    annotations_clean |>
+      select(
+        c("GenBank seq accession", "POS",
+          "RefSeq seq accession", "annotation_type", "annotation_ID",
+          "annotation_description", "annotation_product", "annotation_gene",
+          "pvalues", "logpvalues")
+      ) |>
+      arrange(desc(logpvalues), `GenBank seq accession`, POS)
+  }
 }
 
 lm_eqn <- function(df, r = manteltest$statistic, pp = manteltest$signif) {
