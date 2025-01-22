@@ -12,11 +12,17 @@ save_open_plot <- function(path, plot, width, height) {
   )
 }
 
-manhattan_plot_custom_2 <- function(genome_mapping,
-                                    pvalues,
-                                    outliers_cutoff = NULL) {
+manhattan_plot_custom_2 <- function(pcadapt,
+                                    SNP_positions,
+                                    chromosome_map,
+                                    outliers_positions = NULL,
+                                    outliers_match     = NULL) {
   
-  labs_rank <- genome_mapping |>
+  genome_mapping <- SNP_positions |>
+    mutate(logpvalues = Get_pvalues(pcadapt)) |> # Gets log10 of pvalues
+    order_map(map = chromosome_map$`GenBank seq accession`)
+  
+  labs_rank <- genome_mapping |> # Get positions of chromosome names in axis 1
     mutate(labs_rank = row_number()) |>
     distinct(CHROM, .keep_all = TRUE) |>
     left_join(genome_mapping |> count(CHROM)) |> 
@@ -27,27 +33,35 @@ manhattan_plot_custom_2 <- function(genome_mapping,
   df <- genome_mapping |>
     mutate(
       rank         = row_number(),
-      lab_position = if_else(row_number() %in% labs_rank, TRUE, FALSE),
-      coloured     = CHROM |>
+      lab_position = if_else(row_number() %in% labs_rank, TRUE, FALSE), # Map chromosome names positions
+      coloured     = CHROM |>                                           # Map grey/black colours
         {\(x) factor(x, levels = unique(x))}() |>
         as.integer() |>
         (`%%`)(2)
     )
   
   p <- df |> ggplot() +
-    geom_point(aes(x = rank, y = {{pvalues}}, colour = factor(coloured)))
+    geom_point(aes(x = rank, y = logpvalues, colour = factor(coloured))) # Baseplot
   
-  if (!is.null(outliers_cutoff)) {
+  if (!is.null(outliers_positions)) {
+      p <- p + geom_point(
+        data   = df |> inner_join(outliers_positions, by = c("CHROM", "POS")),
+        aes(x = rank, y = logpvalues),
+        colour = "red"
+      ) # +
+      #   geom_hline(
+      #     yintercept = outliers_cutoff,
+      #     colour     = "red",
+      #     linetype   = "dashed"
+      #   )
+  }
+  
+  if (!is.null(outliers_match)) {
     p <- p + geom_point(
-      data   = df |> filter({{pvalues}} >= outliers_cutoff),
-      aes(x = rank, y = {{pvalues}}),
-      colour = "red"
-    ) +
-      geom_hline(
-        yintercept = outliers_cutoff,
-        colour     = "red",
-        linetype   = "dashed"
-      )
+      data   = df |> inner_join(outliers_match, by = c("CHROM", "POS")),
+      aes(x = rank, y = logpvalues),
+      colour = "green"
+    )
   }
     
   p + scale_colour_manual(values = c("black", "grey")) +
@@ -69,8 +83,8 @@ PCA_plot <- function(pcadapt_output,
                      y_offsets = NULL) {
   # Format data frame
   PCA_df <- tibble(
-    x      = -pcadapt_output$scores[, axis_one],
-    y      = -pcadapt_output$scores[, axis_two],
+    x      = axis_one/abs(axis_one)*pcadapt_output$scores[, abs(axis_one)],
+    y      = axis_two/abs(axis_two)*pcadapt_output$scores[, abs(axis_two)],
     labels = popmap$long_names
   ) |> 
     arrange(labels)
@@ -91,14 +105,14 @@ PCA_plot <- function(pcadapt_output,
   
   PCA <- PCA_df |> ggplot() +
     geom_point(
-      mapping = aes(x = y, y = x, fill = labels),
+      mapping = aes(x = x, y = y, fill = labels),
       size    = 4,
       shape   = 21
     ) +
     scale_fill_hue() +
     labs(
-      x = paste0("-PC", as.character(axis_two), ": ", PCA_percentages[axis_two]),
-      y = paste0("-PC", as.character(axis_one)," : ", PCA_percentages[axis_one])
+      x = paste0("PC", as.character(axis_one), ": ", PCA_percentages[abs(axis_one)]),
+      y = paste0("PC", as.character(axis_two)," : ", PCA_percentages[abs(axis_two)])
     ) +
     coord_fixed(ratio = 1.2) +
     theme_minimal() +
@@ -108,7 +122,7 @@ PCA_plot <- function(pcadapt_output,
   if (is.null(x_offsets) || is.null(y_offsets) == TRUE) {
     PCA + geom_text_repel(
       PCA_average,
-      mapping = aes(x = average_y, y = average_x, label = labels, fontface = "bold"),
+      mapping = aes(x = average_x, y = average_y, label = labels, fontface = "bold"),
       point.size = 10,
       min.segment.length = 0.3
     )
@@ -123,7 +137,7 @@ PCA_plot <- function(pcadapt_output,
     PCA +
     geom_text(
       PCA_average,
-      mapping = aes(x = average_y, y = average_x, label = labels)
+      mapping = aes(x = average_x, y = average_y, label = labels)
     ) +
     theme(legend.position = "none")
   }
