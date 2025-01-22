@@ -21,6 +21,7 @@ c("here", "tidyverse",
 #| label: LoadTidy
 
 source(here("functions", "lcwgs_tidy_functions.R"))
+source(here("functions", "plot_functions.R"))
 ```
 
 # Helper objects
@@ -29,21 +30,21 @@ source(here("functions", "lcwgs_tidy_functions.R"))
 #| label: GenomeMap
 #| echo: false
 
-EJA_lcwgs_vcf <- read.vcfR(here("data", "SNPS", "8-Embiotoca_filtered.vcf.gz"))
+lcwgs_vcf <- read.vcfR(here("data", "SNPS", "8-Embiotoca_filtered.vcf.gz"))
 
-EJA_lcwgs_vcf |>
+lcwgs_vcf |>
   getFIX() |>
   as_tibble() |>
   select(CHROM, POS) |>
   mutate(POS = as.numeric(POS)) |>
   saveRDS(file = here("data", "SNP_positions.rds"))
 
-EJA_lcwgs_vcf |>
+lcwgs_vcf |>
   extract_gt_tidy() |>
   _$Indiv |>
   write_rds(file = here("data", "Individual_list.rds"))
 
-rm(EJA_lcwgs_vcf)
+rm(lcwgs_vcf)
 ```
 
 # pcadapt analysis
@@ -62,12 +63,14 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 #| label: PreAnalysis
 
 EJA_lcwgs <- read.pcadapt(
-  here("data", "SNPs", "8-Embiotoca_filtered.bed"),
+  here("plink2", "8-Embiotoca_filtered.bed"),
   type = "bed"
 )
 
-pcadapt(input = EJA_lcwgs, K = 20) |>
-  plot(option = "screeplot")
+temp <- plot(pcadapt(input = EJA_lcwgs, K = 20), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_all_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
 ```
 
 K = 4 seems correct
@@ -94,13 +97,13 @@ popmap_lcwgs <- c(
   rep("santa_cruz_harbour",   10) # SCH
 )
 
-pcadapt_lcwgs <- EJA_lcwgs |> pcadapt(K = 4)
+pcadapt_lcwgs <- EJA_lcwgs |> pcadapt(K = 9)
 ```
 
 ```{r}
 #| eval: false
 
-write_rds(pcadapt_lcwgs, file = here("output", "pcadapt_lcwgs.rds"))
+write_rds(pcadapt_lcwgs, file = here("output", "pcadapt_lcwgs_K9.rds"))
 ```
 
 ### Exploratory plots
@@ -110,10 +113,13 @@ write_rds(pcadapt_lcwgs, file = here("output", "pcadapt_lcwgs.rds"))
 pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 1, j = 2)
 pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 2, j = 3)
 pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 3, j = 4)
+pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 4, j = 5)
+pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 5, j = 6)
+pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 6, j = 7)
+pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 7, j = 8)
+pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 8, j = 9)
 
 pcadapt_lcwgs |> plot(option = "qqplot")
-
-pcadapt_lcwgs |> plot(option = "manhattan")
 
 pcadapt_lcwgs$pvalues |> hist(
   xlab   = "p-values",
@@ -153,11 +159,14 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 ```{r}
 #| label: CoastPreAnalysis
 EJA_lcwgs_coast <- read.pcadapt(
-  here("data", "SNPs", "8-Embiotoca_filtered_coastal.bed"),
+  here("plink2", "8-Embiotoca_filtered_coastal.bed"),
   type = "bed"
 )
 
-pcadapt(input = EJA_lcwgs_coast, K = 20) |> plot(option = "screeplot")
+temp <- plot(pcadapt(input = EJA_lcwgs_coast, K = 20), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_coast_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
 ```
 
 K = 2 seems correct
@@ -180,42 +189,35 @@ popmap_lcwgs_coast <- c(
   rep("santa_cruz_harbour",   10)  # SCH
 )
 
-pcadapt_lcwgs_coast <- pcadapt(EJA_lcwgs_coast, K = 2)
+pcadapt_lcwgs_coast <- pcadapt(EJA_lcwgs_coast, K = 5)
 ```
 
 ```{r}
 #| eval: false
 
-write_rds(pcadapt_lcwgs_coast, file = here("output", "pcadapt_lcwgs_coast.rds"))
+pcadapt_lcwgs_coast |> 
+  write_rds(file = here("output", "pcadapt_lcwgs_coast_K5.rds"))
 ```
 
 ### Associated exploratory plots
 ```{r}
 #| label: CoastExploPlots
 
-coast_PCA_1_2 <- pcadapt_lcwgs_coast |>
-  plot(option = "scores", pop = popmap_lcwgs_coast, i = 1, j = 2) +
-  theme_minimal()
+pcadapt_lcwgs_coast |> plot(option = "manhattan")
 
-save_open_plot(
-  here("output", "plots", "coast_PCA_1_2.pdf"),
-  plot   = coast_PCA_1_2,
-  width  = 10,
-  height = 8
-)
+pcadapt_lcwgs_coast |>
+  plot(option = "scores", pop = popmap_lcwgs_coast, i = 1, j = 2)
+
+pcadapt_lcwgs_coast |>
+  plot(option = "scores", pop = popmap_lcwgs_coast, i = 2, j = 3)
+
+pcadapt_lcwgs_coast |>
+  plot(option = "scores", pop = popmap_lcwgs_coast, i = 3, j = 4)
+
+pcadapt_lcwgs_coast |>
+  plot(option = "scores", pop = popmap_lcwgs_coast, i = 4, j = 5)
 
 plot(pcadapt_lcwgs_coast, option = "qqplot") + theme_minimal()
-
-coast_manhattan <- pcadapt_lcwgs_coast |>
-  plot(option = "manhattan") +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "coast_manhattan.png"),
-  plot   = coast_manhattan,
-  width  = 16,
-  height = 4
-)
 
 pcadapt_lcwgs_coast$pvalues |> hist(
   xlab   = "p-values",
@@ -292,17 +294,6 @@ save_open_plot(
 
 plot(pcadapt_lcwgs_north, option = "qqplot") + theme_minimal()
 
-north_manhattan <- pcadapt_lcwgs_north |>
-  plot(option = "manhattan") +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "north_manhattan.png"),
-  plot   = north_manhattan,
-  width  = 16,
-  height = 4
-)
-
 pcadapt_lcwgs_north$pvalues |> hist(
   xlab   = "p-values",
   main   = NULL,
@@ -377,17 +368,6 @@ save_open_plot(
 
 plot(pcadapt_lcwgs_south, option = "qqplot") + theme_minimal()
 
-south_manhattan <- pcadapt_lcwgs_south |>
-  plot(option = "manhattan") +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "south_manhattan.png"),
-  plot   = south_manhattan,
-  width  = 16,
-  height = 4
-)
-
 pcadapt_lcwgs_south$pvalues |> hist(
   xlab   = "p-values",
   main   = NULL,
@@ -402,9 +382,111 @@ pcadapt_lcwgs_south$pvalues |> hist(
 rm(EJA_lcwgs_south, south_PCA_1_2, south_manhattan)
 ```
 
-## Coast + ISJ
-
+## Islands
 ### Generating whitelist
+
+```{r}
+#| label: ISLSaveWhitelist
+#| eval: false
+
+read_csv2(here("data", "individuals_coordinates.csv")) |>
+  pull(Indiv) |> 
+  {\(x) {
+    x[(grepl(pattern = "CAT", x = x) |
+       grepl(pattern = "GUA", x = x) |
+       grepl(pattern = "ISJ", x = x) |
+       grepl(pattern = "SCL", x = x))]
+    }}() |> 
+  write_lines(here("plink2", "whitelist_islands.txt"))
+```
+
+### Generating bed file
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_islands.txt --make-bed --out 8-Embiotoca_filtered_isl
+```
+
+### Preanalysis to determine optimal K value
+```{r}
+#| label: ISLPreAnalysis
+lcwgs_isl <- read.pcadapt(
+  here("plink2", "8-Embiotoca_filtered_isl.bed"),
+  type = "bed"
+)
+
+temp <- plot(pcadapt(input = lcwgs_isl, K = 20), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_islands_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
+```
+
+K = 3 seems correct
+
+### Analysis using K = 3
+```{r}
+#| label: ISLpcadapt
+
+popmap_lcwgs_isl <- c(
+  rep("catalina_island",      11), # CAT
+  rep("guadalupe_island",     10), # GUA
+  rep("isla_san_jeronimo",    11), # ISJ
+  rep("san_clemente_island",  10)  # SCL
+)
+
+pcadapt_lcwgs_isl <- lcwgs_isl |> pcadapt(K = 3)
+```
+
+```{r}
+#| eval: false
+
+pcadapt_lcwgs_isl |>
+  write_rds(file = here("output", "pcadapt_lcwgs_isl.rds"))
+```
+
+### Associated exploratory plots
+```{r}
+#| label: ISLExploPlots
+
+isl_PCA_1_2 <- pcadapt_lcwgs_isl |>
+  plot(option = "scores", pop = popmap_lcwgs_isl, i = 1, j = 2) +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "isl_PCA_1_2.pdf"),
+  plot   = isl_PCA_1_2,
+  width  = 10,
+  height = 8
+)
+
+isl_PCA_2_3 <- pcadapt_lcwgs_isl |>
+  plot(option = "scores", pop = popmap_lcwgs_isl, i = 2, j = 3) +
+  theme_minimal()
+
+save_open_plot(
+  here("output", "plots", "isl_PCA_2_3.pdf"),
+  plot   = isl_PCA_2_3,
+  width  = 10,
+  height = 8
+)
+
+pcadapt_lcwgs_isl |> plot(option = "qqplot") + theme_minimal()
+
+pcadapt_lcwgs_isl$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
+```
+
+```{r}
+#| label: ISLMemclean
+
+rm(lcwgs_isl, isl_PCA_1_2, isl_PCA_2_3, isl_manhattan)
+```
+
+## Coast + ISJ
 
 ```{r}
 #| label: CoastISJSaveWhitelist
@@ -420,14 +502,12 @@ read_csv2(here("data", "individuals_coordinates.csv")) |>
   write_lines(here("plink2", "whitelist_coastal_isj.txt"))
 ```
 
-### Generating bed file
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_isj.txt --make-bed --out 8-Embiotoca_filtered_coastal_isj
 ```
 
-### Preanalysis to determine optimal K value
 ```{r}
 #| label: CoastISJPreAnalysis
 EJA_lcwgs_coast_isj <- read.pcadapt(
@@ -435,16 +515,18 @@ EJA_lcwgs_coast_isj <- read.pcadapt(
   type = "bed"
 )
 
-pcadapt(input = EJA_lcwgs_coast_isj, K = 20) |> plot(option = "screeplot")
+temp <- plot(pcadapt(input = EJA_lcwgs_coast_isj, K = 20), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_coast_isj_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
 ```
 
 K = 3 seems correct
 
-### Analysis using K = 3
 ```{r}
 #| label: CoastISJpcadapt
 
-popmap_EJA_lcwgs_coast_isj <- c(
+popmap_lcwgs_coast_isj <- c(
   rep("bodega_bay",            5), # BB
   rep("big_creek",            13), # BIGC -> BCR
   rep("elkhorn",               6), # ELK
@@ -459,54 +541,31 @@ popmap_EJA_lcwgs_coast_isj <- c(
   rep("santa_cruz_harbour",   10)  # SCH
 )
 
-pcadapt_EJA_lcwgs_coast_isj <- EJA_lcwgs_coast_isj |> pcadapt(K = 3)
+pcadapt_lcwgs_coast_isj <- EJA_lcwgs_coast_isj |> pcadapt(K = 6)
 ```
 
 ```{r}
 #| eval: false
 
 pcadapt_lcwgs_coast_isj |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_coast_isj.rds"))
+  write_rds(file = here("output", "pcadapt_lcwgs_coast_isj_K6.rds"))
 ```
 
-### Associated exploratory plots
 ```{r}
 #| label: CoastISJExploPlots
 
-coast_isj_PCA_1_2 <- pcadapt_lcwgs_coast_isj |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 1, j = 2) +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "coast_isj_PCA_1_2.pdf"),
-  plot   = coast_isj_PCA_1_2,
-  width  = 10,
-  height = 8
-)
-
-coast_isj_PCA_2_3 <- pcadapt_lcwgs_coast_isj |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 2, j = 3) +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "coast_isj_PCA_2_3.pdf"),
-  plot   = coast_isj_PCA_2_3,
-  width  = 10,
-  height = 8
-)
+pcadapt_lcwgs_coast_isj |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 1, j = 2)
+pcadapt_lcwgs_coast_isj |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 2, j = 3)
+pcadapt_lcwgs_coast_isj |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 3, j = 4)
+pcadapt_lcwgs_coast_isj |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 4, j = 5)
+pcadapt_lcwgs_coast_isj |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 5, j = 6)
 
 pcadapt_lcwgs_coast_isj |> plot(option = "qqplot") + theme_minimal()
-
-coast_isj_manhattan <- pcadapt_lcwgs_coast_isj |>
-  plot(option = "manhattan") +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "coast_isj_manhattan.png"),
-  plot   = coast_isj_manhattan,
-  width  = 16,
-  height = 4
-)
 
 pcadapt_lcwgs_coast_isj$pvalues |> hist(
   xlab   = "p-values",
@@ -524,8 +583,6 @@ rm(EJA_lcwgs_coast_isj, coast_isj_PCA_1_2, coast_isj_PCA_2_3, coast_isj_manhatta
 
 ## Coast + SCL
 
-### Generating whitelist
-
 ```{r}
 #| label: CoastSCLSaveWhitelist
 #| eval: false
@@ -540,14 +597,12 @@ read_csv2(here("data", "individuals_coordinates.csv")) |>
   write_lines(here("plink2", "whitelist_coastal_scl.txt"))
 ```
 
-### Generating bed file
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_scl.txt --make-bed --out 8-Embiotoca_filtered_coastal_scl
 ```
 
-### Preanalysis to determine optimal K value
 ```{r}
 #| label: CoastSCLPreAnalysis
 lcwgs_coast_scl <- read.pcadapt(
@@ -555,12 +610,14 @@ lcwgs_coast_scl <- read.pcadapt(
   type = "bed"
 )
 
-pcadapt(input = lcwgs_coast_scl, K = 20) |> plot(option = "screeplot")
+temp <- plot(pcadapt(input = lcwgs_coast_scl, K = 20), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_coast_scl_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
 ```
 
 K = 3 seems correct
 
-### Analysis using K = 3
 ```{r}
 #| label: CoastSCLpcadapt
 
@@ -579,54 +636,35 @@ popmap_lcwgs_coast_scl <- c(
   rep("santa_cruz_harbour",   10)  # SCH
 )
 
-pcadapt_lcwgs_coast_scl <- lcwgs_coast_scl |> pcadapt(K = 3)
+pcadapt_lcwgs_coast_scl <- lcwgs_coast_scl |> pcadapt(K = 6)
 ```
 
 ```{r}
 #| eval: false
 
 pcadapt_lcwgs_coast_scl |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_coast_scl.rds"))
+  write_rds(file = here("output", "pcadapt_lcwgs_coast_scl_K6.rds"))
 ```
 
-### Associated exploratory plots
 ```{r}
 #| label: CoastSCLExploPlots
 
-coast_scl_PCA_1_2 <- pcadapt_lcwgs_coast_scl |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 1, j = 2) +
-  theme_minimal()
+pcadapt_lcwgs_coast_scl |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 1, j = 2)
 
-save_open_plot(
-  here("output", "plots", "coast_scl_PCA_1_2.pdf"),
-  plot   = coast_scl_PCA_1_2,
-  width  = 10,
-  height = 8
-)
+pcadapt_lcwgs_coast_scl |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 2, j = 3)
 
-coast_scl_PCA_2_3 <- pcadapt_lcwgs_coast_scl |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 2, j = 3) +
-  theme_minimal()
+pcadapt_lcwgs_coast_scl |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 3, j = 4)
 
-save_open_plot(
-  here("output", "plots", "coast_scl_PCA_2_3.pdf"),
-  plot   = coast_scl_PCA_2_3,
-  width  = 10,
-  height = 8
-)
+pcadapt_lcwgs_coast_scl |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 4, j = 5)
+
+pcadapt_lcwgs_coast_scl |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 5, j = 6)
 
 pcadapt_lcwgs_coast_scl |> plot(option = "qqplot") + theme_minimal()
-
-coast_scl_manhattan <- pcadapt_lcwgs_coast_scl |>
-  plot(option = "manhattan") +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "coast_scl_manhattan.png"),
-  plot   = coast_scl_manhattan,
-  width  = 16,
-  height = 4
-)
 
 pcadapt_lcwgs_coast_scl$pvalues |> hist(
   xlab   = "p-values",
@@ -641,9 +679,8 @@ pcadapt_lcwgs_coast_scl$pvalues |> hist(
 
 rm(lcwgs_coast_scl, coast_scl_PCA_1_2, coast_scl_PCA_2_3, coast_scl_manhattan)
 ```
-## Coast + GUA
 
-### Generating whitelist
+## Coast + GUA
 
 ```{r}
 #| label: CoastGUASaveWhitelist
@@ -659,14 +696,12 @@ read_csv2(here("data", "individuals_coordinates.csv")) |>
   write_lines(here("plink2", "whitelist_coastal_gua.txt"))
 ```
 
-### Generating bed file
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua
 ```
 
-### Preanalysis to determine optimal K value
 ```{r}
 #| label: CoastGUAPreAnalysis
 lcwgs_coast_gua <- read.pcadapt(
@@ -674,12 +709,14 @@ lcwgs_coast_gua <- read.pcadapt(
   type = "bed"
 )
 
-pcadapt(input = lcwgs_coast_gua, K = 20) |> plot(option = "screeplot")
+temp <- plot(pcadapt(input = lcwgs_coast_gua, K = 20), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_coast_gua_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
 ```
 
 K = 3 seems correct
 
-### Analysis using K = 3
 ```{r}
 #| label: CoastGUApcadapt
 
@@ -698,54 +735,35 @@ popmap_lcwgs_coast_gua <- c(
   rep("santa_cruz_harbour",   10)  # SCH
 )
 
-pcadapt_lcwgs_coast_gua <- lcwgs_coast_gua |> pcadapt(K = 3)
+pcadapt_lcwgs_coast_gua <- lcwgs_coast_gua |> pcadapt(K = 6)
 ```
 
 ```{r}
 #| eval: false
 
 pcadapt_lcwgs_coast_gua |>
-  write_rds(file = here("output", "pcadapt_lcwgs_coast_gua.rds"))
+  write_rds(file = here("output", "pcadapt_lcwgs_coast_gua_K6.rds"))
 ```
 
-### Associated exploratory plots
 ```{r}
 #| label: CoastGUAExploPlots
 
 coast_gua_PCA_1_2 <- pcadapt_lcwgs_coast_gua |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 1, j = 2) +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "coast_gua_PCA_1_2.pdf"),
-  plot   = coast_gua_PCA_1_2,
-  width  = 10,
-  height = 8
-)
+  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 1, j = 2)
 
 coast_gua_PCA_2_3 <- pcadapt_lcwgs_coast_gua |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 2, j = 3) +
-  theme_minimal()
+  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 2, j = 3)
 
-save_open_plot(
-  here("output", "plots", "coast_gua_PCA_2_3.pdf"),
-  plot   = coast_gua_PCA_2_3,
-  width  = 10,
-  height = 8
-)
+coast_gua_PCA_2_3 <- pcadapt_lcwgs_coast_gua |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 3, j = 4)
+
+coast_gua_PCA_2_3 <- pcadapt_lcwgs_coast_gua |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 4, j = 5)
+
+coast_gua_PCA_2_3 <- pcadapt_lcwgs_coast_gua |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 5, j = 6)
 
 pcadapt_lcwgs_coast_gua |> plot(option = "qqplot") + theme_minimal()
-
-coast_gua_manhattan <- pcadapt_lcwgs_coast_gua |>
-  plot(option = "manhattan") +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "coast_gua_manhattan.png"),
-  plot   = coast_gua_manhattan,
-  width  = 16,
-  height = 4
-)
 
 pcadapt_lcwgs_coast_gua$pvalues |> hist(
   xlab   = "p-values",
@@ -763,8 +781,6 @@ rm(lcwgs_coast_gua, coast_gua_PCA_1_2, coast_gua_PCA_2_3, coast_gua_manhattan)
 
 ## Coast + CAT
 
-### Generating whitelist
-
 ```{r}
 #| label: CoastCATSaveWhitelist
 #| eval: false
@@ -779,14 +795,12 @@ read_csv2(here("data", "individuals_coordinates.csv")) |>
   write_lines(here("plink2", "whitelist_coastal_cat.txt"))
 ```
 
-### Generating bed file
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_cat.txt --make-bed --out 8-Embiotoca_filtered_coastal_cat
 ```
 
-### Preanalysis to determine optimal K value
 ```{r}
 #| label: CoastCATPreAnalysis
 lcwgs_coast_cat <- read.pcadapt(
@@ -794,12 +808,14 @@ lcwgs_coast_cat <- read.pcadapt(
   type = "bed"
 )
 
-pcadapt(input = lcwgs_coast_cat, K = 20) |> plot(option = "screeplot")
+temp <- plot(pcadapt(input = lcwgs_coast_cat, K = 20), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_coast_cat_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
 ```
 
 K = 3 seems correct
 
-### Analysis using K = 3
 ```{r}
 #| label: CoastCATpcadapt
 
@@ -818,54 +834,36 @@ popmap_lcwgs_coast_cat <- c(
   rep("santa_cruz_harbour",   10)  # SCH
 )
 
-pcadapt_lcwgs_coast_cat <- lcwgs_coast_cat |> pcadapt(K = 3)
+pcadapt_lcwgs_coast_cat <- lcwgs_coast_cat |> pcadapt(K = 6)
 ```
 
 ```{r}
 #| eval: false
 
 pcadapt_lcwgs_coast_cat |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_coast_cat.rds"))
+  write_rds(file = here("output", "pcadapt_lcwgs_coast_cat_K6.rds"))
 ```
 
-### Associated exploratory plots
 ```{r}
 #| label: CoastCATExploPlots
 
-coast_cat_PCA_1_2 <- pcadapt_lcwgs_coast_cat |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 1, j = 2) +
-  theme_minimal()
+pcadapt_lcwgs_coast_cat |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 1, j = 2)
 
-save_open_plot(
-  here("output", "plots", "coast_cat_PCA_1_2.pdf"),
-  plot   = coast_cat_PCA_1_2,
-  width  = 10,
-  height = 8
-)
+pcadapt_lcwgs_coast_cat |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 2, j = 3)
+  
+pcadapt_lcwgs_coast_cat |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 3, j = 4)
 
-coast_cat_PCA_2_3 <- pcadapt_lcwgs_coast_cat |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 2, j = 3) +
-  theme_minimal()
+pcadapt_lcwgs_coast_cat |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 4, j = 5)
 
-save_open_plot(
-  here("output", "plots", "coast_cat_PCA_2_3.pdf"),
-  plot   = coast_cat_PCA_2_3,
-  width  = 10,
-  height = 8
-)
+pcadapt_lcwgs_coast_cat |>
+  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 5, j = 6)
+
 
 pcadapt_lcwgs_coast_cat |> plot(option = "qqplot") + theme_minimal()
-
-coast_cat_manhattan <- pcadapt_lcwgs_coast_cat |>
-  plot(option = "manhattan") +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "coast_cat_manhattan.png"),
-  plot   = coast_cat_manhattan,
-  width  = 16,
-  height = 4
-)
 
 pcadapt_lcwgs_coast_cat$pvalues |> hist(
   xlab   = "p-values",
@@ -881,485 +879,663 @@ pcadapt_lcwgs_coast_cat$pvalues |> hist(
 rm(lcwgs_coast_cat, coast_cat_PCA_1_2, coast_cat_PCA_2_3, coast_cat_manhattan)
 ```
 
-# Outliers Coast + ISJ
+## CAT + SCL
 
-## Get outliers sequences and positions
-
-### Read genome
 ```{r}
-lcwgs_catalog <- read.dna(
-    here("data", "JAKOON01_catalog", "catalog.fa"),
-    format       = "fasta",
-    as.character = TRUE
-  )
+#| label: CATSCLSaveWhitelist
+#| eval: false
 
-names(lcwgs_catalog) <- names(lcwgs_catalog) |>
-  str_split(pattern = " ") |>
-  map(\(x) x[1]) |>
-  unlist()
+read_csv2(here("data", "individuals_coordinates.csv")) |>
+  pull(Indiv) |> 
+  {\(x) {
+    x[(grepl(pattern = "SCL", x = x) |
+       grepl(pattern = "CAT", x = x))]
+    }}() |> 
+  write_lines(here("plink2", "whitelist_cat_scl.txt"))
 ```
 
-### Adjusted pvalues
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
-```{r}
-padj <- p.adjust(pcadapt_lcwgs_coast$pvalues, method = "bonferroni")
-alpha <- 0.1
-outliers <- which(padj < alpha)
-length(outliers)
-```
-
-### Get pvalues map from coastal individuals analysis
-```{r}
-pcadapt_lcwgs_coast <- readRDS(here("output", "pcadapt_lcwgs_coast.rds"))
-
-pvalues_positions_filtered_dup <- readRDS(file = here("data", "SNP_positions.rds")) |> 
-  select(-c(lab_position, coloured, rank)) |> 
-  mutate(
-    pvalues    = pcadapt_lcwgs_coast$pvalues,
-    logpvalues = Get_pvalues(pcadapt_lcwgs_coast)
-  ) |> # Extract pvalues
-  filter(is.na(pvalues) == FALSE) |>
-  filter(logpvalues >= 200) |> # Filtered
-  mutate(dist = c(0, diff(POS))) |> 
-  filter(dist >= 500) |>
-  select(-c(dist)) # Removed duplicates
-```
-
-### Get corresponding read windows
-```{r}
-chromosomes_length <- read_tsv(here("data", "JAKOON01_catalog", "JAKOON01_contigs.tsv"))
-
-pvalues_positions_filtered_dup_sequences <- pvalues_positions_filtered_dup |>
-  mutate(
-    sequences = row_number() |>
-      map(
-        \(x) lcwgs_catalog[[CHROM[[x]]]][Get_window(CHROM[[x]], POS[[x]])] |>
-          paste(collapse = "") |>
-          toupper()
-      ) |> 
-      unlist()
-    )
-```
-
-### Write to fasta files
-```{r}
-pvalues_positions_filtered_dup_sequences |>
-  mutate(seq_name = paste0(">", CHROM, " POS: ", as.character(POS))) |>
-  select(seq_name, sequences) |> 
-  filter(row_number() %in% 1:200) |> 
-  write.table(
-    file      = here("output", "lcwgs_outliers_sequences_1.fa"),
-    sep       = "\n",
-    row.names = FALSE,
-    col.names = FALSE,
-    quote     = FALSE
-  )
-
-pvalues_positions_filtered_dup_sequences |>
-  mutate(seq_name = paste0(">", CHROM, " POS: ", as.character(POS))) |>
-  select(seq_name, sequences) |> 
-  filter(row_number() %in% 201:400) |> 
-  write.table(
-    file      = here("output", "lcwgs_outliers_sequences_2.fa"),
-    sep       = "\n",
-    row.names = FALSE,
-    col.names = FALSE,
-    quote     = FALSE
-  )
-
-pvalues_positions_filtered_dup_sequences |>
-  mutate(seq_name = paste0(">", CHROM, " POS: ", as.character(POS))) |>
-  select(seq_name, sequences) |> 
-  filter(row_number() %in% 401:456) |> 
-  write.table(
-    file      = here("output", "lcwgs_outliers_sequences_3.fa"),
-    sep       = "\n",
-    row.names = FALSE,
-    col.names = FALSE,
-    quote     = FALSE
-  )
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_cat_scl.txt --make-bed --out 8-Embiotoca_filtered_cat_scl
 ```
 
 ```{r}
-rm(chromosomes_length,
-   pvalues_positions_filtered_dup_sequences)
-gc()
+#| label: CATSCLPreAnalysis
+
+lcwgs_cat_scl <- read.pcadapt(
+  here("plink2", "8-Embiotoca_filtered_cat_scl.bed"),
+  type = "bed"
+)
+
+temp <- plot(pcadapt(input = lcwgs_cat_scl, K = 20), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_cat_scl_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
 ```
 
-## Extract outliers annotations from ncbi genome annotations
-
-### Load external info
+K = 1 seems correct
 
 ```{r}
-EJA_annotations <- here("data", "EJA_annotations.gff") |>
-  read.gff() |>
-  as_tibble()
+#| label: CATSCLpcadapt
 
-chromosomes_info <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |> 
-  read_tsv() |>
-  select(c(`GenBank seq accession`, `RefSeq seq accession`))
-```
+popmap_lcwgs_cat_scl <- c(
+  rep("catalina_island",      11), # CAT
+  rep("san_clemente_island",  10)  # SCL
+)
 
-### Get annotations
-
-```{r}
-pvalues_positions_filtered_dup_annotations <- pvalues_positions_filtered_dup |>
-  Get_annotations(
-    chrom_info     = chromosomes_info,
-    gff_annotation = EJA_annotations
-  )
-```
-
-### Memory cleanup
-
-```{r}
-rm(EJA_annotations, chromosomes_info, pvalues_positions_filtered_dup)
-gc()
-```
-
-### Sort and filter info
-
-```{r}
-pvalues_positions_filtered_dup_annotations_genes <- pvalues_positions_filtered_dup_annotations |>
-  unnest(annotation) |>
-  filter(grepl("ID=gene", annotation)) |>
-  mutate(
-    annotation_ID          = annotation |>
-      str_split_i(pattern = ";", i = 1) |>
-      str_remove(pattern = "ID="),
-    annotation_description = annotation |>
-      str_split_i(pattern = ";", i = 4) |>
-      str_remove(pattern = "description=")
-  ) |> 
-  select(-c(annotation)) |>
-  distinct(annotation_ID, .keep_all = TRUE)
-
-pvalues_positions_filtered_dup_annotations_rnas <- pvalues_positions_filtered_dup_annotations |>
-  unnest(annotation) |>
-  filter(grepl("ID=rna", annotation)) |>
-  mutate(
-    annotation_ID      = annotation |>
-      str_split_i(pattern = ";", i = 1) |>
-      str_remove(pattern = "ID="),
-    annotation_product = annotation |>
-      str_match("product=\\s*(.*?)\\s*;") |>
-      _[, 2]
-  ) |>
-  select(-c(annotation)) |>
-  distinct(annotation_ID, .keep_all = TRUE)
-
-pvalues_positions_filtered_dup_annotations_exons <- pvalues_positions_filtered_dup_annotations |>
-  unnest(annotation) |>
-  filter(grepl("ID=exon", annotation)) |>
-  mutate(
-    annotation_ID      = annotation |>
-      str_split_i(pattern = ";", i = 1) |>
-      str_remove(pattern = "ID="),
-    annotation_gene    = annotation |>
-      str_match("gene=\\s*(.*?)\\s*;") |>
-      _[, 2],
-    annotation_product = annotation |>
-      str_match("product=\\s*(.*?)\\s*;") |>
-      _[, 2]
-  ) |>
-  select(-c(annotation)) |>
-  distinct(annotation_ID, .keep_all = TRUE)
-
-pvalues_positions_filtered_dup_annotations_cds <- pvalues_positions_filtered_dup_annotations |>
-  unnest(annotation) |>
-  filter(grepl("ID=cds", annotation)) |>
-  mutate(
-    annotation_ID      = annotation |>
-      str_split_i(pattern = ";", i = 1) |>
-      str_remove(pattern = "ID="),
-    annotation_gene    = annotation |>
-      str_match("gene=\\s*(.*?)\\s*;") |>
-      _[, 2],
-    annotation_product = annotation |>
-      str_match("product=\\s*(.*?)\\s*;") |>
-      _[, 2]
-  ) |>
-  select(-c(annotation)) |>
-  distinct(annotation_ID, .keep_all = TRUE)
-
-pvalues_positions_filtered_dup_annotations_all <- bind_rows(
-  pvalues_positions_filtered_dup_annotations_genes,
-  pvalues_positions_filtered_dup_annotations_rnas,
-  pvalues_positions_filtered_dup_annotations_exons,
-  pvalues_positions_filtered_dup_annotations_cds
-) |> 
-  mutate(
-    annotation_type        = annotation_ID |> str_split_i(pattern = "-", i = 1),
-    annotation_ID          = annotation_ID |> str_split_i(pattern = "-", i = 2),
-    annotation_description = annotation_description |>
-      str_remove_all(pattern = "%2C"),
-    annotation_product     = annotation_product |>
-      str_remove_all(pattern = "%2C")
-  ) |>
-  select(
-    c("GenBank seq accession", "POS",
-      "RefSeq seq accession", "annotation_type", "annotation_ID",
-      "annotation_description", "annotation_product", "annotation_gene",
-      "pvalues", "logpvalues")
-  ) |> 
-  arrange(pvalues, `GenBank seq accession`, POS)
-```
-
-### Save as file and cleanup
-
-```{r}
-pvalues_positions_filtered_dup_annotations_all |>
-  write_csv2(here("output", "lcwgs_EJA_outliers_annotations.csv"))
-
-rm(pvalues_positions_filtered_dup_annotations_genes,
-   pvalues_positions_filtered_dup_annotations_rnas,
-   pvalues_positions_filtered_dup_annotations_exons,
-   pvalues_positions_filtered_dup_annotations_cds)
-```
-
-## Get BLAST results
-
-```{r}
-pvalues_positions <- pvalues_positions |>
-  mutate(Rank = paste0(CHROM, " POS: ", as.character(POS)))
-
-lcwgs_EJA_outliers_blast_tib <- c("GZSEDPGT016-Alignment.xml",
-                                  "GZSJHA6W016-Alignment.xml",
-                                  "GZSMYB0J016-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
-  here("data", "BLASTs") |>
-  map( \(x) read_xml(x) |> XML_to_df()) |> 
-  bind_rows() |>
-  left_join(pvalues_positions)
-
-rm(pvalues_positions)
-```
-
-### Filter BLAST results
-
-```{r}
-lcwgs_EJA_outliers_blast_tib_filtered <- lcwgs_EJA_outliers_blast_tib |>
-  filter(bit_score >= 80) |> 
-  filter(!grepl("genome assembly", title)) |> 
-  filter(!duplicated(Rank)) |> # Keep the first match for each locus
-  filter(!duplicated(accession_number))
+pcadapt_lcwgs_cat_scl <- lcwgs_cat_scl |> pcadapt(K = 1)
 ```
 
 ```{r}
-write_csv2(
-  lcwgs_EJA_outliers_blast_tib_filtered,
-  file = here("output", "lcwgs_outliers_match.csv")
+#| eval: false
+
+pcadapt_lcwgs_cat_scl |> 
+  write_rds(file = here("output", "pcadapt_lcwgs_cat_scl.rds"))
+```
+
+```{r}
+#| label: CATSCLExploPlots
+
+pcadapt_lcwgs_cat_scl |> plot(option = "qqplot") + theme_minimal()
+
+pcadapt_lcwgs_cat_scl$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
 )
 ```
 
-### Get protein sequences from GenBank
-
 ```{r}
-lcwgs_protein_sequences <- lcwgs_EJA_outliers_blast_tib_filtered |> Get_protein_sequences()
+#| label: CoastCATMemclean
+
+rm(lcwgs_cat_scl, cat_scl_manhattan)
 ```
 
-### Save output as fasta file which can be sent to [blast KOALA](https://www.kegg.jp/blastkoala/).
+## GUA + CAT
 
 ```{r}
-lcwgs_protein_sequences |> 
-  mutate(accession_number = paste0("> ", accession_number)) |>
-  write.table(
-    file      = here("output", "lwcgs_EJA_outliers_protein_sequences.fa"),
-    sep       = "\n",
-    row.names = FALSE,
-    col.names = FALSE,
-    quote     = FALSE
-  )
+#| label: GUACATSaveWhitelist
+#| eval: false
+
+read_csv2(here("data", "individuals_coordinates.csv")) |>
+  pull(Indiv) |> 
+  {\(x) {
+    x[(grepl(pattern = "GUA", x = x) |
+       grepl(pattern = "CAT", x = x))]
+    }}() |> 
+  write_lines(here("plink2", "whitelist_gua_cat.txt"))
 ```
 
-## Get BLAST results A. ocellaris
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
-```{r}
-pvalues_positions <- readRDS(
-  file = here("data", "SNP_positions.rds")
-) |> 
-  mutate(
-    pvalues = pcadapt_lcwgs_coast$pvalues,
-    logpvalues = Get_pvalues(pcadapt_lcwgs_coast)
-  ) |>
-  mutate(Rank = paste0(CHROM, " POS: ", as.character(POS)))
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_gua_cat.txt --make-bed --out 8-Embiotoca_filtered_gua_cat
 ```
 
 ```{r}
-lcwgs_EJA_outliers_blast_A_ocellaris_tib <- c("HFHS4UE9013-Alignment.xml",
-                                              "HFHRYX38013-Alignment.xml",
-                                              "HFHSG8SF016-Alignment.xml") |> # "Single-file XML2" file from NCBI BLASTn output is expected
-  here("data", "BLASTs") |>
-  map( \(x) read_xml(x) |> XML_to_df()) |> 
-  bind_rows() |>
-  left_join(pvalues_positions)
+#| label: GUACATPreAnalysis
 
-rm(pvalues_positions)
+lcwgs_gua_cat <- read.pcadapt(
+  here("plink2", "8-Embiotoca_filtered_gua_cat.bed"),
+  type = "bed"
+)
+
+temp <- plot(pcadapt(input = lcwgs_gua_cat, K = 20), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_gua_cat_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
+```
+
+K = 1 seems correct
+
+```{r}
+#| label: GUACATpcadapt
+
+popmap_lcwgs_gua_cat <- c(
+  rep("catalina_island",      11), # CAT
+  rep("guadalupe_island",     10)  # GUA
+)
+
+pcadapt_lcwgs_gua_cat <- lcwgs_gua_cat |> pcadapt(K = 1)
 ```
 
 ```{r}
-lcwgs_EJA_outliers_blast_A_ocellaris_tib_filtered <- lcwgs_EJA_outliers_blast_A_ocellaris_tib |>
-  filter(bit_score >= 80) |> 
-  filter(!grepl("genome assembly", title)) |> 
-  filter(!duplicated(Rank)) |> # Keep the first match for each locus
-  filter(!duplicated(accession_number))
+#| eval: false
 
-lcwgs_EJA_outliers_blast_A_ocellaris_tib_filtered |>
-  write.csv2(here("output", "lcwgs_outliers_match_A_ocellaris.csv"))
+pcadapt_lcwgs_gua_cat |> 
+  write_rds(file = here("output", "pcadapt_lcwgs_gua_cat.rds"))
 ```
 
-# Outliers Coast - ISJ
-
-## Get outliers
-
-### Adjusted pvalues
-
 ```{r}
-padj <- p.adjust(pcadapt_lcwgs_coast$pvalues, method = "bonferroni")
-alpha <- 0.1
-outliers <- which(padj < alpha)
-length(outliers)
+#| label: GUACATExploPlots
+
+pcadapt_lcwgs_gua_cat |> plot(option = "qqplot") + theme_minimal()
+
+pcadapt_lcwgs_gua_cat$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
 ```
 
-### Get pvalues map from coastal individuals analysis
 ```{r}
-pcadapt_lcwgs_coast <- readRDS(here("output", "pcadapt_lcwgs_coast.rds"))
+#| label: GUACATMemclean
 
-outliers_positions_coast <- readRDS(file = here("data", "SNP_positions.rds")) |> 
-  mutate(
-    padj = p.adjust(pcadapt_lcwgs_coast$pvalues, method = "bonferroni")
-  ) |> # Extract pvalues
-  filter(padj < .1)
+rm(lcwgs_gua_cat, gua_cat_manhattan)
 ```
 
-## Extract outliers annotations from ncbi genome annotations
-
-### Load external info
+## GUA + SCL
 
 ```{r}
-EJA_annotations <- here("data", "EJA_annotations.gff") |>
+#| label: GUASCLSaveWhitelist
+#| eval: false
+
+read_csv2(here("data", "individuals_coordinates.csv")) |>
+  pull(Indiv) |> 
+  {\(x) {
+    x[(grepl(pattern = "SCL", x = x) |
+       grepl(pattern = "GUA", x = x))]
+    }}() |> 
+  write_lines(here("plink2", "whitelist_gua_scl.txt"))
+```
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_gua_scl.txt --make-bed --out 8-Embiotoca_filtered_gua_scl
+```
+
+```{r}
+#| label: GUASCLPreAnalysis
+
+lcwgs_gua_scl <- read.pcadapt(
+  here("plink2", "8-Embiotoca_filtered_gua_scl.bed"),
+  type = "bed"
+)
+
+temp <- plot(pcadapt(input = lcwgs_gua_scl, K = 19), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_gua_scl_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
+```
+
+K = 1 seems correct
+
+```{r}
+#| label: GUASCLpcadapt
+
+popmap_lcwgs_gua_scl <- c(
+  rep("guadalupe_island",     10), # GUA
+  rep("san_clemente_island",  10)  # SCL
+)
+
+pcadapt_lcwgs_gua_scl <- lcwgs_gua_scl |> pcadapt(K = 1)
+```
+
+```{r}
+#| eval: false
+
+pcadapt_lcwgs_gua_scl |> 
+  write_rds(file = here("output", "pcadapt_lcwgs_gua_scl.rds"))
+```
+
+```{r}
+#| label: GUASCLExploPlots
+
+pcadapt_lcwgs_gua_scl |> plot(option = "qqplot") + theme_minimal()
+
+pcadapt_lcwgs_gua_scl$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
+```
+
+```{r}
+#| label: GUASCLMemclean
+
+rm(lcwgs_gua_scl, gua_scl_manhattan)
+```
+
+## GUA + ISJ
+
+```{r}
+#| label: GUAISJSaveWhitelist
+#| eval: false
+
+read_csv2(here("data", "individuals_coordinates.csv")) |>
+  pull(Indiv) |> 
+  {\(x) {
+    x[(grepl(pattern = "GUA", x = x) |
+       grepl(pattern = "ISJ", x = x))]
+    }}() |> 
+  write_lines(here("plink2", "whitelist_gua_isj.txt"))
+```
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_GUA_ISJ.txt --make-bed --out 8-Embiotoca_filtered_GUA_ISJ
+```
+
+```{r}
+#| label: GUAISJPreAnalysis
+
+lcwgs_gua_isj <- read.pcadapt(
+  here("plink2", "8-Embiotoca_filtered_gua_isj.bed"),
+  type = "bed"
+)
+
+temp <- plot(pcadapt(input = lcwgs_gua_isj, K = 19), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_gua_isj_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
+```
+
+K = 1 seems correct
+
+```{r}
+#| label: GUAISJpcadapt
+
+popmap_lcwgs_GUA_ISJ <- c(
+  rep("guadalupe_island",     10), # GUA
+  rep("isla_san_jeronimo",    11)  # ISJ
+)
+
+pcadapt_lcwgs_GUA_ISJ <- lcwgs_gua_isj |> pcadapt(K = 1)
+```
+
+```{r}
+#| eval: false
+
+pcadapt_lcwgs_GUA_ISJ |> 
+  write_rds(file = here("output", "pcadapt_lcwgs_gua_isj.rds"))
+```
+
+```{r}
+#| label: GUAISJExploPlots
+
+pcadapt_lcwgs_GUA_ISJ |> plot(option = "qqplot") + theme_minimal()
+
+pcadapt_lcwgs_GUA_ISJ$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
+```
+
+```{r}
+#| label: GUAISJMemclean
+
+rm(lcwgs_GUA_ISJ, GUA_ISJ_manhattan)
+```
+
+## CAT + ISJ
+
+```{r}
+#| label: CATISJSaveWhitelist
+#| eval: false
+
+read_csv2(here("data", "individuals_coordinates.csv")) |>
+  pull(Indiv) |> 
+  {\(x) {
+    x[(grepl(pattern = "CAT", x = x) |
+       grepl(pattern = "ISJ", x = x))]
+    }}() |> 
+  write_lines(here("plink2", "whitelist_cat_isj.txt"))
+```
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_cat_isj.txt --make-bed --out 8-Embiotoca_filtered_cat_isj
+```
+
+```{r}
+#| label: CATISJPreAnalysis
+
+lcwgs_cat_isj <- read.pcadapt(
+  here("plink2", "8-Embiotoca_filtered_cat_isj.bed"),
+  type = "bed"
+)
+
+temp <- plot(pcadapt(input = lcwgs_cat_isj, K = 19), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_cat_isj_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
+```
+
+K = 1 seems correct
+
+```{r}
+#| label: CATISJpcadapt
+
+popmap_lcwgs_cat_isj <-  c(
+  rep("catalina_island",      11), # CAT
+  rep("isla_san_jeronimo",    11)  # ISJ
+)
+
+pcadapt_lcwgs_cat_isj <- lcwgs_cat_isj |> pcadapt(K = 1)
+```
+
+```{r}
+#| eval: false
+
+pcadapt_lcwgs_cat_isj |> 
+  write_rds(file = here("output", "pcadapt_lcwgs_cat_isj.rds"))
+```
+
+```{r}
+#| label: CATISJExploPlots
+
+pcadapt_lcwgs_cat_isj |> plot(option = "qqplot") + theme_minimal()
+
+pcadapt_lcwgs_cat_isj$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
+```
+
+```{r}
+#| label: CATISJMemclean
+
+rm(lcwgs_cat_isj, cat_isj_manhattan)
+```
+
+## SCL + ISJ
+
+```{r}
+#| label: SCLISJSaveWhitelist
+#| eval: false
+
+read_csv2(here("data", "individuals_coordinates.csv")) |>
+  pull(Indiv) |> 
+  {\(x) {
+    x[(grepl(pattern = "ISJ", x = x) |
+       grepl(pattern = "SCL", x = x))]
+    }}() |> 
+  write_lines(here("plink2", "whitelist_scl_isj.txt"))
+```
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_scl_isj.txt --make-bed --out 8-Embiotoca_filtered_scl_isj
+```
+
+```{r}
+#| label: SCLISJPreAnalysis
+
+lcwgs_scl_isj <- read.pcadapt(
+  here("plink2", "8-Embiotoca_filtered_scl_isj.bed"),
+  type = "bed"
+)
+
+temp <- plot(pcadapt(input = lcwgs_scl_isj, K = 19), option = "screeplot") + theme_classic()
+
+ggsave(here("output", "plots", "pcadapt_scl_isj_screeplot.pdf"), temp, width = 10, height = 8)
+rm(temp)
+```
+
+K = 1 seems correct
+
+```{r}
+#| label: SCLISJpcadapt
+
+popmap_lcwgs_scl_isj <- c(
+  rep("isla_san_jeronimo",    11), # ISJ
+  rep("san_clemente_island",  10)  # SCL
+)
+
+pcadapt_lcwgs_scl_isj <- lcwgs_scl_isj |> pcadapt(K = 1)
+```
+
+```{r}
+#| eval: false
+
+pcadapt_lcwgs_scl_isj |> 
+  write_rds(file = here("output", "pcadapt_lcwgs_scl_isj.rds"))
+```
+
+```{r}
+#| label: SCLISJExploPlots
+
+pcadapt_lcwgs_scl_isj |> plot(option = "qqplot") + theme_minimal()
+
+pcadapt_lcwgs_scl_isj$pvalues |> hist(
+  xlab   = "p-values",
+  main   = NULL,
+  breaks = 50,
+  col    = "orange"
+)
+```
+
+```{r}
+#| label: SCLISJMemclean
+
+rm(lcwgs_scl_isj, scl_isj_manhattan)
+```
+
+# Outliers
+
+## Load species Metadata
+
+```{r}
+EJA_annotations <- here("data", "EJA_annotations.gff") |> # Load annotated genome
   read.gff() |>
   as_tibble()
 
-chromosomes_info <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |> 
+chromosomes_info <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |>  # Load misc inform
   read_tsv() |>
   select(c(`GenBank seq accession`, `RefSeq seq accession`))
 ```
 
-### Get annotations
+### All outliers
 
 ```{r}
-outliers_positions_coast_annotations <- outliers_positions_coast |>
-  Get_annotations(
-    chrom_info     = chromosomes_info,
-    gff_annotation = EJA_annotations
-  )
-```
-
-### Memory cleanup
-
-```{r}
-rm(EJA_annotations, chromosomes_info)
-gc()
-```
-
-### Sort and filter info
-
-```{r}
-outliers_positions_coast_annotations_genes <- outliers_positions_coast_annotations |>
-  unnest(annotation) |>
-  filter(grepl("ID=gene", annotation)) |>
-  mutate(
-    annotation_ID          = annotation |>
-      str_split_i(pattern = ";", i = 1) |>
-      str_remove(pattern = "ID="),
-    annotation_description = annotation |>
-      str_split_i(pattern = ";", i = 4) |>
-      str_remove(pattern = "description=")
-  ) |> 
-  select(-c(annotation)) |>
-  distinct(annotation_ID, .keep_all = TRUE)
-
-outliers_positions_coast_annotations_rnas <- outliers_positions_coast_annotations |>
-  unnest(annotation) |>
-  filter(grepl("ID=rna", annotation)) |>
-  mutate(
-    annotation_ID      = annotation |>
-      str_split_i(pattern = ";", i = 1) |>
-      str_remove(pattern = "ID="),
-    annotation_product = annotation |>
-      str_match("product=\\s*(.*?)\\s*;") |>
-      _[, 2]
-  ) |>
-  select(-c(annotation)) |>
-  distinct(annotation_ID, .keep_all = TRUE)
-
-outliers_positions_coast_annotations_exons <- outliers_positions_coast_annotations |>
-  unnest(annotation) |>
-  filter(grepl("ID=exon", annotation)) |>
-  mutate(
-    annotation_ID      = annotation |>
-      str_split_i(pattern = ";", i = 1) |>
-      str_remove(pattern = "ID="),
-    annotation_gene    = annotation |>
-      str_match("gene=\\s*(.*?)\\s*;") |>
-      _[, 2],
-    annotation_product = annotation |>
-      str_match("product=\\s*(.*?)\\s*;") |>
-      _[, 2]
-  ) |>
-  select(-c(annotation)) |>
-  distinct(annotation_ID, .keep_all = TRUE)
-
-outliers_positions_coast_annotations_cds <- outliers_positions_coast_annotations |>
-  unnest(annotation) |>
-  filter(grepl("ID=cds", annotation)) |>
-  mutate(
-    annotation_ID      = annotation |>
-      str_split_i(pattern = ";", i = 1) |>
-      str_remove(pattern = "ID="),
-    annotation_gene    = annotation |>
-      str_match("gene=\\s*(.*?)\\s*;") |>
-      _[, 2],
-    annotation_product = annotation |>
-      str_match("product=\\s*(.*?)\\s*;") |>
-      _[, 2]
-  ) |>
-  select(-c(annotation)) |>
-  distinct(annotation_ID, .keep_all = TRUE)
-
-outliers_positions_coast_annotations_all <- bind_rows(
-  outliers_positions_coast_annotations_genes,
-  outliers_positions_coast_annotations_rnas,
-  outliers_positions_coast_annotations_exons,
-  outliers_positions_coast_annotations_cds
+read_write_locations <- tibble(
+  read_files = list.files(here("output")) |> str_subset("pcadapt")
 ) |> 
   mutate(
-    annotation_type        = annotation_ID |> str_split_i(pattern = "-", i = 1),
-    annotation_ID          = annotation_ID |> str_split_i(pattern = "-", i = 2),
-    annotation_description = annotation_description |>
-      str_remove_all(pattern = "%2C"),
-    annotation_product     = annotation_product |>
-      str_remove_all(pattern = "%2C")
-  ) |>
-  select(
-    c("GenBank seq accession", "POS",
-      "RefSeq seq accession", "annotation_type", "annotation_ID",
-      "annotation_description", "annotation_product", "annotation_gene",
-      "padj")
-  ) |> 
-  arrange(padj, `GenBank seq accession`, POS)
-```
+    write_files = read_files |>
+      str_replace("pcadapt", "EJA") |>
+      str_replace(".rds", "_5E-2_outliers_annotations.csv")
+  )
 
-### Save as file and cleanup
+map2(
+  read_write_locations$read_files, read_write_locations$write_files,
+     \(x, y) {
+       print(x)
+       
+       here("output", x) |>
+         readRDS() |>
+         Get_outliers(method = "bonferroni", pvalue_threshold = .05) |> 
+         Get_annotations(chrom_info = chromosomes_info, gff_annotation = EJA_annotations) |>
+         Clean_annotations() |> 
+         write_csv2(here("output", y))
+     }
+)
+```
+####Log:
+
+[1] "pcadapt_lcwgs_cat_isj.rds"
+[1] "There are 48182 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 2886 genes."
+[1] "There are 6882 rnas."
+[1] "There are 1704 exons."
+[1] "There are 754 cds."
+[1] "There are 3145 unique SNPs."
+
+[1] "pcadapt_lcwgs_cat_scl.rds"
+[1] "There are 8467 outliers SNPs."
+[1] "There are 8467 annotated outliers SNPs."
+[1] "There are 1879 genes."
+[1] "There are 4252 rnas."
+[1] "There are 1040 exons."
+[1] "There are 457 cds."
+[1] "There are 2063 unique SNPs."
+
+[1] "pcadapt_lcwgs_coast_cat_K6.rds"
+[1] "There are 13850 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 2764 genes."
+[1] "There are 6261 rnas."
+[1] "There are 1510 exons."
+[1] "There are 656 cds."
+[1] "There are 3005 unique SNPs."
+
+[1] "pcadapt_lcwgs_coast_gua_K6.rds"
+[1] "There are 23112 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 2631 genes."
+[1] "There are 6095 rnas."
+[1] "There are 1976 exons."
+[1] "There are 752 cds."
+[1] "There are 2890 unique SNPs."
+
+[1] "pcadapt_lcwgs_coast_isj_K6.rds"
+[1] "There are 12536 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 1786 genes."
+[1] "There are 3988 rnas."
+[1] "There are 1517 exons."
+[1] "There are 740 cds."
+[1] "There are 2098 unique SNPs."
+
+[1] "pcadapt_lcwgs_coast_K5.rds"
+[1] "There are 4507 outliers SNPs."
+[1] "There are 4507 annotated outliers SNPs."
+[1] "There are 1261 genes."
+[1] "There are 2794 rnas."
+[1] "There are 695 exons."
+[1] "There are 339 cds."
+[1] "There are 1350 unique SNPs."
+
+[1] "pcadapt_lcwgs_coast_scl_K6.rds"
+[1] "There are 17167 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 2968 genes."
+[1] "There are 6757 rnas."
+[1] "There are 1769 exons."
+[1] "There are 843 cds."
+[1] "There are 3233 unique SNPs."
+
+[1] "pcadapt_lcwgs_gua_cat.rds"
+[1] "There are 38986 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 1940 genes."
+[1] "There are 4274 rnas."
+[1] "There are 1145 exons."
+[1] "There are 493 cds."
+[1] "There are 2210 unique SNPs."
+
+[1] "pcadapt_lcwgs_gua_isj.rds"
+[1] "There are 75834 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 2533 genes."
+[1] "There are 5744 rnas."
+[1] "There are 1551 exons."
+[1] "There are 648 cds."
+[1] "There are 2807 unique SNPs."
+
+[1] "pcadapt_lcwgs_gua_scl.rds"
+[1] "There are 44863 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 1850 genes."
+[1] "There are 4214 rnas."
+[1] "There are 1259 exons."
+[1] "There are 535 cds."
+[1] "There are 2154 unique SNPs."
+
+[1] "pcadapt_lcwgs_isl.rds"
+[1] "There are 55838 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 2854 genes."
+[1] "There are 6643 rnas."
+[1] "There are 1653 exons."
+[1] "There are 770 cds."
+[1] "There are 3119 unique SNPs."
+
+[1] "pcadapt_lcwgs_K9.rds"
+[1] "There are 56775 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 2915 genes."
+[1] "There are 6733 rnas."
+[1] "There are 1997 exons."
+[1] "There are 837 cds."
+[1] "There are 3219 unique SNPs."
+
+[1] "pcadapt_lcwgs_scl_isj.rds"
+[1] "There are 64969 outliers SNPs."
+[1] "Outliers number was reduced to 10.000 lowest pvalues."
+[1] "There are 10000 annotated outliers SNPs."
+[1] "There are 2692 genes."
+[1] "There are 6394 rnas."
+[1] "There are 1745 exons."
+[1] "There are 770 cds."
+[1] "There are 2977 unique SNPs."
+
+## For only one
 
 ```{r}
-outliers_positions_coast_annotations_all |>
-  write_csv2(here("output", "lcwgs_EJA_coast-isj_outliers_annotations.csv"))
+here("output", "pcadapt_lcwgs_gua_isj.rds") |>
+  readRDS() |>
+  Get_outliers(method = "bonferroni", pvalue_threshold = .05) |> 
+  Get_annotations(chrom_info = chromosomes_info, gff_annotation = EJA_annotations) |>
+  Clean_annotations() |> 
+  write_csv2(here("output", "EJA_lcwgs_gua_isj_5E-2_outliers_annotations.csv"))
+```
 
-rm(outliers_positions_coast_annotations_genes,
-   outliers_positions_coast_annotations_rnas,
-   outliers_positions_coast_annotations_exons,
-   outliers_positions_coast_annotations_cds)
+# Allele frequencies
+
+## Send-away code
+
+```{r}
+#| eval: false
+
+EJA_gen <- readRDS(here("data", "EJA_lcwgs_gen.rds"))
+
+EJA_allele_frequencies <- makefreq(EJA_gen)
+
+EJA_allele_frequencies_tb <- EJA_allele_frequencies |>
+    t() |>
+    as_tibble(rownames = "POSITION") |>
+    separate_wider_delim(POSITION, delim = "_", names = c("CHROM", "TBD", "POSALLELE")) |>
+    separate_wider_delim(POSALLELE, delim = ".", names = c("POS", "ALLELE")) |>
+    select(-c(TBD)) |>
+    mutate(CHROM = paste0(CHROM, ".1"))
+
+saveRDS(EJA_allele_frequencies_tb, here("output", "EJA_allele_frequencies_tb.rds"))
+```
+
+## Results exploration
+
+```{r}
+allele_freq <- readRDS(here("output", "EJA_allele_frequencies_tb.rds"))
+allele_freq |> write_csv2(here("output", "EJA_allele_frequencies_tb.csv"))
+```
+
+```{r}
+allele_freq |>
+  filter(CHROM == "JAKOON010000124.1")
 ```
 
 
@@ -1397,7 +1573,7 @@ snmf_analysis <- snmf(
 
 ## Plot cross entropy to chose optimal value of K
 ```{r}
-#| label: snmfSinglePlot
+#| label: snmfCrossEntropy
 
 plot(snmf_analysis)
 
@@ -1427,7 +1603,7 @@ K = 7 has the minimum cross-entropy.
 
 ## Plot results for K = 7
 ```{r}
-#| label: snmfAnalysisMultiPlot
+#| label: snmfBarPlot
 
 barchart(
   snmf_analysis,
@@ -1438,20 +1614,20 @@ barchart(
 )
 ```
 
-# Triangular plots
+# Triangle plots
 
 ## For North-South Gradient
 
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
-./plink2 --bfile 8-Embiotoca_filtered_coastal-isj --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal-isj
+./plink2 --bfile 8-Embiotoca_filtered_coastal --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal
 ```
 
 ```{r}
-EJA_lcwgs_coast_isj_vcf <- read.vcfR(here("data", "SNPS", "8-Embiotoca_filtered_coastal-isj.vcf"))
+lcwgs_coast_vcf <- read.vcfR(here("plink2", "8-Embiotoca_filtered_coastal.vcf"))
 
-popmap_lcwgs_coast_isj <- read_csv2(here("data", "individuals_coordinates.csv")) |> 
+popmap_lcwgs_coast <- read_csv2(here("data", "individuals_coordinates.csv")) |> 
   select(Indiv, Localisation) |>
   rename(id = Indiv, pop = Localisation) |> 
   filter(pop != c("CAT")) |> 
@@ -1462,17 +1638,17 @@ popmap_lcwgs_coast_isj <- read_csv2(here("data", "individuals_coordinates.csv"))
 ```
 
 ```{r}
-EJA_lcwgs_coast_isj_vcf_diffs <- vector(mode='list', length=3)
+lcwgs_coast_vcf_diffs <- vector(mode = 'list', length = 3)
 parameters <- c(.5, .75, 1)
 
 for (i in 1:3) {
-  EJA_lcwgs_coast_isj_vcf_diffs[[i]] <- alleleFreqDiff(EJA_lcwgs_coast_isj_vcf,
-                                                       pm = popmap_lcwgs_coast_isj,
-                                                       p1 = "BBA", p2 = "SD",
-                                                       difference = parameters[i])
+  lcwgs_coast_vcf_diffs[[i]] <- alleleFreqDiff(lcwgs_coast_vcf,
+                                               pm = popmap_lcwgs_coast,
+                                               p1 = "BBA", p2 = "SD",
+                                               difference = parameters[i])
 }
 
-rm(EJA_lcwgs_coast_isj_vcf)
+rm(lcwgs_coast_vcf)
 ```
 with 1 difference : "8456 sites passed allele frequency difference threshold"
 
@@ -1481,26 +1657,26 @@ Difference = .75 76178
 Difference = .5 : 276405 sites
 
 ```{r}
-hi_het_coast_isj <- vector(mode='list', length=3)
+hi_het_coast <- vector(mode = 'list', length = 3)
 
 for (i in 1:3) {
-  hi_het_coast_isj[[i]] <- hybridIndex(EJA_lcwgs_coast_isj_vcf_diffs[[i]],
-                                       pm = popmap_lcwgs_coast_isj,
-                                       p1 = "BBA", p2 = "SD")
+  hi_het_coast[[i]] <- hybridIndex(lcwgs_coast_vcf_diffs[[i]],
+                                   pm = popmap_lcwgs_coast,
+                                   p1 = "BBA", p2 = "SD")
 }
 ```
 
 ```{r}
 #| eval: false
 
-write_rds(hi_het_coast_isj, here("output", "Triangle_analysis_coast_isj.rds"))
+write_rds(hi_het_coast, here("output", "Triangle_analysis_coast.rds"))
 ```
 
 ```{r}
-hi_het_coast_isj_plots <- vector(mode='list', length=3)
+hi_het_coast_plots <- vector(mode = 'list', length = 3)
 
 for (i in 1:3) {
-  hi_het_coast_isj_plots[[i]] <- hi_het_coast_isj[[i]] |>
+  hi_het_coast_plots[[i]] <- hi_het_coast[[i]] |>
     mutate(
       pop = factor(
         pop,
@@ -1514,8 +1690,8 @@ for (i in 1:3) {
 }
 
 save_open_plot(
-  path   = here("output", "plots", "coast-isj_Triangle_plots.pdf"),
-  plot   = Reduce("+", hi_het_coast_isj_plots) +
+  path   = here("output", "plots", "coast_Triangle_plots.pdf"),
+  plot   = Reduce("+", hi_het_coast_plots) +
     plot_layout(axis_titles = "collect", guides = "collect"),
   width  = 14,
   height = 4
@@ -1523,7 +1699,7 @@ save_open_plot(
 ```
 
 ```{r}
-rm(EJA_lcwgs_coast_isj_vcf_diffs, hi_het_coast_isj, hi_het_coast_isj_plots)
+rm(lcwgs_coast_vcf_diffs, hi_het_coast, hi_het_coast_plots)
 gc()
 ```
 
@@ -1781,4 +1957,144 @@ save_open_plot(
 ```{r}
 rm(EJA_lcwgs_south_vcf_diff, hi_het_south, hi_het_south_plots)
 gc()
+```
+
+# Genotype-Environment Association
+
+## Prep
+
+```{r}
+#| eval: false
+
+Temperatures <- read_rds(here("data", "Copernicus", "annual_average_SST.rds")) |> 
+  terra::unwrap()
+
+Coordinates <- read_csv2(here("data", "individuals_coordinates_temps.csv")) |>
+  select(Longitude, Latitude) |> 
+  as.data.frame()
+
+Temp_data <- terra::extract(
+  x = Temperatures,
+  y = data.frame(Coordinates),
+  cells = FALSE
+)
+
+read_csv2(here("data", "individuals_coordinates_temps.csv")) |> 
+  mutate("Temp (Celsius)" = Temp_data$mean) |> 
+  write_csv2(here("data", "individuals_coordinates_temps.csv"))
+
+rm(Temperatures, Coordinates, Temp_data)
+```
+
+```{r}
+ggplot() +
+  geom_spatraster(data = Temperatures) +
+  geom_point(data = Coordinates, aes(x = Longitude, y = Latitude), shape = 21)
+```
+
+## All pops
+
+### Data preparation
+
+```{r}
+Temp_data <- read_csv2(here("data", "individuals_coordinates_temps.csv")) |> 
+  pull(`Temp (Celsius)`) |> 
+  as.matrix()
+```
+
+
+```{r}
+Genotype <- LEA::read.geno(here("data", "8-Embiotoca_filtered.geno"))
+
+Genotype_noNA <- Genotype[, !apply(Genotype, 2, function(col) any(col == 9))]
+
+snmf(here("data", "8-Embiotoca_filtered.geno"), K = 7,  project = "new",)
+
+impute(
+  object     = load.snmfProject(
+    here("data", "snmf", "8-Embiotoca_filtered.snmfProject")
+  ),
+  input.file = here("data", "8-Embiotoca_filtered.geno"),
+  method      = "mode",
+  K          = 7,
+  run        = 1
+)
+
+Genotype_imputed <- read.lfmm(here("data", "8-Embiotoca_filtered.lfmm_imputed.lfmm"))
+
+rm(Genotype)
+```
+
+### Analysis
+
+```{r}
+mod_lfmm <- LEA::lfmm2(
+  input        = Genotype_noNA,
+  env          = Temp_data, 
+  K            = 4, 
+  effect.sizes = TRUE
+)
+```
+
+```{r}
+pv <-  lfmm2.test(mod_lfmm, 
+                  input = Genotype_noNA, 
+                  env   = Temp_data, 
+                  full  = TRUE)
+
+plot(-log10(pv$pvalue), cex = .3, pch = 19, col = "blue")
+```
+
+## Coast
+
+### Data preparation
+
+```{r}
+#| eval: false
+
+vcf2geno(
+  input.file  = here("plink2", "8-Embiotoca_filtered_coastal.vcf"),
+  output.file = here("data", "8-Embiotoca_filtered_coastal.geno")
+)
+```
+
+```{r}
+Genotype_coast <- LEA::read.geno(here("data", "8-Embiotoca_filtered_coastal.geno"))
+
+Genotype_coast_noNA <- Genotype_coast[, !apply(Genotype_coast, 2, function(col) any(col == 9))]
+
+rm(Genotype_coast)
+```
+
+```{r}
+Temp_data_coast <- read_csv2(here("data", "individuals_coordinates_temps.csv")) |> 
+  filter(Localisation != "CAT") |>
+  filter(Localisation != "GUA") |>
+  filter(Localisation != "ISJ") |>
+  filter(Localisation != "SCL") |>
+  pull(`Temp (Celsius)`) |> 
+  as.matrix()
+```
+
+
+### Analysis
+
+```{r}
+mod_lfmm_coast <- LEA::lfmm2(
+  input        = Genotype_coast_noNA,
+  env          = Temp_data_coast, 
+  K            = 3,
+  effect.sizes = TRUE
+)
+```
+
+```{r}
+pv_coast <- lfmm2.test(
+    object = mod_lfmm_coast,
+    input  = Genotype_coast_noNA, 
+    env    = Temp_data_coast, 
+    full   = TRUE
+  )
+
+plot(-log10(pv_coast$pvalue), cex = .3, pch = 19, col = "blue")
 ```
