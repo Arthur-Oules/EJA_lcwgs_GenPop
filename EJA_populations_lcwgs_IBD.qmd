@@ -5,11 +5,15 @@ format: html
 editor: source
 ---
 
+# Load packages
+
 ```{r}
 #| label: LoadPackages
 #| echo: false
 
-c("here", "tidyverse", "rnaturalearth", "terra", "vcfR", "dartR") |>
+c("here", "tidyverse", "vcfR", "dartR", "adegenet",
+  "topoDistance", "terra", "tidyterra", "inlabru",
+  "rnaturalearth", "marmap") |>
   lapply(library, character.only = TRUE) |> invisible()
 ```
 
@@ -22,6 +26,58 @@ source(here("functions", "lcwgs_tidy_functions.R"))
 source(here("functions", "plot_functions.R"))
 ```
 
+# Common computing
+
+## Barrier distance
+
+```{r}
+water <- ne_states(
+  country     = c("united states of america", "mexico"),
+  returnclass = "sv"
+) |>
+  crop(y = ext(-124,-113, 28.5, 38.5)) |>
+  rasterize(y = rast(ext(-124, -113, 28.5, 38.5), ncols = 1100, nrows = 1000)) |> 
+  subst(from = NA, to = 2) |> 
+  subst(from = 1, to = NA) |> 
+  subst(from = 2, to = 1)
+
+barrier_distance <- function(from, to) {
+  background <- water
+  background[from] <- 2
+  grid_map <- gridDist(background, target = 2)
+  extract(grid_map, to) |> as.numeric()
+}
+```
+
+## Topographic distance
+
+```{r}
+catalina_df_water <- getNOAA.bathy(
+    lon1 = -124, lon2 = -115,
+    lat1 = 28,   lat2 = 39,
+    resolution = .5
+  ) |>
+  fortify.bathy() |>
+  mutate(z = ifelse(z > 0, NA, z)) |> 
+  mutate(z = ifelse(z < 0, -z, z)) |> 
+  raster::rasterFromXYZ()
+```
+
+```{r}
+catalina_df <- getNOAA.bathy(
+    lon1 = -124, lon2 = -115,
+    lat1 = 28,   lat2 = 39,
+    resolution = .5
+  ) |> 
+  fortify.bathy() |>
+  mutate(z = ifelse(z > 0, NA, z)) # Remove landmass data
+
+states <- ne_states(
+  country     = c("united states of america", "mexico"),
+  returnclass = "sf"
+)
+```
+
 # All populations
 
 ## Prep
@@ -30,7 +86,7 @@ source(here("functions", "plot_functions.R"))
 ```{r}
 #| echo: false
 
-lcwgs_gl <- here("data", "SNPs", "8-Embiotoca_filtered.vcf.gz") |>
+lcwgs_gl <- here("plink2", "8-Embiotoca_filtered.vcf.gz") |>
   gl.read.vcf()
 
 lcwgs_gl@other$latlon <- tibble(
@@ -38,7 +94,7 @@ lcwgs_gl@other$latlon <- tibble(
   Pop   = lcwgs_gl@pop
   ) |> 
   left_join(
-    y = read_csv2(here("data", "low_coverage_sampling.csv")) |>
+    y = read_csv2(here("data", "low_coverage_sampling_sites.csv")) |>
       select(Popmap, Latitude, Longitude)
   ) |>
   rename(lat = Latitude, lon = Longitude) |> 
@@ -71,11 +127,73 @@ rm(IBD)
 IBD <- readRDS(here("output", "Embiotocidae_lcwgs_IBD.rds"))
 ```
 
-## Results
-```{r}
-vegan::mantel(IBD$Dgen, IBD$Dgeo)
+## Barrier distance
 
-mantel_plot(IBD$Dgeo, IBD$Dgen)
+### Computing barrier distance matrix
+```{r}
+geo_dist_cells <- here("data", "low_coverage_sampling_sites.csv") |> 
+  read_csv2(show_col_types = FALSE) |> 
+  select(c(Code, Longitude, Latitude, Popmap)) |> 
+  rename(pop = Popmap) |> 
+  mutate(
+    pop  = as.factor(pop),
+    Code = as.factor(Code)
+  ) |>
+  arrange(pop) |> 
+  (\(x) {
+    mutate(x, cell_id = cellFromXY(water, as.matrix(x[, 2:3])))
+  })() |> 
+  pull(cell_id, name = pop)
+```
+
+```{r}
+barrier_dist_mat <- proxy::dist(geo_dist_cells, method = barrier_distance)
+```
+
+### Test Euclidean and barrrier distance correlation
+
+```{r}
+mantel_plot(IBD$Dgeo, barrier_dist_mat)
+```
+
+Distances correlate -> don't use barrier distance
+
+## Geographic distance considering batymetry
+
+### Compute distance
+
+```{r}
+coordinates <- here("data", "low_coverage_sampling_sites.csv") |>
+  read_csv2() |>
+  select(Popmap, Longitude, Latitude) |> 
+  mutate(Popmap = as.factor(Popmap)) |> 
+  arrange(Popmap) |> 
+  column_to_rownames(var = "Popmap") |> 
+  as.matrix()
+```
+
+```{r}
+Topo_Dist_w <- topoDist(catalina_df_water, coordinates, paths = TRUE)
+```
+
+### Draw paths 
+
+```{r}
+bathy_paths <- ggplot() +
+  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
+  scale_fill_hypso_tint_c(palette = "colombia_bathy", limits = range(catalina_df$z, na.rm = TRUE)) +
+  geom_sf(data = states) +
+  gg(data = Topo_Dist_w[[2]]) +
+  geom_point(data = coordinates, mapping = aes(x = Longitude, y = Latitude), size = 2) +
+  coord_sf(xlim = c(-124, -115), ylim = c(28, 39), expand = FALSE) +
+  labs(x = "Longitude", y = "Latitude")
+
+save_open_plot(
+  here("output", "plots", "IBD_bathy_map.png"),
+  plot   = bathy_paths,
+  width  = 9,
+  height = 7
+)
 ```
 
 ## PCA distances
@@ -119,173 +237,99 @@ PCA_distance <- tibble(
   column_to_rownames(var = "pop") |> 
   dist()
 
-vegan::mantel(PCA_distance, IBD$Dgeo)
-
-mantel_plot(IBD$Dgeo, PCA_distance)
+rm(pcadapt_lcwgs, popmap_lcwgs)
 ```
 
-## Manual geographic barrier distance computing
+## Edward distance
 
-### Computing barrier distance matrix
-```{r}
-water <- ne_states(
-  country     = c("united states of america", "mexico"),
-  returnclass = "sv"
-) |>
-  crop(y = ext(-124,-113, 28.5, 38.5)) |>
-  rasterize(y = rast(ext(-124, -113, 28.5, 38.5), ncols = 1100, nrows = 1000)) |> 
-  subst(from = NA, to = 2) |> 
-  subst(from = 1, to = NA) |> 
-  subst(from = 2, to = 1)
-
-barrier_distance <- function(from, to) {
-  background <- water
-  background[from] <- 2
-  grid_map <- gridDist(background, target = 2)
-  extract(grid_map, to) |> as.numeric()
-}
-
-geo_dist_cells <- here("data", "low_coverage_sampling_sites.csv") |> 
-  read_csv2(show_col_types = FALSE) |> 
-  select(c(Code, Longitude, Latitude, Popmap)) |> 
-  rename(pop = Popmap) |> 
-  mutate(
-    pop  = as.factor(pop),
-    Code = as.factor(Code)
-  ) |>
-  arrange(pop) |> 
-  (\(x) {
-    mutate(x, cell_id = cellFromXY(water, as.matrix(x[, 2:3])))
-  })() |> 
-  pull(cell_id, name = pop)
-
-
-barrier_dist_mat <- proxy::dist(geo_dist_cells, method = barrier_distance)
-
-rm(geo_dist_cells)
-```
-
-### Test if Euclidean and barrrier geographic distances are different
-```{r}
-mantel_plot(IBD$Dgeo, barrier_dist_mat)
-```
-
-### Correlation btw gl.ibd and barrier distances
-```{r}
-vegan::mantel(barrier_dist_mat, IBD$Dgen)
-mantel_plot(barrier_dist_mat, IBD$Dgen)
-```
-
-### Correlation btw PCA and barrier distances
-```{r}
-vegan::mantel(barrier_dist_mat, PCA_distance)
-mantel_plot(barrier_dist_mat, PCA_distance)
-```
-
-## Geographic distance considering batymetry
+### Send-away code
 
 ```{r}
-library(topoDistance)
-library(marmap)
-```
+#| eval: false
 
-```{r}
-catalina_df_water <- getNOAA.bathy(
-    lon1 = -124, lon2 = -115,
-    lat1 = 28,   lat2 = 39,
-    resolution = .5
-  ) |>
-  fortify.bathy() |>
-  mutate(z = ifelse(z > 0, NA, z)) |> 
-  mutate(z = ifelse(z < 0, -z, z)) |> 
-  raster::rasterFromXYZ()
+EJA_gi <- read.vcfR(here("data", "8-Embiotoca_filtered.vcf.gz")) |>
+  vcfR2genind()
 
-coordinates <- here("data", "low_coverage_sampling_sites.csv") |>
-  read_csv2() |>
-  select(Popmap, Longitude, Latitude) |> 
-  mutate(Popmap = as.factor(Popmap)) |> 
-  arrange(Popmap) |> 
-  column_to_rownames(var = "Popmap") |> 
-  as.matrix()
-```
-
-```{r}
-Topo_Dist_w <- topoDist(catalina_df_water, coordinates, paths = TRUE)
-```
-
-```{r}
-png(file = here("output", "plots", "IBD_bathy_map.png"), width = 1080, height = 1080)
-topoPathMap(catalina_df_water, coordinates, topoPaths = Topo_Dist_w, type = "terrain")
-dev.off()
-```
-```{r}
-library(inlabru)
-library(tidyterra)
-
-catalina_df <- getNOAA.bathy(
-    lon1 = -124, lon2 = -115,
-    lat1 = 28,   lat2 = 39,
-    resolution = .5
-  ) |> 
-  fortify.bathy() |>
-  mutate(z = ifelse(z > 0, NA, z)) # Remove landmass data
-
-states <- ne_states(
-  country     = c("united states of america", "mexico"),
-  returnclass = "sf"
+popmap_lcwgs <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("catalina_island",      11), # CAT
+  rep("elkhorn",               6), # ELK
+  rep("guadalupe_island",     10), # GUA
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
+  rep("isla_san_jeronimo",    11), # ISJ
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara",        13), # SB
+  rep("san_clemente_island",  10), # SCL
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10) # SCH
 )
+
+EJA_gi@pop <- factor(popmap_lcwgs)
+
+EJA_gen <- genind2genpop(EJA_gi)
+
+saveRDS(EJA_gen, here("output", "EJA_lcwgs_gen.rds"))
+saveRDS(EJA_gi, here("output", "EJA_lcwgs_gi.rds"))
+rm(EJA_vcf, EJA_gi)
+
+EJA_chord_distance <- dist.genpop(EJA_gen, method = 2)
+
+saveRDS(EJA_chord_distance, here("output", "EJA_lcwgs_Edward_distance.rds"))
 ```
 
+### Load results
+
 ```{r}
-bathy_paths <- ggplot() +
-  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
-  scale_fill_hypso_tint_c(palette = "colombia_bathy", limits = range(catalina_df$z, na.rm = TRUE)) +
-  geom_sf(data = states) +
-  gg(data = Topo_Dist_w[[2]]) +
-  geom_point(data = coordinates, mapping = aes(x = Longitude, y = Latitude), size = 2) +
-  coord_sf(xlim = c(-124, -115), ylim = c(28, 39), expand = FALSE) +
-  labs(x = "Longitude", y = "Latitude")
+Edward_distance <- readRDS(here("output", "EJA_lcwgs_Edward_distance.rds"))
+```
+
+## All comparisons
+
+```{r}
+mantel.randtest(dist(coordinates), PCA_distance)
+p1 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), PCA_distance, xlab = "Euclidean", ylab = "PCA")
+
+mantel.randtest(as.dist(Topo_Dist_w[[1]]), PCA_distance)
+p2 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), PCA_distance, xlab = "Bathy", ylab = "PCA")
+
+mantel.randtest(dist(coordinates), Edward_distance)
+p3 <- mantel_plot(dist(coordinates), Edward_distance, xlab = "Euclidean", ylab = "Chord distance")
+
+mantel.randtest(as.dist(Topo_Dist_w[[1]]), Edward_distance)
+p4 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), Edward_distance, xlab = "Bathy", ylab = "Chord distance")
+
+combined <- (p1 | p2) / (p3 | p4)
 
 save_open_plot(
-  here("output", "plots", "IBD_bathy_map.png"),
-  plot   = bathy_paths,
-  width  = 9,
-  height = 7
-)
-```
-
-```{r}
-mantel_plot(IBD$Dgeo, barrier_dist_mat)
-mantel_plot(IBD$Dgeo, as.dist(Topo_Dist_w[[1]]))
-mantel_plot(barrier_dist_mat, as.dist(Topo_Dist_w[[1]]))
-```
-
-```{r}
-vegan::mantel(IBD$Dgeo, IBD$Dgen)
-p1 <- mantel_plot(IBD$Dgeo, IBD$Dgen, xlab = "Euclidean", ylab = "Fst")
-
-vegan::mantel(as.dist(Topo_Dist_w[[1]]), IBD$Dgen)
-p2 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), IBD$Dgen, xlab = "Bathy", ylab = "Fst")
-
-vegan::mantel(as.dist(Topo_Dist_w[[1]]), PCA_distance)
-p3 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), PCA_distance, xlab = "Bathy", ylab = "PCA")
-
-combined <- p1 + p2 + p3
-
-save_open_plot(
-  path   = here("output", "plots", "IBD_all_pops_tests.png"),
+  path   = here("output", "plots", "IBD_all_pops_K3.png"),
   plot   = combined,
-  width  = 24,
+  width  = 8,
   height = 8
-  )
+)
 ```
-
 
 ```{r}
-rm(combined, p1, p2, p3)
+rm(combined, p1, p2, p3, p4, p5, p6)
+rm(Topo_Dist_w, PCA_distance)
 ```
 
-# Excluding islanders
+## Adegenet analysis
+
+```{r}
+Dgen <- Edward_distance
+Dgeo <- dist(coordinates)
+
+ibd <- mantel.randtest(Dgen, Dgeo)
+vegan::mantel(Dgen, Dgeo)
+ibd
+plot(ibd)
+```
+
+# Coast + ISJ
 
 ## Prep and Send-away
 
@@ -329,36 +373,12 @@ IBD |> saveRDS(file = here("output", "Embiotocidae_islanders_IBD.rds"))
 rm(IBD)
 ```
 
-## Load cluster analysis results
+### Load cluster analysis results
 
 ```{r}
 lcwgs_IBD_islanders <- readRDS(
   file = here("output", "Embiotocidae_lcwgs_islanders_IBD.rds")
 )
-```
-
-## Compute geographic barrier distance
-```{r}
-geo_dist_cells_islanders <- here("data", "low_coverage_sampling_sites.csv") |> 
-  read_csv2(show_col_types = FALSE) |> 
-  select(c(Code, Longitude, Latitude, Popmap)) |>
-  rename(pop = Popmap) |> 
-  filter(
-    !pop %in% c("guadalupe_island", "catalina_island", "san_clemente_island")
-  ) |> 
-  mutate(
-    pop  = as.factor(pop),
-    Code = as.factor(Code)
-  ) |>
-  arrange(pop) |> 
-  (\(x) mutate(x,
-               cell_id = cellFromXY(water, as.matrix(x[, 2:3]))))() |> 
-  pull(cell_id, name = pop)
-
-barrier_dist_mat_islanders <- proxy::dist(geo_dist_cells_islanders,
-                                          method = barrier_distance)
-
-rm(water)
 ```
 
 ## Compute geographic euclidean distance
@@ -378,79 +398,13 @@ rownames(Dist_geo_isl) <- Dist_geo_isl$pop
 Dist_geo_isl <- Dist_geo_isl[, 2:3] |> dist()
 ```
 
-## Test if Euclidean and barrier geographic distances are different
+## Barrier distance
+
+### Compute geographic barrier distance
 ```{r}
-vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgeo)
-```
-
-## Correlation btw gl.ibd and barrier distances
-```{r}
-vegan::mantel(barrier_dist_mat_islanders, lcwgs_IBD_islanders$Dgen)
-vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgen)
-
-mantel_plot(barrier_dist_mat_islanders, lcwgs_IBD_islanders$Dgen)
-```
-
-## Correlation btw PCA and barrier distances
-
-```{r}
-pcadapt_lcwgs_coast <- read_rds(here("output", "pcadapt_lcwgs_coast.rds"))
-popmap_lcwgs_coast <- c(
-  rep("bodega_bay",            5), # BB
-  rep("big_creek",            13), # BIGC -> BCR
-  rep("elkhorn",               6), # ELK
-  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-  rep("isla_san_jeronimo",    11), # ISJ
-  rep("laguna_beach",         13), # LB
-  rep("point_dume",            5), # PD
-  rep("santa_barbara", 13), # SB
-  rep("la_jolla_san_diego",   13), # SD
-  rep("tomales_bay",           1), # TB
-  rep("redondo_beach",        10), # RB
-  rep("santa_cruz_harbour",   10)  # SCH
-)
-```
-
-```{r}
-PCA_distances_coast <- tibble(
-  PCA1 = pcadapt_lcwgs_coast$scores[, 1],
-  PCA2 = pcadapt_lcwgs_coast$scores[, 2],
-  pop  = popmap_lcwgs_coast
-) |> 
-  group_by(pop) |> 
-  summarise(
-    PCA1_popmean = mean(PCA1),
-    PCA2_popmean = mean(PCA2)
-  ) |> 
-  dist()
-
-vegan::mantel(Dist_geo_isl, PCA_distances_coast)
-vegan::mantel(barrier_dist_mat_islanders, PCA_distances_coast)
-
-mantel_plot(Dist_geo_isl, PCA_distances_coast)
-```
-
-## Geographic distance considering batymetry
-
-```{r}
-library(topoDistance)
-library(marmap)
-```
-
-```{r}
-catalina_df_water <- getNOAA.bathy(
-    lon1 = -124, lon2 = -115,
-    lat1 = 28,   lat2 = 39,
-    resolution = .5
-  ) |>
-  fortify.bathy() |>
-  mutate(z = ifelse(z > 0, NA, z)) |> 
-  mutate(z = ifelse(z < 0, -z, z)) |> 
-  raster::rasterFromXYZ()
-
-coordinates_coast <- here("data", "low_coverage_sampling_sites.csv") |>
+coordinates_coast_isj <- here("data", "low_coverage_sampling_sites.csv") |>
   read_csv2() |>
-  select(Popmap, Longitude, Latitude) |> 
+  dplyr::select(Popmap, Longitude, Latitude) |> 
   mutate(Popmap = as.factor(Popmap)) |> 
   arrange(Popmap) |> 
   filter(
@@ -460,9 +414,20 @@ coordinates_coast <- here("data", "low_coverage_sampling_sites.csv") |>
   as.matrix()
 ```
 
+### Test if Euclidean and barrier geographic distances are different
 ```{r}
-Topo_Dist_w_coast <- topoDist(catalina_df_water, coordinates_coast, paths = TRUE)
+vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgeo)
 ```
+
+## Geographic distance considering batymetry
+
+### Compute
+
+```{r}
+Topo_Dist_w_coast_isj <- topoDist(catalina_df_water, coordinates_coast_isj, paths = TRUE)
+```
+
+### Draw paths 
 
 ```{r}
 bathy_paths_coast <- ggplot() +
@@ -482,34 +447,271 @@ save_open_plot(
 )
 ```
 
+## PCA distance
+
 ```{r}
-mantel_plot(Dist_geo_isl, barrier_dist_mat_islanders)
-mantel_plot(Dist_geo_isl, as.dist(Topo_Dist_w_coast[[1]]))
-mantel_plot(barrier_dist_mat_islanders, as.dist(Topo_Dist_w_coast[[1]]))
+pcadapt_lcwgs_coast_isj <- read_rds(here("output", "pcadapt_lcwgs_coast_isj.rds"))
+popmap_lcwgs_coast_isj <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("elkhorn",               6), # ELK
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+  rep("isla_san_jeronimo",    11), # ISJ
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara",        13), # SB
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10)  # SCH
+)
+
+PCA_distances_coast_isj <- tibble(
+  PCA1 = pcadapt_lcwgs_coast_isj$scores[, 1],
+  PCA2 = pcadapt_lcwgs_coast_isj$scores[, 2],
+  pop  = popmap_lcwgs_coast_isj
+) |> 
+  group_by(pop) |> 
+  summarise(
+    PCA1_popmean = mean(PCA1),
+    PCA2_popmean = mean(PCA2)
+  ) |> 
+  column_to_rownames(var = "pop") |> 
+  dist()
+
+rm(pcadapt_lcwgs_coast_isj, popmap_lcwgs_coast_isj)
 ```
 
+## Edward distance
+
+### Send-away code
+
 ```{r}
-vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgen)
-p1 <- mantel_plot(Dist_geo_isl, lcwgs_IBD_islanders$Dgen, xlab = "Euclidean", ylab = "Fst")
+#| eval: false
 
-vegan::mantel(as.dist(Topo_Dist_w_coast[[1]]), lcwgs_IBD_islanders$Dgen)
-p2 <- mantel_plot(as.dist(Topo_Dist_w_coast[[1]]), lcwgs_IBD_islanders$Dgen, xlab = "Bathy", ylab = "Fst")
+EJA_coast_isj_gi <- read.vcfR(here("data", "8-Embiotoca_filtered_EJA_coast_isj.vcf")) |>
+  vcfR2genind()
 
-vegan::mantel(as.dist(Topo_Dist_w_coast[[1]]), PCA_distances_coast)
-p3 <- mantel_plot(as.dist(Topo_Dist_w_coast[[1]]), PCA_distances_coast, xlab = "Bathy", ylab = "PCA")
+popmap_lcwgs_coast_isj <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("elkhorn",               6), # ELK
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
+  rep("isla_san_jeronimo",    11), # ISJ
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara",        13), # SB
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10) # SCH
+)
 
-combined <- p1 + p2 + p3
+EJA_coast_isj_gi@pop <- factor(popmap_lcwgs_coast_isj)
+
+EJA_coast_isj_gen <- genind2genpop(EJA_coast_isj_gi)
+
+saveRDS(EJA_coast_isj_gen, here("output", "EJA_coast_isj_lcwgs_gen.rds"))
+saveRDS(EJA_coast_isj_gi, here("output", "EJA_coast_isj_lcwgs_gi.rds"))
+rm(EJA_coast_isj_vcf, EJA_coast_isj_gi)
+
+EJA_coast_isj_chord_distance <- dist.genpop(EJA_coast_isj_gen, method = 2)
+
+saveRDS(EJA_coast_isj_chord_distance, here("output", "EJA_coast_isj_lcwgs_Edward_distance.rds"))
+```
+
+### Load
+
+```{r}
+Edward_distance_coast_isj <- readRDS(here("output", "EJA_lcwgs_coast_isj_Edward_distance.rds"))
+```
+
+## All comparisons
+
+```{r}
+mantel.randtest(dist(coordinates_coast_isj), PCA_distances_coast_isj)
+p1 <- mantel_plot(dist(coordinates_coast_isj), PCA_distances_coast_isj, xlab = "Euclidean", ylab = "PCA")
+
+mantel.randtest(as.dist(Topo_Dist_w_coast_isj[[1]]), PCA_distances_coast_isj)
+p2 <- mantel_plot(as.dist(Topo_Dist_w_coast_isj[[1]]), PCA_distances_coast_isj, xlab = "Bathy", ylab = "PCA")
+
+mantel.randtest(dist(coordinates_coast_isj), Edward_distance_coast_isj)
+p3 <- mantel_plot(dist(coordinates_coast_isj), Edward_distance_coast_isj, xlab = "Euclidean", ylab = "Chord distance")
+
+mantel.randtest(as.dist(Topo_Dist_w_coast_isj[[1]]), Edward_distance_coast_isj)
+p4 <- mantel_plot(as.dist(Topo_Dist_w_coast_isj[[1]]), Edward_distance_coast_isj, xlab = "Bathy", ylab = "Chord distance")
+
+combined <- (p1 | p2) / (p3 | p4)
 
 save_open_plot(
-  path   = here("output", "plots", "IBD_coast_pops_tests.png"),
+  path   = here("output", "plots", "IBD_coast_isj_pops.png"),
   plot   = combined,
-  width  = 24,
+  width  = 8,
   height = 8
   )
 ```
 
 ```{r}
-rm(combined, p1, p2, p3)
+rm(combined, p1, p2, p3, p4)
+```
+
+# Coast
+
+## Compute geographic euclidean distance
+```{r}
+coordinates_coast <- here("data", "low_coverage_sampling_sites.csv") |>
+  read_csv2() |>
+  dplyr::select(Popmap, Longitude, Latitude) |> 
+  mutate(Popmap = as.factor(Popmap)) |> 
+  arrange(Popmap) |> 
+  filter(
+    !Popmap %in% c("guadalupe_island", "catalina_island", "san_clemente_island", "isla_san_jeronimo")
+  ) |> 
+  column_to_rownames(var = "Popmap") |> 
+  as.matrix()
+```
+
+## PCA distance
+
+```{r}
+pcadapt_lcwgs_coast <- read_rds(here("output", "pcadapt_lcwgs_coast.rds"))
+popmap_lcwgs_coast <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("elkhorn",               6), # ELK
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara",        13), # SB
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10)  # SCH
+)
+
+PCA_distances_coast <- tibble(
+  PCA1 = pcadapt_lcwgs_coast$scores[, 1],
+  PCA2 = pcadapt_lcwgs_coast$scores[, 2],
+  pop  = popmap_lcwgs_coast
+) |> 
+  group_by(pop) |> 
+  summarise(
+    PCA1_popmean = mean(PCA1),
+    PCA2_popmean = mean(PCA2)
+  ) |> 
+  column_to_rownames(var = "pop") |> 
+  dist()
+
+rm(pcadapt_lcwgs_coast, popmap_lcwgs_coast)
+```
+
+## Geographic distance considering batymetry
+
+### Compute
+
+```{r}
+Topo_Dist_w_coast <- topoDist(catalina_df_water, coordinates_coast, paths = TRUE)
+```
+
+### Draw paths
+
+```{r}
+bathy_paths_coast <- ggplot() +
+  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
+  scale_fill_hypso_tint_c(palette = "colombia_bathy", limits = range(catalina_df$z, na.rm = TRUE)) +
+  geom_sf(data = states) +
+  gg(data = Topo_Dist_w_coast[[2]]) +
+  geom_point(data = coordinates_coast, mapping = aes(x = Longitude, y = Latitude), size = 2) +
+  coord_sf(xlim = c(-124, -115), ylim = c(28, 39), expand = FALSE) +
+  labs(x = "Longitude", y = "Latitude")
+
+save_open_plot(
+  here("output", "plots", "IBD_bathy_map_coast.png"),
+  plot   = bathy_paths_coast,
+  width  = 9,
+  height = 7
+)
+```
+
+## Edward distance
+
+### Send-away code
+
+```{r}
+#| eval: false
+
+EJA_coast_isj_gi <- read.vcfR(here("data", "8-Embiotoca_filtered_EJA_coast_isj.vcf")) |>
+  vcfR2genind()
+
+popmap_lcwgs_coast_isj <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("elkhorn",               6), # ELK
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
+  rep("isla_san_jeronimo",    11), # ISJ
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara",        13), # SB
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10) # SCH
+)
+
+EJA_coast_isj_gi@pop <- factor(popmap_lcwgs_coast_isj)
+
+EJA_coast_isj_gen <- genind2genpop(EJA_coast_isj_gi)
+
+saveRDS(EJA_coast_isj_gen, here("output", "EJA_coast_isj_lcwgs_gen.rds"))
+saveRDS(EJA_coast_isj_gi, here("output", "EJA_coast_isj_lcwgs_gi.rds"))
+rm(EJA_coast_isj_vcf, EJA_coast_isj_gi)
+
+EJA_coast_isj_chord_distance <- dist.genpop(EJA_coast_isj_gen, method = 2)
+
+saveRDS(EJA_coast_isj_chord_distance, here("output", "EJA_coast_isj_lcwgs_Edward_distance.rds"))
+```
+
+### Load results
+
+```{r}
+Edward_distance_coast <- readRDS(here("output", "EJA_lcwgs_coast_Edward_distance.rds"))
+```
+
+## All comparisons
+
+```{r}
+mantel.randtest(dist(coordinates_coast), PCA_distances_coast) |> plot()
+p1 <- mantel_plot(dist(coordinates_coast),
+                  PCA_distances_coast,
+                  xlab = "Euclidean", ylab = "PCA")
+
+mantel.randtest(as.dist(Topo_Dist_w_coast[[1]]), PCA_distances_coast) |> plot()
+p2 <- mantel_plot(as.dist(Topo_Dist_w_coast[[1]]),
+                  PCA_distances_coast,
+                  xlab = "Bathy", ylab = "PCA")
+
+mantel.randtest(dist(coordinates_coast), chord_distance) |> plot()
+p3 <- mantel_plot(dist(coordinates_coast),
+                  Edward_distance_coast,
+                  xlab = "Euclidean", ylab = "Chord distance")
+
+mantel.randtest(as.dist(Topo_Dist_w_coast[[1]]), chord_distance) |> plot()
+p4 <- mantel_plot(as.dist(Topo_Dist_w_coast[[1]]),
+                  Edward_distance_coast,
+                  xlab = "Bathy", ylab = "Chord distance")
+
+combined <- (p1 | p2) / (p3 | p4)
+
+save_open_plot(
+  path   = here("output", "plots", "IBD_coast_pops.png"),
+  plot   = combined,
+  width  = 8,
+  height = 8
+  )
+```
+
+```{r}
+rm(combined, p1, p2, p3, p4, p5, p6)
 ```
 
 ## Tree tests
@@ -535,10 +737,11 @@ PCA_distance <- tibble(
   dist()
 ```
 
-
 ```{r}
 PCA_distance |> nj() |> root(outgroup = "guadalupe_island") |> ladderize() |> plot()
 ```
 
-
+```{r}
+Edward_distance |> nj() |> root(outgroup = "guadalupe_island") |> ladderize() |> plot()
+```
 
