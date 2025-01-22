@@ -26,7 +26,7 @@ source(here("functions", "plot_functions.R"))
 
 ## Figure 1 - Manhattan plot home-made
 
-### Load Data
+### Load Metadata
 
 ```{r}
 #| label: LoadMetadata
@@ -46,157 +46,290 @@ chromosome_map <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |>
   )
 ```
 
-### Plot every populations
+### Individual plot example
 
 ```{r}
-#| label: ManhattanPlotNCBI
+#| label: ManhattanPlot
 
-SNP_positions_pvalues <- SNP_positions |>
-  mutate(
-    pvalues_all = here("output", "pcadapt_lcwgs.rds") |>
-      read_rds() |>
-      Get_pvalues()
+manhattan_plot_lcwgs_K9 <- here("output", "pcadapt_lcwgs_gua_isj.rds") |>
+  read_rds() |> 
+  manhattan_plot_custom_2(
+    SNP_positions   = SNP_positions,
+    chromosome_map  = chromosome_map
   )
-
-manhattan_lcwgs_NCBI <- SNP_positions_pvalues |>
-  order_map(map = chromosome_map$`GenBank seq accession`) |> 
-  manhattan_plot_custom_2(pvalues = pvalues_all)
-```
-
-```{r}
-#| label: SaveManhattanPlotNCBI
 
 ggsave(
   here("output", "plots",
-       "manhattan_plot_custom_lcwgs_ncbi.png"),
-  plot   = manhattan_lcwgs_NCBI,
+       "manhattan_plot_custom_lcwgs_gua_isj.png"),
+  plot   = manhattan_plot_lcwgs_K9,
+  width  = 6000,
+  height = 2000,
+  units  = "px"
+)
+```
+
+#### With outliers
+
+```{r}
+#| label: ManhattanPlot
+
+manhattan_plot_lcwgs_gua_isj_outliers <- manhattan_plot_custom_2(
+  pcadapt            = here("output", "pcadapt_lcwgs_gua_isj.rds") |> read_rds(),
+  SNP_positions      = SNP_positions,
+  chromosome_map     = chromosome_map,
+  outliers_positions = here("output", "pcadapt_lcwgs_gua_isj.rds") |>
+    read_rds() |> 
+    Get_outliers(pvalue_threshold = 0.05) |> 
+    select(CHROM, POS)
+)
+
+ggsave(
+  here("output", "plots", "manhattan_new", "outliers",
+       "manhattan_plot_custom_lcwgs_gua_isj_outliers.png"),
+  plot   = manhattan_plot_lcwgs_gua_isj_outliers,
   width  = 6000,
   height = 2000,
   units  = "px"
 )
 
-rm(manhattan_lcwgs_NCBI)
+# manhattan_plot_lcwgs_K9_outliers_crop <- manhattan_plot_lcwgs_K9_outliers + coord_cartesian(ylim = c(-1, 200))
 ```
 
-### Plot coastal populations
-
-#### NCBI Chromosomes Order
+#### With outliers and match
 
 ```{r}
-#| label: ManhattanPlotCoastNCBI
-
-SNP_positions_pvalues <- SNP_positions_pvalues |>
-  mutate(
-    pvalues_coast = here("output", "pcadapt_lcwgs_coast.rds") |>
-      read_rds() |>
-      Get_pvalues()
-  )
-
-manhattan_lcwgs_coast_NCBI <- SNP_positions_pvalues |>
-  order_map(map = chromosome_map$`GenBank seq accession`) |> 
-  manhattan_plot_custom_2(pvalues = pvalues_coast)
-```
-
-```{r}
-#| label: SaveManhattanPlotCoastNCBI
+manhattan_plot_lcwgs_gua_isj_outliers_match <- manhattan_plot_custom_2(
+  pcadapt            = here("output", "pcadapt_lcwgs_gua_isj.rds") |>
+    read_rds(),
+  SNP_positions      = SNP_positions,
+  chromosome_map     = chromosome_map,
+  outliers_positions = here("output", "pcadapt_lcwgs_gua_isj.rds") |>
+    read_rds() |> 
+    Get_outliers(pvalue_threshold = 0.05) |> 
+    select(CHROM, POS),
+  outliers_match     = here("output", "EJA_lcwgs_gua_isj_5E-2_outliers_annotations.csv") |> 
+    read_csv2() |>
+    distinct(`GenBank seq accession`, POS) |> 
+    rename("CHROM" = `GenBank seq accession`)
+)
 
 ggsave(
-  here("output", "plots",
-       "manhattan_plot_custom_lcwgs_ncbi_coast.png"),
-  plot   = manhattan_lcwgs_coast_NCBI,
+  here("output", "plots", "manhattan_new", "match",
+       "manhattan_plot_custom_lcwgs_gua_isj_outliers_match.png"),
+  plot   = manhattan_plot_lcwgs_gua_isj_outliers_match,
   width  = 6000,
   height = 2000,
   units  = "px"
 )
-
-rm(manhattan_lcwgs_coast_NCBI)
 ```
 
-#### With outliers couloured
+### Generate all plots from pcadapt analyses
 
 ```{r}
-#| label: ManhattanPlotCoastNCBIOutliers
+#| label: PlotsGen
 
-manhattan_lcwgs_coast_ncbi_outliers <- SNP_positions_pvalues |>
-  order_map(map = chromosome_map$`GenBank seq accession`) |> 
-  manhattan_plot_custom_2(pvalues = pvalues_coast, outliers_cutoff = 200)
-```
-
-```{r}
-#| label: SaveManhattanPlotCoastNCBIOutliers
-
-ggsave(
-  here("output", "plots",
-       "manhattan_plot_custom_lcwgs_ncbi_coast_outliers.png"),
-  plot   = manhattan_lcwgs_coast_ncbi_outliers,
-  width  = 6000,
-  height = 2000,
-  units  = "px"
-)
-
-rm(manhattan_lcwgs_coast_ncbi_outliers)
-```
-
-### Plot island populations NCBI
-
-```{r}
-#| label: ManhattanPlotIslNCBI
-
-SNP_positions_pvalues <- SNP_positions_pvalues |>
+manhattans <- tibble(
+  read_files = list.files(here("output")) |> str_subset("pcadapt")
+) |> 
   mutate(
-    pvalues_islands = here("output", "pcadapt_lcwgs_islands.rds") |>
-      read_rds() |>
-      Get_pvalues()
+    plots       = here("output", read_files) |>
+      map(
+        \(x) manhattan_plot_custom_2(
+          read_rds(file = x),
+          SNP_positions  = SNP_positions,
+          chromosome_map = chromosome_map
+        )
+      ),
+    write_files = read_files |>
+      str_replace("pcadapt", "manhattan_plot_custom") |>
+      str_replace(".rds", ".png")
   )
-
-manhattan_plot_lcwgs_islands <- SNP_positions_pvalues |> 
-  order_map(map = chromosome_map$`GenBank seq accession`) |> 
-  manhattan_plot_custom_2(pvalues = pvalues_islands)
 ```
 
 ```{r}
-#| label: SaveManhattanPlotIslNCBI
+#| label: PlotsSave
+
+manhattans |> (\(x) {
+  map2(x$write_files, x$plots,
+    \(x, y) {
+      ggsave(
+        x |> here("output", "plots", ... = _),
+        plot   = y,
+        width  = 6000,
+        height = 2000,
+        units  = "px"
+      )
+    }
+  )
+})()
+```
+
+#### Coast and Islands Multiplot
+
+```{r}
+layout <-  "
+AA######
+BBCC####
+DDEEFF##
+GGHHIIJJ
+"
+
+multi_plot_coast_islands <- manhattans$plots[[4]]  +
+    manhattans$plots[[5]] + manhattans$plots[[9]]  +
+    manhattans$plots[[3]] + manhattans$plots[[8]]  + manhattans$plots[[1]] +
+    manhattans$plots[[7]] + manhattans$plots[[10]] + manhattans$plots[[13]] + manhattans$plots[[2]] +
+    plot_layout(design = layout, axes = "collect_x", axis_titles = "collect")
 
 ggsave(
-  here("output", "plots", "manhattan_plot_custom_lcwgs_ncbi_islands.png"),
-  plot   = manhattan_plot_lcwgs_islands,
-  width  = 6000,
-  height = 2000,
+  here("output", "plots", "multi_plot_coast_islands.png"),
+  plot   = multi_plot_coast_islands,
+  width  = 12000,
+  height = 6000,
   units = "px"
 )
-
-rm(manhattan_plot_lcwgs_islands)
 ```
 
-### Plot SD vs SCH
+### Generate plots with outliers
 
 ```{r}
-#| label: ManhattanPlotSDSCNCBI
+#| label: PlotsGenOutliers
 
-SNP_positions_pvalues <- SNP_positions_pvalues |>
+manhattans_outliers <- tibble(
+  read_files_pcadapt  = list.files(here("output")) |> str_subset("pcadapt")
+) |> 
   mutate(
-    pvalues_SD_SC = here("output", "pcadapt_lcwgs_SD_SC.rds") |>
-      read_rds() |>
-      Get_pvalues()
+    plots       = map(
+      read_files_pcadapt,
+      \(x) manhattan_plot_custom_2(
+        pcadapt            = here("output", x) |> read_rds(),
+        SNP_positions      = SNP_positions,
+        chromosome_map     = chromosome_map,
+        outliers_positions = here("output", x) |>
+          read_rds() |>
+          Get_outliers(pvalue_threshold = .05) |> 
+          select(CHROM, POS)
+      )
+    ),
+    write_files = read_files_pcadapt |>
+      str_replace("pcadapt", "manhattan_plot_custom") |>
+      str_replace(".rds", "_outliers.png")
   )
-
-manhattan_plot_lcwgs_SD_SC <- SNP_positions_pvalues |> 
-  order_map(map = chromosome_map$`GenBank seq accession`) |> 
-  manhattan_plot_custom_2(pvalues = pvalues_SD_SC)
 ```
 
 ```{r}
-#| label: SaveManhattanSDSCIslNCBI
+#| label: PlotsSaveOutliers
+
+map2(
+  manhattans_outliers$write_files, manhattans_outliers$plots,
+  \(x, y) {
+    ggsave(
+      here("output", "plots", "manhattan_new", "outliers", x),
+      plot   = y,
+      width  = 6000,
+      height = 2000,
+      units  = "px"
+    )
+  }
+)
+```
+
+#### Coast and Islands Multiplot
+
+```{r}
+layout <-  "
+AA######
+BBCC####
+DDEEFF##
+GGHHIIJJ
+"
+
+multi_plot_coast_islands_outliers <- manhattans_outliers$plots[[4]]  +
+    manhattans_outliers$plots[[5]] + manhattans_outliers$plots[[9]]  +
+    manhattans_outliers$plots[[3]] + manhattans_outliers$plots[[8]]  + manhattans_outliers$plots[[1]] +
+    manhattans_outliers$plots[[7]] + manhattans_outliers$plots[[10]] + manhattans_outliers$plots[[13]] + manhattans_outliers$plots[[2]] +
+    plot_layout(design = layout, axes = "collect_x", axis_titles = "collect")
 
 ggsave(
-  here("output", "plots", "manhattan_plot_custom_lcwgs_ncbi_SD_SC.png"),
-  plot   = manhattan_plot_lcwgs_SD_SC,
-  width  = 6000,
-  height = 2000,
+  here("output", "plots", "multi_plot_coast_islands_outliers.png"),
+  plot   = multi_plot_coast_islands_outliers,
+  width  = 12000,
+  height = 6000,
   units = "px"
 )
+```
 
-rm(manhattan_plot_lcwgs_SD_SC)
+### Generate plots with match
+
+```{r}
+#| label: PlotsGenMatch
+
+manhattans_outliers_match <- tibble(
+  read_files_pcadapt = list.files(here("output")) |> str_subset("pcadapt"),
+  read_files_match   = list.files(here("output")) |> str_subset("outliers_annotations")
+) |> 
+  mutate(
+    plots       = map2(
+      read_files_pcadapt, read_files_match,
+      \(x, y) manhattan_plot_custom_2(
+        pcadapt            = here("output", x) |> read_rds(),
+        SNP_positions      = SNP_positions,
+        chromosome_map     = chromosome_map,
+        outliers_positions = here("output", x) |>
+          read_rds() |>
+          Get_outliers(pvalue_threshold = .05) |> 
+          select(CHROM, POS),
+        outliers_match     = here("output", y) |> 
+          read_csv2() |>
+          distinct(`GenBank seq accession`, POS) |> 
+          rename("CHROM" = `GenBank seq accession`)
+      )
+    ),
+    write_files = read_files_pcadapt |>
+      str_replace("pcadapt", "manhattan_plot_custom") |>
+      str_replace(".rds", "_outliers_match.png")
+  )
+```
+
+```{r}
+#| label: PlotsGenMatch
+
+map2(
+  manhattans_outliers_match$write_files, manhattans_outliers_match$plots,
+  \(x, y) {
+    ggsave(
+      here("output", "plots", "manhattan_new", "match", x),
+      plot   = y,
+      width  = 6000,
+      height = 2000,
+      units  = "px"
+    )
+  }
+)
+```
+
+#### Coast and Islands Multiplot
+
+```{r}
+layout <-  "
+AA######
+BBCC####
+DDEEFF##
+GGHHIIJJ
+"
+
+multi_plot_coast_islands_match <- manhattans_outliers_match$plots[[4]]  +
+    manhattans_outliers_match$plots[[5]] + manhattans_outliers_match$plots[[9]]  +
+    manhattans_outliers_match$plots[[3]] + manhattans_outliers_match$plots[[8]]  + manhattans_outliers_match$plots[[1]] +
+    manhattans_outliers_match$plots[[7]] + manhattans_outliers_match$plots[[10]] + manhattans_outliers_match$plots[[13]] + manhattans_outliers_match$plots[[2]] +
+    plot_layout(design = layout, axes = "collect_x", axis_titles = "collect")
+
+ggsave(
+  here("output", "plots", "multi_plot_coast_islands_match.png"),
+  plot   = multi_plot_coast_islands_match,
+  width  = 12000,
+  height = 6000,
+  units = "px"
+)
 ```
 
 ### Clean memory
@@ -204,16 +337,23 @@ rm(manhattan_plot_lcwgs_SD_SC)
 ```{r}
 #| label: ManhattanMemClean
 
-rm(SNP_positions, SNP_positions_pvalues, chromosome_map)
+rm(SNP_positions, chromosome_map,
+   manhattans, multi_plot_coast_islands,
+   multi_plot_coast_islands_outliers, manhattans_outliers_match,
+   manhattans_outliers_match, multi_plot_coast_islands_match,
+   layout)
+
 gc()
 ```
 
 ## Figure 2 - PCA & map
-### PCA plot
+
+### PCA plot All 1&2
+
 ```{r}
 #| label: LoadPCA
 
-pcadapt_lcwgs <- read_rds(file = here("output", "pcadapt_lcwgs.rds"))
+pcadapt_lcwgs <- read_rds(file = here("output", "pcadapt_lcwgs_K9.rds"))
 
 popmap_lcwgs <- tibble(
   long_names = factor(
@@ -271,6 +411,8 @@ popmap_lcwgs <- tibble(
 PCA <- PCA_plot(
   pcadapt_output = pcadapt_lcwgs,
   popmap         = popmap_lcwgs,
+  axis_one       = -2,
+  axis_two       = -1
 )
 ```
 
@@ -285,17 +427,7 @@ save_open_plot(
 )
 ```
 
-```{r}
-#| label: PCAMapInteractivePlot
-
-PCA_plot(
-  pcadapt_output = pcadapt_lcwgs,
-  popmap         = popmap_lcwgs,
-  x_offsets      = rep(.01, 15),
-  y_offsets      = rep(.05, 15)
-) |>
-  ggplotly()
-```
+#### Crop PCA
 
 ```{r}
 #| label: PCAMapPlotCrop
@@ -324,7 +456,6 @@ theme(legend.position = "none") +
 inset_element(PCA_crop, left = 0.6, bottom = 0.6, right = 1, top = 1)
 ```
 
-
 ```{r}
 #| label: PCAMapPCASave
 
@@ -336,7 +467,20 @@ save_open_plot(
 )
 ```
 
-#### Interactive 3D PCA
+#### Interactive PCA
+
+```{r}
+#| label: PCAMap2DInteractivePlot
+
+PCA_plot(
+  pcadapt_output = pcadapt_lcwgs,
+  popmap         = popmap_lcwgs,
+  x_offsets      = rep(.01, 15),
+  y_offsets      = rep(.05, 15)
+) |>
+  ggplotly()
+```
+
 ```{r}
 #| label: PCAMapPCAInteractive
 
@@ -365,6 +509,42 @@ rm(TD_PCA_plot)
 
 rm(pcadapt_lcwgs, PCA, PCA_crop)
 gc()
+```
+
+### PCA plot All 2 to 5
+
+```{r}
+#| label: PCAMapPCAPlot
+
+PCA2_3 <- PCA_plot(
+  pcadapt_output = pcadapt_lcwgs,
+  popmap         = popmap_lcwgs,
+  axis_one       = 2,
+  axis_two       = 3
+) + theme(aspect.ratio = 1)
+
+PCA3_4 <- PCA_plot(
+  pcadapt_output = pcadapt_lcwgs,
+  popmap         = popmap_lcwgs,
+  axis_one       = 3,
+  axis_two       = 4
+) + theme(aspect.ratio = 1)
+
+PCA4_5 <- PCA_plot(
+  pcadapt_output = pcadapt_lcwgs,
+  popmap         = popmap_lcwgs,
+  axis_one       = 4,
+  axis_two       = 5
+) + theme(aspect.ratio = 1)
+
+multiPCA <- PCA2_3 | PCA3_4 | PCA4_5 + plot_layout(widths = 1)
+
+save_open_plot(
+  path   = here("output", "plots", "PCA2to5.pdf"),
+  plot   = multiPCA,
+  width  = 27,
+  height = 9
+)
 ```
 
 ### Map - SST and current 
@@ -444,17 +624,17 @@ states <- ne_states(
 )
 
 # Sampling site coordinates and misc info on map
-sample_sites <- read_csv2(here("data","lcwgs", "low_coverage_sampling.csv")) |>
+sample_sites <- read_csv2(here("data", "low_coverage_sampling_sites.csv")) |>
   mutate(
     Popmap  = factor(
       Popmap,
       levels  = levels(popmap_lcwgs$long_names)
     ),
     lab_lon = Longitude + c(.85, .9, .60, .62, .90,
-                            .63, .8, 1.1, .98,  -1,
+                            .63, .8, 1.1, .98,  1,
                               1, -1, .62, .70, .79),
     lab_lat = Latitude + c( .09, -.13, .25, .10, -.15,
-                            .10,  .20, .06, .05,  .10,
+                            .10,  .20, .06, .05,  .15,
                            -.17, -.27, .10, .15,  .25)
   ) |>
   arrange(Popmap) |> 
@@ -471,9 +651,9 @@ states_labels <- data.frame(
 city_labels <- data.frame(
   "lat"      = c(37.773972, 34.448113),
   "long"     = c(-122.431297, -120.471439),
-  "lat_lab"  = c(37.7, 34.7),
+  "lat_lab"  = c(37.7, 34.75),
   "long_lab" = c(-122.28, -120.435),
-  "lab"      = c("San Francisco", "Point\nConception")
+  "lab"      = c("San Francisco", "Point Conception")
 )
 ocean_labels <- data.frame(
   "long" = c(-121,-113.85),
@@ -902,41 +1082,67 @@ coordinates <- left_join(coordinates, coords)
 
 coordinates |> write_csv2(file = here("data", "individuals_coordinates.csv"))
 rm(indiv, coords, coordinates)
+
+
+
+polygon_mask <- cbind("lon" = c(-116.745, -113.826, -113, -113, -116.745),
+                           "lat" = c(33.732, 28.5, 28.5, 33.732, 33.732)) |> 
+  vect("polygon", crs = "GEOGCRS[\"WGS 84 (CRS84)\",\n    DATUM[\"World Geodetic System 1984\",\n        ELLIPSOID[\"WGS 84\",6378137,298.257223563,\n            LENGTHUNIT[\"metre\",1]]],\n    PRIMEM[\"Greenwich\",0,\n        ANGLEUNIT[\"degree\",0.0174532925199433]],\n    CS[ellipsoidal,2],\n        AXIS[\"geodetic longitude (Lon)\",east,\n            ORDER[1],\n            ANGLEUNIT[\"degree\",0.0174532925199433]],\n        AXIS[\"geodetic latitude (Lat)\",north,\n            ORDER[2],\n            ANGLEUNIT[\"degree\",0.0174532925199433]],\n    USAGE[\n        SCOPE[\"unknown\"],\n        AREA[\"World\"],\n        BBOX[-90,-180,90,180]],\n    ID[\"OGC\",\"CRS84\"]]")
+
+ne_states(
+  country     = c("united states of america", "mexico"),
+  returnclass = "sv"
+) |>
+  crop(y = ext(-124, -113, 28.5, 38.5)) |>
+  rasterize(y = rast(ext(-124, -113, 28.5, 38.5), ncols = 2200, nrows = 2000)) |> 
+  subst(from = NA, to = 2) |> 
+  subst(from = 1, to = NA) |> 
+  subst(from = 2, to = 1) |> 
+  terra::mask(mask = polygon_mask, inverse = TRUE) |> 
+  writeRaster(here("data", "ocean_map.tif"), overwrite = TRUE)
+
+getNOAA.bathy(
+    lon1 = -124, lon2 = -113,
+    lat1 = 28.5, lat2 = 38.5,
+    resolution = .5
+  ) |> 
+  fortify.bathy() |>
+  mutate(z = ifelse(z > 0, NA, z)) |>  # Remove landmass data
+  mutate(z = ifelse(z < -40, NA, z)) |>  # Remove landmass data
+  mutate(z = ifelse(z <= 0 , 1, z)) |> 
+  rast(type = "xyz") |> 
+  terra::mask(mask = vect(cbind("lon" = c(-120.8, -113.826, -113, -113, -120.8),
+                                "lat" = c(38.426, 28.5, 28.5, 38.426, 38.426)),
+                          "polygon"),
+              inverse = TRUE) |> 
+  terra::writeRaster(here("data", "fourty_meter_mask.tif"), overwrite = TRUE)
 ```
+
+### Load Data
 
 ```{r}
 coordinates <- here("data", "individuals_coordinates.csv") |>
   read_csv2() |>
   select(Longitude, Latitude) |> 
   as.matrix()
-```
 
-```{r}
-# genotype <- here("data", "8-Embiotoca_filtered.geno") |>
-#   read.geno()
-# 
-# genotype[genotype == 9] <- NA
-# 
-# tess_obj <- tess3(X = genotype, coord = coordinates, K = 5:8, ploidy = 2, openMP.core.num = 4)
-```
-
-```{r}
 q_matrix <- read_table(
-  here("data", "8-Embiotoca_filtered.snmf", "K7", "run46",
-       "8-Embiotoca_filtered_r46.7.Q"),
+  here("data", "8-Embiotoca_filtered_r46.7.Q"),
   col_names = paste0("Pop ", seq(1, 7))
 ) |> as.matrix()
 
-ne_states(
+catalina_df <- getNOAA.bathy(
+    lon1 = -124, lon2 = -113,
+    lat1 = 28.5, lat2 = 38.5,
+    resolution = .5
+  ) |> 
+  fortify.bathy() |>
+  mutate(z = ifelse(z > 0, NA, z)) # Remove landmass data
+
+states <- ne_states(
   country     = c("united states of america", "mexico"),
-  returnclass = "sv"
-) |>
-  crop(y = ext(-124,-113, 28.5, 38.5)) |>
-  rasterize(y = rast(ext(-124, -113, 28.5, 38.5), ncols = 2200, nrows = 2000)) |> 
-  subst(from = NA, to = 2) |> 
-  subst(from = 1, to = NA) |> 
-  subst(from = 2, to = 1) |> 
-  writeRaster(here("data", "ocean_map.tif"))
+  returnclass = "sf"
+)
 ```
 
 ```{r}
@@ -952,12 +1158,12 @@ popmap_lcwgs <- tibble(
       rep("isla_san_jeronimo",    11), # ISJ
       rep("laguna_beach",         13), # LB
       rep("point_dume",            5), # PD
-      rep("santa_barbara", 13), # SB
+      rep("santa_barbara",        13), # SB
       rep("san_clemente_island",  10), # SCL
       rep("la_jolla_san_diego",   13), # SD
       rep("tomales_bay",           1), # TB
       rep("redondo_beach",        10), # RB
-      rep("santa_cruz",   10) # SCH
+      rep("santa_cruz",           10) # SCH
     ),
     levels = c("big_sur", "bodega_bay", "catalina_island", "santa_cruz",
                "guadalupe_island", "isla_san_jeronimo", "la_jolla_san_diego",
@@ -1007,7 +1213,7 @@ sample_sites <- read_csv2(here("data", "low_coverage_sampling_sites.csv")) |>
   mutate(
     Sampling_sites = gsub("\\n", "\n", Sampling_sites, fixed = TRUE)
   )
-<
+
 states <- ne_states(
   country     = c("united states of america", "mexico"),
   returnclass = "sf"
@@ -1023,11 +1229,22 @@ gg_obj <- ggtess3Q(
   resolution      = c(1000, 1000),
   window          = c(-124, -113, 28.5, 38.5),
   background      = TRUE,
-  raster.filename = here("data", "ocean_map.tif"),
+  raster.filename = here("data", "fourty_meter_mask.tif"),
+  # raster.filename = here("data", "ocean_map.tif"),
   col.palette     = CreatePalette(turbo(n = 7), 25)
 )
 
 pop_area <- gg_obj +
+  ggnewscale::new_scale_fill() +
+  geom_raster(
+    data    = catalina_df,
+    mapping = aes(x = x, y = y, fill = z),
+    alpha = .5
+  ) +
+  scale_fill_hypso_tint_c(
+    palette = "colombia_bathy",
+    limits  = range(catalina_df$z, na.rm = TRUE)
+  ) +
   geom_sf(data = states) +
   coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
   geom_point(
@@ -1070,11 +1287,13 @@ pop_area <- gg_obj +
     labels = unit_format(suffix = "°N", sep = "")
   ) +
   theme_classic()
+
+pop_area$layers <- pop_area$layers[c(2, 1, 3, 4, 5, 6, 7, 8)]
 ```
 
 ```{r}
 save_open_plot(
-  here("output", "plots", "pop_areas_K=7.png"),
+  here("output", "plots", "pop_areas_K=7_40m_bathy.png"),
   plot   = pop_area,
   width  = 9,
   height = 9
