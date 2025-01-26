@@ -952,6 +952,51 @@ rm(currents_tibble_annual_mean, catalina_df, states, bathy)
 ## Figure 5 - Admixture plot
 Change individuals order in the file `Individuals_plot_order.txt`
 
+### K = 5 populations
+```{r}
+admixture_data_5 <- read_table(
+  here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K5", "run16",
+       "8-Embiotoca_filtered_r16.5.Q"),
+  col_names = paste0("Pop ", seq(1, 5))
+) |> 
+  mutate(Individuals = Indiv_list |> unique()) |> 
+  relocate(Individuals) |> 
+  pivot_longer(
+    -c(Individuals),
+    names_to  = "Populations",
+    values_to = "Ancestry proportions"
+  )
+
+admixture_plot_5 <- admixture_data_5 |>
+  ggplot(
+    aes(
+      x    = factor(
+        Individuals,
+        levels = here("data", "Individuals_plot_order.txt") |> 
+          read.table() |>
+          unlist() |>
+          as.vector() 
+      ),
+      y    = `Ancestry proportions`,
+      fill = Populations
+    )
+  ) +
+  geom_col(position = "stack", width = 1) +
+  scale_fill_viridis(discrete = TRUE, option = "turbo") +
+  labs(x = "Individuals") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "admixture_plot_K=5.pdf"),
+  plot   = admixture_plot_5,
+  width  = 16,
+  height = 6
+)
+```
+
 ### K = 6 populations
 
 #### Load data
@@ -1054,6 +1099,97 @@ admixture_plot_7 <- admixture_data_7 |>
 save_open_plot(
   path   = here("output", "plots", "admixture_plot_K=7.pdf"),
   plot   = admixture_plot_7,
+  width  = 16,
+  height = 6
+)
+```
+
+### K = 7 populations but higher cross-entropy
+
+```{r}
+admixture_data_7_bad <- read_table(
+  here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K7", "run44",
+       "8-Embiotoca_filtered_r44.7.Q"),
+  col_names = paste0("Pop ", seq(1, 7))
+) |> 
+  mutate(Individuals = Indiv_list |> unique()) |> 
+  relocate(Individuals) |> 
+  pivot_longer(
+    -c(Individuals),
+    names_to  = "Populations",
+    values_to = "Ancestry proportions"
+  )
+
+admixture_plot_7_bad <- admixture_data_7_bad |>
+  ggplot(
+    aes(
+      x    = factor(
+        Individuals,
+        levels = here("data", "Individuals_plot_order.txt") |> 
+          read.table() |>
+          unlist() |>
+          as.vector() 
+      ),
+      y    = `Ancestry proportions`,
+      fill = Populations
+    )
+  ) +
+  geom_col(position = "stack", width = 1) +
+  scale_fill_viridis(discrete = TRUE, option = "turbo") +
+  labs(x = "Individuals") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "admixture_plot_K=7_bad.pdf"),
+  plot   = admixture_plot_7_bad,
+  width  = 16,
+  height = 6
+)
+```
+
+### K = 8 populations
+```{r}
+admixture_data_8 <- read_table(
+  here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K8", "run8",
+       "8-Embiotoca_filtered_r8.8.Q"),
+  col_names = paste0("Pop ", seq(1, 8))
+) |> 
+  mutate(Individuals = Indiv_list |> unique()) |> 
+  relocate(Individuals) |> 
+  pivot_longer(
+    -c(Individuals),
+    names_to  = "Populations",
+    values_to = "Ancestry proportions"
+  )
+
+admixture_plot_8 <- admixture_data_8 |>
+  ggplot(
+    aes(
+      x    = factor(
+        Individuals,
+        levels = here("data", "Individuals_plot_order.txt") |> 
+          read.table() |>
+          unlist() |>
+          as.vector() 
+      ),
+      y    = `Ancestry proportions`,
+      fill = Populations
+    )
+  ) +
+  geom_col(position = "stack", width = 1) +
+  scale_fill_viridis(discrete = TRUE, option = "turbo") +
+  labs(x = "Individuals") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "admixture_plot_K=8.pdf"),
+  plot   = admixture_plot_8,
   width  = 16,
   height = 6
 )
