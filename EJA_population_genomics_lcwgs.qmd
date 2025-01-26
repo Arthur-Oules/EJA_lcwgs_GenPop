@@ -37,6 +37,8 @@ lcwgs_vcf |>
   as_tibble() |>
   select(CHROM, POS) |>
   mutate(POS = as.numeric(POS)) |>
+  mutate(rank = row_number()) |>
+  select(rank, CHROM, POS) |> 
   saveRDS(file = here("data", "SNP_positions.rds"))
 
 lcwgs_vcf |>
@@ -1330,7 +1332,10 @@ rm(lcwgs_scl_isj, scl_isj_manhattan)
 ```{r}
 EJA_annotations <- here("data", "EJA_annotations.gff") |> # Load annotated genome
   read.gff() |>
-  as_tibble()
+  as_tibble() |> 
+  filter(type = "region")
+
+EJA_annotations_short <- EJA_annotations |> select(seqid, type, start, end)
 
 chromosomes_info <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |>  # Load misc inform
   read_tsv() |>
@@ -1363,7 +1368,7 @@ map2(
      }
 )
 ```
-####Log:
+#### Log
 
 [1] "pcadapt_lcwgs_cat_isj.rds"
 [1] "There are 48182 outliers SNPs."
@@ -1496,12 +1501,40 @@ map2(
 ## For only one
 
 ```{r}
-here("output", "pcadapt_lcwgs_gua_isj.rds") |>
+test <- here("output", "pcadapt_lcwgs_gua_isj.rds") |>
   readRDS() |>
   Get_outliers(method = "bonferroni", pvalue_threshold = .05) |> 
-  Get_annotations(chrom_info = chromosomes_info, gff_annotation = EJA_annotations) |>
+  Get_annotations(chrom_info = chromosomes_info, gff_annotation = EJA_annotations)
+|>
   Clean_annotations() |> 
   write_csv2(here("output", "EJA_lcwgs_gua_isj_5E-2_outliers_annotations.csv"))
+```
+
+## Principal Components association
+
+```{r}
+tibble(
+  read_csv     = list.files(here("output")) |> str_subset("outliers_annotations"),
+  read_pcadapt = list.files(here("output")) |> str_subset("pcadapt")
+) |> 
+  (\(x) {
+    map2(
+      x$read_csv, x$read_pcadapt,
+      \(x, y) {
+        here("output", x) |> 
+          read_csv2() |> 
+          inner_join(
+            readRDS(file = here("data", "SNP_positions.rds")),
+            by = join_by("GenBank seq accession" == "CHROM", "POS")
+          ) |> 
+          mutate(
+            PC = here("output", y) |> read_rds() |> get.pc(list = rank) |> pull(PC)
+          ) |> 
+          select(-c(rank)) |> 
+          write_csv2(file = here("output", sub(".csv", "_PC.csv", x)))
+      }
+    )
+  })()
 ```
 
 # Allele frequencies
@@ -1570,6 +1603,33 @@ snmf_analysis <- snmf(
   entropy     = TRUE
 )
 ```
+
+## Load analysis
+
+```{r}
+EJA_snmf_analysis <- load.snmfProject(here("data", "lcwgs", "8-Embiotoca_filtered.snmfProject"))
+
+cross_entropies <- tibble(
+  `c-e`   = map(4:9, \(x) cross.entropy(EJA_snmf_analysis, K = x) |> as.vector()) |> unlist(),
+  K_value = factor(c(rep(4, 50), rep(5, 50), rep(6, 50), rep(7, 50), rep(8, 50), rep(9, 10)))
+)
+
+cross_entropies |> 
+  ggplot(aes(x = K_value, y = `c-e`)) +
+  geom_boxplot(alpha = .3) +
+  # geom_violin(alpha = .3) +
+  geom_point(alpha = .1) +
+  labs(x = "Number of ancestral population", y = "Cross-entropy Criterion") +
+  theme_classic()
+
+cross_entropies |> filter(K_value == 7) |> mutate(run = row_number()) |> ggplot() + geom_point(aes(x = run, y = `c-e`))
+```
+
+```{r}
+which.min(cross.entropy(EJA_snmf_analysis, K = 5))
+which.min(cross.entropy(EJA_snmf_analysis, K = 8))
+```
+
 
 ## Plot cross entropy to chose optimal value of K
 ```{r}
