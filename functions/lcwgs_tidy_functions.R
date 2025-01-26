@@ -180,7 +180,7 @@ Get_annotations <- function(positions, chrom_info, gff_annotation) {
   
   positions_annotations <- positions |>
     rename(`GenBank seq accession` = CHROM) |> 
-    left_join(chrom_info) |> 
+    left_join(chrom_info, by = join_by(`GenBank seq accession`)) |> 
     rowwise() |> 
     mutate(
       annotation = (\(x, y) {
@@ -190,14 +190,17 @@ Get_annotations <- function(positions, chrom_info, gff_annotation) {
           pull(attributes)
       })(`RefSeq seq accession`, POS) |>
         list()
-    )
+    ) |> 
+    filter(length(annotation) != 0)
   
-  print(paste0("There are ", as.character(dim(positions_annotations)[1]), " annotated outliers SNPs."))
+  print(paste0(as.character(dim(positions_annotations)[1]), " outliers were annotated."))
   
   positions_annotations
 }
 
 Clean_annotations <- function(annotations) {
+  print(paste("There are", as.character(dim(annotations)[1]), "annotations to clean."))
+  
   annotations_genes <- annotations |>
     unnest(annotation) |>
     filter(grepl("ID=gene", annotation)) |>
@@ -283,15 +286,26 @@ Clean_annotations <- function(annotations) {
         str_remove_all(pattern = "%2C")
     )
   
+  annotations_clean_len <- annotations_clean |> 
+    distinct(`GenBank seq accession`, POS) |>
+    dim() |>
+    _[1]
+  
   print(
     paste(
       "There are",
       as.character(annotations_clean |>
-                     distinct(`GenBank seq accession`, POS) |>
                      dim() |>
                      _[1]),
-      "unique SNPs.")
+      "annotations with",
+      as.character(annotations_clean_len),
+      "unique positions.",
+      as.character(
+        dim(annotations)[1] - annotations_clean_len
+      ),
+      "were bad annotations."
     )
+  )
   
   if ("padj" %in% colnames(annotations_clean)) {
     annotations_clean |>
