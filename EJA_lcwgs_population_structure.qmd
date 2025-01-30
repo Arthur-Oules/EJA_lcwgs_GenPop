@@ -64,6 +64,31 @@ lcwgs_gl@pop <- factor(popmap_lcwgs)
 lcwgs_gl |> saveRDS(file = here("data", "Embiotoca_lcwgs_gl.rds"))
 ```
 
+
+```{r}
+#| echo: false
+
+lcwgs_gl <- readRDS(file = here("data", "Embiotoca_lcwgs_gl.rds"))
+
+lcwgs_gl_islanders <- lcwgs_gl[!lcwgs_gl$pop %in% c("guadalupe_island", "catalina_island", "san_clemente_island"), ] |>
+  gl.filter.monomorphs(lcwgs_gl_islanders, verbose = 5) |> 
+  gl.recalc.metrics(lcwgs_gl_islanders, verbose = 5)
+
+lcwgs_gl_islanders@other$latlon <- here("data", "low_coverage_sampling.csv") |> 
+  read_csv2() |>
+  select(Popmap, Latitude, Longitude) |>
+  right_join(tibble(Popmap = pop(lcwgs_gl_islanders))) |> 
+  rename(lat = Latitude, lon = Longitude) |> 
+  select(-c(Popmap))
+
+saveRDS(
+  lcwgs_gl_islanders,
+  file = here("data", "Embiotoca_lcwgs_islanders_gl.rds")
+)
+
+rm(lcwgs_gl)
+```
+
 ## Genetic distances
 
 ### Pairwise Hamming genetic distances
@@ -597,7 +622,6 @@ states <- ne_states(
 
 #### Barrier distance
 
-##### Computing barrier distance matrix
 ```{r}
 geo_dist_cells <- here("data", "low_coverage_sampling_sites.csv") |> 
   read_csv2(show_col_types = FALSE) |> 
@@ -618,8 +642,6 @@ geo_dist_cells <- here("data", "low_coverage_sampling_sites.csv") |>
 barrier_dist_mat <- proxy::dist(geo_dist_cells, method = barrier_distance)
 ```
 
-##### Test Euclidean and barrrier distance correlation
-
 ```{r}
 mantel_plot(IBD$Dgeo, barrier_dist_mat)
 ```
@@ -627,8 +649,6 @@ mantel_plot(IBD$Dgeo, barrier_dist_mat)
 Distances correlate -> don't use barrier distance
 
 #### Geographic distance considering batymetry
-
-##### Compute distance
 
 ```{r}
 coordinates <- here("data", "low_coverage_sampling_sites.csv") |>
@@ -643,8 +663,6 @@ coordinates <- here("data", "low_coverage_sampling_sites.csv") |>
 ```{r}
 Topo_Dist_w <- topoDist(catalina_df_water, coordinates, paths = TRUE)
 ```
-
-##### Draw paths 
 
 ```{r}
 bathy_paths <- ggplot() +
@@ -758,33 +776,7 @@ plot(ibd)
 
 ### Coast + ISJ
 
-#### Prep
-
-```{r}
-#| echo: false
-
-lcwgs_gl <- readRDS(file = here("data", "Embiotoca_lcwgs_gl.rds"))
-
-lcwgs_gl_islanders <- lcwgs_gl[!lcwgs_gl$pop %in% c("guadalupe_island", "catalina_island", "san_clemente_island"), ] |>
-  gl.filter.monomorphs(lcwgs_gl_islanders, verbose = 5) |> 
-  gl.recalc.metrics(lcwgs_gl_islanders, verbose = 5)
-
-lcwgs_gl_islanders@other$latlon <- here("data", "low_coverage_sampling.csv") |> 
-  read_csv2() |>
-  select(Popmap, Latitude, Longitude) |>
-  right_join(tibble(Popmap = pop(lcwgs_gl_islanders))) |> 
-  rename(lat = Latitude, lon = Longitude) |> 
-  select(-c(Popmap))
-
-saveRDS(
-  lcwgs_gl_islanders,
-  file = here("data", "Embiotoca_lcwgs_islanders_gl.rds")
-)
-
-rm(lcwgs_gl)
-```
-
-#### Compute geographic euclidean distance
+#### Euclidean distance
 ```{r}
 Dist_geo_isl <- here("data", "low_coverage_sampling_sites.csv") |> 
   read_csv2(show_col_types = FALSE) |> 
@@ -803,7 +795,6 @@ Dist_geo_isl <- Dist_geo_isl[, 2:3] |> dist()
 
 #### Barrier distance
 
-##### Compute geographic barrier distance
 ```{r}
 coordinates_coast_isj <- here("data", "low_coverage_sampling_sites.csv") |>
   read_csv2() |>
@@ -817,20 +808,15 @@ coordinates_coast_isj <- here("data", "low_coverage_sampling_sites.csv") |>
   as.matrix()
 ```
 
-##### Test if Euclidean and barrier geographic distances are different
 ```{r}
 vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgeo)
 ```
 
 #### Geographic distance considering batymetry
 
-##### Compute
-
 ```{r}
 Topo_Dist_w_coast_isj <- topoDist(catalina_df_water, coordinates_coast_isj, paths = TRUE)
 ```
-
-##### Draw paths 
 
 ```{r}
 bathy_paths_coast <- ggplot() +
@@ -939,7 +925,7 @@ rm(combined, p1, p2, p3, p4)
 
 ### Coast
 
-#### Compute geographic euclidean distance
+#### Euclidean distance
 ```{r}
 coordinates_coast <- here("data", "low_coverage_sampling_sites.csv") |>
   read_csv2() |>
@@ -953,7 +939,31 @@ coordinates_coast <- here("data", "low_coverage_sampling_sites.csv") |>
   as.matrix()
 ```
 
-#### PCA distance
+#### Geographic distance considering batymetry
+
+```{r}
+Topo_Dist_w_coast <- topoDist(catalina_df_water, coordinates_coast, paths = TRUE)
+```
+
+```{r}
+bathy_paths_coast <- ggplot() +
+  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
+  scale_fill_hypso_tint_c(palette = "colombia_bathy", limits = range(catalina_df$z, na.rm = TRUE)) +
+  geom_sf(data = states) +
+  gg(data = Topo_Dist_w_coast[[2]]) +
+  geom_point(data = coordinates_coast, mapping = aes(x = Longitude, y = Latitude), size = 2) +
+  coord_sf(xlim = c(-124, -115), ylim = c(28, 39), expand = FALSE) +
+  labs(x = "Longitude", y = "Latitude")
+
+save_open_plot(
+  here("output", "plots", "IBD_bathy_map_coast.png"),
+  plot   = bathy_paths_coast,
+  width  = 9,
+  height = 7
+)
+```
+
+#### LoadPCA distance
 
 ```{r}
 pcadapt_lcwgs_coast <- read_rds(here("output", "pcadapt_lcwgs_coast.rds"))
@@ -985,34 +995,6 @@ PCA_distances_coast <- tibble(
   dist()
 
 rm(pcadapt_lcwgs_coast, popmap_lcwgs_coast)
-```
-
-#### Geographic distance considering batymetry
-
-##### Compute
-
-```{r}
-Topo_Dist_w_coast <- topoDist(catalina_df_water, coordinates_coast, paths = TRUE)
-```
-
-##### Draw paths
-
-```{r}
-bathy_paths_coast <- ggplot() +
-  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
-  scale_fill_hypso_tint_c(palette = "colombia_bathy", limits = range(catalina_df$z, na.rm = TRUE)) +
-  geom_sf(data = states) +
-  gg(data = Topo_Dist_w_coast[[2]]) +
-  geom_point(data = coordinates_coast, mapping = aes(x = Longitude, y = Latitude), size = 2) +
-  coord_sf(xlim = c(-124, -115), ylim = c(28, 39), expand = FALSE) +
-  labs(x = "Longitude", y = "Latitude")
-
-save_open_plot(
-  here("output", "plots", "IBD_bathy_map_coast.png"),
-  plot   = bathy_paths_coast,
-  width  = 9,
-  height = 7
-)
 ```
 
 #### Load Edward distance
@@ -1067,7 +1049,7 @@ save_open_plot(
 rm(combined, p1, p2, p3, p4, p5, p6)
 ```
 
-#### Tree tests
+### Tree tests
 
 ```{r}
 IBD$Dgen |> nj() |> root(outgroup = "guadalupe_island") |> ladderize() |> plot()
@@ -1221,7 +1203,7 @@ See `EJA_populations_lcwgs_Figures.qmd` for pretty plots.
 
 ## Triangle plots
 
-### For North-South Gradient
+### North-South Gradient
 
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
@@ -1309,7 +1291,7 @@ gc()
 ```
 
 
-### For Coastal + ISJ
+### Coastal + ISJ
 
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
@@ -1394,7 +1376,7 @@ rm(EJA_lcwgs_coast_isj_vcf_diff, hi_het_coast_isj, hi_het_coast_isj_plots)
 gc()
 ```
 
-### For North
+### North
 
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
@@ -1481,7 +1463,7 @@ rm(EJA_lcwgs_north_vcf_diff, hi_het_north, hi_het_north_plots)
 gc()
 ```
 
-### For South
+### South
 
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
@@ -1564,7 +1546,7 @@ rm(EJA_lcwgs_south_vcf_diff, hi_het_south, hi_het_south_plots)
 gc()
 ```
 
-<!-- # Genotype-Environment Association -->
+## Genotype-Environment Association -->
 
 <!-- ## Prep -->
 
