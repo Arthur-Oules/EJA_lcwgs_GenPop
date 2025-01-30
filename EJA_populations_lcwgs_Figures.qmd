@@ -1003,14 +1003,14 @@ save_open_plot(
 ```{r}
 #| label: AdmPlotPrep
 
-Indiv_list <- read_rds(file = here("data", "Individual_list.rds"))
+Indiv_meta <- read_csv2(here("data", "Individuals_coordinates.csv"))
 
 admixture_data_6 <- read_table(
   here("data", "8-Embiotoca_filtered.snmf", "K6", "run16",
        "8-Embiotoca_filtered_r16.6.Q"),
   col_names = paste0("Pop ", seq(1, 6))
 ) |> 
-  mutate(Individuals = Indiv_list |> unique()) |> 
+  mutate(Individuals = Indiv_list |> 
   relocate(Individuals) |> 
   pivot_longer(
     -c(Individuals),
@@ -1061,46 +1061,17 @@ rm(Indiv_list, admixture_data, admixture_plot)
 
 ### K = 7 populations
 ```{r}
-admixture_data_7 <- read_table(
-  here("data", "8-Embiotoca_filtered.snmf", "K7", "run46",
-       "8-Embiotoca_filtered_r46.7.Q"),
-  col_names = paste0("Pop ", seq(1, 7))
-) |> 
-  mutate(Individuals = Indiv_list |> unique()) |> 
-  relocate(Individuals) |> 
-  pivot_longer(
-    -c(Individuals),
-    names_to  = "Populations",
-    values_to = "Ancestry proportions"
-  )
+admixture_data_7 <- here("output", "admixture", "8-Embiotoca_filtered_r46.7.Q") |> 
+  read_admixture(pops = 7)
 
-admixture_plot_7 <- admixture_data_7 |>
-  ggplot(
-    aes(
-      x    = factor(
-        Individuals,
-        levels = here("data", "Individuals_plot_order.txt") |> 
-          read.table() |>
-          unlist() |>
-          as.vector() 
-      ),
-      y    = `Ancestry proportions`,
-      fill = Populations
-    )
-  ) +
-  geom_col(position = "stack", width = 1) +
-  scale_fill_viridis(discrete = TRUE, option = "turbo") +
-  labs(x = "Individuals") +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
-  )
+admixture_plot_7 <- admixture_data_7 |> 
+  admixture_plot(pop_map = Indiv_meta |> select(Indiv, popmap))
 
 save_open_plot(
   path   = here("output", "plots", "admixture_plot_K=7.pdf"),
   plot   = admixture_plot_7,
-  width  = 16,
-  height = 6
+  width  = 8,
+  height = 3
 )
 ```
 
@@ -1112,7 +1083,7 @@ admixture_data_7_bad <- read_table(
        "8-Embiotoca_filtered_r44.7.Q"),
   col_names = paste0("Pop ", seq(1, 7))
 ) |> 
-  mutate(Individuals = Indiv_list |> unique()) |> 
+  mutate(Individuals = Indiv_list) |> 
   relocate(Individuals) |> 
   pivot_longer(
     -c(Individuals),
@@ -1157,7 +1128,7 @@ admixture_data_8 <- read_table(
        "8-Embiotoca_filtered_r8.8.Q"),
   col_names = paste0("Pop ", seq(1, 8))
 ) |> 
-  mutate(Individuals = Indiv_list |> unique()) |> 
+  mutate(Individuals = Indiv_list) |> 
   relocate(Individuals) |> 
   pivot_longer(
     -c(Individuals),
