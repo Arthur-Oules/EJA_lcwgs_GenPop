@@ -384,6 +384,7 @@ Substract_diagonal <- function(matrix) {
   
   return(matrix)
 }
+
 lm_eqn <- function(df, r = manteltest$statistic, pp = manteltest$signif) {
   m <- lm(Dgen ~ Dgeo, df)
   eq <- substitute(
