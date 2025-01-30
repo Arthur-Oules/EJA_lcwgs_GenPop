@@ -1,9 +1,11 @@
-save_open_plot <- function(path, plot, width, height) {
+save_open_plot <- function(path, plot, width = NA, height = NA, units = "in", dpi = 300) {
   ggsave(
     path,
     plot   = plot,
     width  = width,
-    height = height
+    height = height,
+    units  = units,
+    dpi    = dpi
   )
   system2(
     "open",
@@ -12,67 +14,36 @@ save_open_plot <- function(path, plot, width, height) {
   )
 }
 
-manhattan_plot_custom_2 <- function(pcadapt,
-                                    SNP_positions,
-                                    chromosome_map,
-                                    outliers_positions = NULL,
-                                    outliers_match     = NULL) {
-  
-  genome_mapping <- SNP_positions |>
-    mutate(logpvalues = Get_pvalues(pcadapt)) |> # Gets log10 of pvalues
-    order_map(map = chromosome_map$`GenBank seq accession`)
-  
-  labs_rank <- genome_mapping |> # Get positions of chromosome names in axis 1
-    mutate(labs_rank = row_number()) |>
-    distinct(CHROM, .keep_all = TRUE) |>
-    left_join(genome_mapping |> count(CHROM)) |> 
-    mutate(midranks = round(labs_rank + n/2)) |> 
-    filter(row_number() <= 25) |> 
-    pull(midranks)
-  
-  df <- genome_mapping |>
-    mutate(
-      rank         = row_number(),
-      lab_position = if_else(row_number() %in% labs_rank, TRUE, FALSE), # Map chromosome names positions
-      coloured     = CHROM |>                                           # Map grey/black colours
-        {\(x) factor(x, levels = unique(x))}() |>
-        as.integer() |>
-        (`%%`)(2)
-    )
-  
-  p <- df |> ggplot() +
-    geom_point(aes(x = rank, y = logpvalues, colour = factor(coloured))) # Baseplot
-  
-  if (!is.null(outliers_positions)) {
-      p <- p + geom_point(
-        data   = df |> inner_join(outliers_positions, by = c("CHROM", "POS")),
-        aes(x = rank, y = logpvalues),
-        colour = "red"
-      ) # +
-      #   geom_hline(
-      #     yintercept = outliers_cutoff,
-      #     colour     = "red",
-      #     linetype   = "dashed"
-      #   )
-  }
-  
-  if (!is.null(outliers_match)) {
-    p <- p + geom_point(
-      data   = df |> inner_join(outliers_match, by = c("CHROM", "POS")),
-      aes(x = rank, y = logpvalues),
-      colour = "green"
-    )
-  }
-    
-  p + scale_colour_manual(values = c("black", "grey")) +
-    scale_x_continuous(
-      breaks = df$rank[df$lab_position],
-      labels = df$CHROM[df$lab_position],
-      guide  = guide_axis(angle = 45)
+pcadapt_screeplot <- function(pcadapt) {
+  tibble(
+    components  = 1:length(pcadapt$singular.values),
+    proportions = 100*pcadapt$singular.values^2
+  ) |> 
+    ggplot(mapping = aes(x = components, y = proportions)) +
+    geom_col() +
+    geom_label(
+      mapping = aes(x = components, y = proportions, label = round(proportions, 2)),
+      label.r = unit(0, "lines"),
+      vjust   = 1.1
     ) +
-    labs(x = "chromosome", y = bquote(-log[10]~("p-value"))) +
-    theme_classic() +
-    theme(legend.position = "none")
+    labs(x = "Component rank", y = "Proportion of Variance (%)") +
+    scale_x_continuous(breaks = length(pcadapt$singular.values)) +
+    scale_y_continuous(breaks = seq(0, 100, 5), minor_breaks = seq(0, 100)) +
+    theme(
+      panel.background   = element_rect(fill = "white", color = "black"),
+      panel.grid.major.y = element_line(
+        color = "black",
+        linetype = "solid",
+        linewidth = .12
+      ),
+      panel.grid.minor.y = element_line(
+        color = "black",
+        linetype = "dashed",
+        linewidth = .08
+      ),
+      panel.grid.major.x = element_line(linetype = "blank"),
+      panel.grid.minor.x = element_line(linetype = "blank")
+    )
 }
 
 PCA_plot <- function(pcadapt_output,
@@ -143,6 +114,69 @@ PCA_plot <- function(pcadapt_output,
   }
 }
 
+manhattan_plot_custom_2 <- function(pcadapt,
+                                    SNP_positions,
+                                    chromosome_map,
+                                    outliers_positions = NULL,
+                                    outliers_match     = NULL) {
+  
+  genome_mapping <- SNP_positions |>
+    mutate(logpvalues = Get_pvalues(pcadapt)) |> # Gets log10 of pvalues
+    order_map(map = chromosome_map$`GenBank seq accession`)
+  
+  labs_rank <- genome_mapping |> # Get positions of chromosome names in axis 1
+    mutate(labs_rank = row_number()) |>
+    distinct(CHROM, .keep_all = TRUE) |>
+    left_join(genome_mapping |> count(CHROM)) |> 
+    mutate(midranks = round(labs_rank + n/2)) |> 
+    filter(row_number() <= 25) |> 
+    pull(midranks)
+  
+  df <- genome_mapping |>
+    mutate(
+      rank         = row_number(),
+      lab_position = if_else(row_number() %in% labs_rank, TRUE, FALSE), # Map chromosome names positions
+      coloured     = CHROM |>                                           # Map grey/black colours
+        {\(x) factor(x, levels = unique(x))}() |>
+        as.integer() |>
+        (`%%`)(2)
+    )
+  
+  p <- df |> ggplot() +
+    geom_point(aes(x = rank, y = logpvalues, colour = factor(coloured))) # Baseplot
+  
+  if (!is.null(outliers_positions)) {
+    p <- p + geom_point(
+      data   = df |> inner_join(outliers_positions, by = c("CHROM", "POS")),
+      aes(x = rank, y = logpvalues),
+      colour = "red"
+    ) # +
+    #   geom_hline(
+    #     yintercept = outliers_cutoff,
+    #     colour     = "red",
+    #     linetype   = "dashed"
+    #   )
+  }
+  
+  if (!is.null(outliers_match)) {
+    p <- p + geom_point(
+      data   = df |> inner_join(outliers_match, by = c("CHROM", "POS")),
+      aes(x = rank, y = logpvalues),
+      colour = "green"
+    )
+  }
+  
+  p + scale_colour_manual(values = c("black", "grey")) +
+    scale_x_continuous(
+      breaks = df$rank[df$lab_position],
+      labels = df$CHROM[df$lab_position],
+      guide  = guide_axis(angle = 45)
+    ) +
+    labs(x = "chromosome", y = bquote(-log[10]~("p-value"))) +
+    theme_classic() +
+    theme(legend.position = "none")
+}
+
 mantel_plot <- function(Matx, Maty, xlab = NULL, ylab = NULL) {
   
   mantel_result <- vegan::mantel(Matx, Maty)
@@ -175,4 +209,62 @@ mantel_plot <- function(Matx, Maty, xlab = NULL, ylab = NULL) {
   }
   
   p
+}
+
+admixture_plot <- function(data, pop_map = NULL) {
+  plot <- data |>
+    ggplot(
+      aes(
+        x    = Individuals,
+        y    = `Ancestry proportions`,
+        fill = Populations
+      )
+    ) +
+    geom_col(position = "stack", width = 1) +
+    scale_fill_viridis(name = "Ancestral\nPopulations", discrete = TRUE, option = "turbo") +
+    labs(x = "Individuals") +
+    scale_y_continuous(expand = c(0,0)) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1),
+      panel.grid  = element_blank()
+    )
+  
+  if (!is.null(pop_map)) {
+    axis <- data |>
+      arrange(Individuals) |> 
+      left_join(pop_map, by = join_by(Individuals == Indiv)) |> 
+      mutate(rank = row_number()) |> 
+      group_by(popmap) |> 
+      mutate(mean_rank = as.integer(mean(rank))) |> 
+      ungroup() |> 
+      mutate(mean_rank = Individuals[mean_rank]) |> 
+      distinct(popmap, mean_rank) |> 
+      mutate(popmap = popmap |> gsub("_", " ", x = _) |> str_to_title())
+    
+    plot <- plot + scale_x_discrete(breaks = axis$mean_rank, labels = axis$popmap)
+  }
+  
+  plot
+}
+
+plot_matrix <- function(df) {
+  df |>
+    ggplot(aes(x = Var1, y = Var2)) + 
+    geom_raster(aes(fill = dist/1000000)) +
+    geom_text(aes(label = round(dist/1000000, digits = 2))) +
+    scale_fill_viridis(name = "Distance in Mb", option = "turbo") +
+    labs(x = "", y = "") +
+    scale_x_discrete(position = "top") +
+    scale_y_discrete(limits = rev(levels(df$Var2)))
+}
+
+plot_matrix_notext <- function(df) {
+  df |> 
+    ggplot(aes(x = Var1, y = Var2)) + 
+    geom_raster(aes(fill = dist/1000000)) +
+    scale_fill_viridis(name = "Distance in Mb", option = "turbo") +
+    labs(x = "", y = "") +
+    scale_x_discrete(position = "top") +
+    scale_y_discrete(limits = rev(levels(df$Var2)))
 }

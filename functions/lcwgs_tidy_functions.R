@@ -13,6 +13,27 @@ order_map <- function(df, map) {
   df |> mutate(CHROM = factor(CHROM, levels = map)) |> arrange(CHROM)
 }
 
+read_admixture <- function(path, pops) {
+  path |>
+    read_table(col_names = paste0("Pop ", seq(1, pops))) |> 
+    mutate(
+      Individuals = read_csv2(here("data", "Individuals_coordinates.csv")) |>
+        pull(Indiv) |>
+        factor(
+          levels = here("data", "Individuals_plot_order.txt") |> 
+            read.table() |>
+            unlist() |>
+            as.vector() 
+        )
+    ) |> 
+    relocate(Individuals) |> 
+    pivot_longer(
+      -c(Individuals),
+      names_to  = "Populations",
+      values_to = "Ancestry proportions"
+    )
+} 
+
 Get_window <- function(chromosome, position) {
   chromosome_length <- chromosomes_length |>
     filter(accession == chromosome) |>
@@ -183,15 +204,16 @@ Get_annotations <- function(positions, chrom_info, gff_annotation) {
     left_join(chrom_info, by = join_by(`GenBank seq accession`)) |> 
     rowwise() |> 
     mutate(
-      annotation = (\(x, y) {
-        gff_annotation |>
-          filter(seqid == x) |> 
-          filter(start <= y & y <= end) |>
-          pull(attributes)
-      })(`RefSeq seq accession`, POS) |>
-        list()
+      annotation = map2(`RefSeq seq accession`, POS,
+                        \(x, y) {
+                          gff_annotation |>
+                            filter(seqid == x) |> 
+                            filter(start <= y & y <= end) |>
+                            pull(attributes)
+                        }) |> list()
     ) |> 
-    filter(length(annotation) != 0)
+    unnest(annotation) |> 
+    filter(annotation |> map(\(x) length(unlist(x))) |> unlist() > 0)
   
   print(paste0(as.character(dim(positions_annotations)[1]), " outliers were annotated."))
   
@@ -328,6 +350,40 @@ Clean_annotations <- function(annotations) {
   }
 }
 
+aggregate_by_population <- function(matrix, populations) {
+  unique_pops <- unique(populations)
+  pop_dist <- matrix(0, nrow = length(unique_pops), ncol = length(unique_pops))
+  rownames(pop_dist) <- colnames(pop_dist) <- unique_pops
+  
+  for (i in seq_along(unique_pops)) {
+    for (j in seq_along(unique_pops)) {
+      group1 <- which(populations == unique_pops[i])
+      group2 <- which(populations == unique_pops[j])
+      if (i == j) {
+        pop_dist[i, j] <- mean(matrix[group1, group2])/2
+      } else {
+        pop_dist[i, j] <- mean(matrix[group1, group2])
+      }
+    }
+  }
+  
+  return(pop_dist)
+}
+
+Substract_diagonal <- function(matrix) {
+  for (i in 1:dim(matrix)[1]) {
+    for (j in 1:dim(matrix)[1]) {
+      if (i == j) {
+        matrix[i, j] <- matrix[i, j] - matrix[i, i]
+      } else {
+        matrix[i, j] <- matrix[i, j] - (matrix[i, i] + matrix[j, j])
+      }
+      
+    }
+  }
+  
+  return(matrix)
+}
 lm_eqn <- function(df, r = manteltest$statistic, pp = manteltest$signif) {
   m <- lm(Dgen ~ Dgeo, df)
   eq <- substitute(
