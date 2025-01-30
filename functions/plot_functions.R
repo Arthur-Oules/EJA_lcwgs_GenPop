@@ -1,4 +1,6 @@
-save_open_plot <- function(path, plot, width = NA, height = NA, units = "in", dpi = 300) {
+save_open_plot <- function(path,         plot,
+                           width = NA,   height = NA,
+                           units = "in", dpi = 300) {
   ggsave(
     path,
     plot   = plot,
@@ -46,12 +48,9 @@ pcadapt_screeplot <- function(pcadapt) {
     )
 }
 
-PCA_plot <- function(pcadapt_output,
-                     popmap,
-                     axis_one  = 1,
-                     axis_two  = 2,
-                     x_offsets = NULL,
-                     y_offsets = NULL) {
+PCA_plot <- function(pcadapt_output,   popmap,
+                     axis_one  = 1,    axis_two  = 2,
+                     x_offsets = NULL, y_offsets = NULL) {
   # Format data frame
   PCA_df <- tibble(
     x      = axis_one/abs(axis_one)*pcadapt_output$scores[, abs(axis_one)],
@@ -115,8 +114,7 @@ PCA_plot <- function(pcadapt_output,
 }
 
 manhattan_plot_custom_2 <- function(pcadapt,
-                                    SNP_positions,
-                                    chromosome_map,
+                                    SNP_positions, chromosome_map,
                                     outliers_positions = NULL,
                                     outliers_match     = NULL) {
   
