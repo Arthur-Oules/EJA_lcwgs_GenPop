@@ -1,0 +1,1705 @@
+---
+title: "Isolation by Distance"
+author: "Arthur Oulès"
+format: html
+editor: source
+---
+
+## Load packages
+
+```{r}
+#| label: LoadPackages
+#| echo: false
+
+c("here", "tidyverse", "vcfR", "dartR", "adegenet",
+  "topoDistance", "terra", "tidyterra", "inlabru",
+  "rnaturalearth", "marmap") |>
+  lapply(library, character.only = TRUE) |> invisible()
+```
+
+## Load functions
+
+```{r}
+#| label: LoadPlot
+
+source(here("functions", "lcwgs_tidy_functions.R"))
+source(here("functions", "plot_functions.R"))
+```
+
+## Helper objects
+
+```{r}
+popmap_tb <- read_csv2(here("data", "individuals_coordinates.csv")) |>
+  select(
+    ID     = Indiv,
+    Code   = Localisation,
+    Code_b = Localisation_b,
+    pop    = popmap,
+    pop2   = pop_map_b
+  )
+```
+
+## Data conversion
+
+### Convert vcf to genlight
+```{r}
+#| echo: false
+
+lcwgs_gl <- here("plink2", "8-Embiotoca_filtered.vcf.gz") |>
+  gl.read.vcf()
+
+lcwgs_gl@other$latlon <- tibble(
+  Indiv = lcwgs_gl@ind.names,
+  Pop   = lcwgs_gl@pop
+  ) |> 
+  left_join(
+    y = read_csv2(here("data", "low_coverage_sampling_sites.csv")) |>
+      select(Popmap, Latitude, Longitude)
+  ) |>
+  rename(lat = Latitude, lon = Longitude) |> 
+  as.data.frame()
+
+lcwgs_gl@pop <- factor(popmap_lcwgs)
+
+lcwgs_gl |> saveRDS(file = here("data", "Embiotoca_lcwgs_gl.rds"))
+```
+
+## Genetic distances
+
+### Pairwise Hamming genetic distances
+
+#### Compute distances in plink 1.9
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink --vcf 8-Embiotoca_filtered.vcf.gz --out Embiotoca_filtered_dist_matrix --allow-extra-chr --autosome-num 95 --distance square --const-fid
+```
+
+#### Import plink results
+
+```{r}
+EJA_lcwgs_dist <- here("plink2", "Embiotoca_filtered_dist_matrix.dist") |> 
+  read_table(col_names = FALSE) |> 
+  as.matrix()
+
+IDs <- here("plink2", "Embiotoca_filtered_dist_matrix.dist.id") |> 
+  read_table(col_names = FALSE) |> pull(X2)
+
+colnames(EJA_lcwgs_dist) <- IDs
+rownames(EJA_lcwgs_dist) <- IDs
+```
+
+#### Individual
+
+##### Plot results
+
+```{r}
+ID_plot_order <- read.table(here("data", "Individuals_plot_order.txt")) |> unlist()
+
+ID_dist_plot <- EJA_lcwgs_dist[ID_plot_order, ID_plot_order] |>
+  reshape2::melt(value.name = c("dist")) |> 
+  plot_matrix_notext() +
+  theme(
+    axis.text.x      = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    panel.background = element_blank()
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "ID_dist_plot.png"),
+  plot   = ID_dist_plot,
+  width  = 16,
+  height = 15
+)
+```
+
+##### NJ trees
+
+```{r}
+NJ_Tree_lcwgs <- EJA_lcwgs_dist |> as.dist() |> nj()
+
+NJ_Tree_lcwgs_annotations <- tibble(
+  Indiv = NJ_Tree_lcwgs$tip.label,
+  pop   = popmap_lcwgs
+)
+
+NJ_Tree_lcwgs_plot <- NJ_Tree_lcwgs |>
+  ggtree(layout = "circular") %<+% NJ_Tree_lcwgs_annotations +
+  geom_tiplab(aes(color = pop), size = 2.8) +
+  geom_treescale(x = 800000, y = 0)
+
+save_open_plot(
+  path   = here("output", "plots", "dist_tree.pdf"),
+  plot   = NJ_Tree_lcwgs_plot,
+  width  = 12,
+  height = 9
+)
+```
+
+```{r}
+NJ_Tree_lcwgs_rooted <- NJ_Tree_lcwgs |> root(outgroup = "EJA_GUA20")
+
+NJ_Tree_lcwgs_rooted_plot <- NJ_Tree_lcwgs_rooted |>
+  ggtree() %<+% NJ_Tree_lcwgs_annotations +
+  geom_tiplab(aes(color = pop), size = 2.8) +
+  geom_treescale(x = 800000, y = 0)
+
+save_open_plot(
+  path   = here("output", "plots", "dist_tree_rooted.pdf"),
+  plot   = NJ_Tree_lcwgs_rooted_plot,
+  width  = 12,
+  height = 12
+)
+```
+
+#### All Populations
+
+```{r}
+pop_distance_matrix <- aggregate_by_population(EJA_lcwgs_dist, popmap_tb$pop)
+pop_distance_matrix_sub <- Substract_diagonal(pop_distance_matrix)
+```
+
+```{r}
+pop_distance_matrix[pop_order_b, pop_order_b] |>
+  as.data.frame() |>
+  write.csv(here("output", "EJA_all_pop_allele_distances.csv"))
+
+pop_distance_matrix_sub[pop_order_b, pop_order_b] |>
+  as.data.frame() |>
+  write.csv(here("output", "EJA_all_pop_allele_distances_substracted.csv"))
+```
+
+```{r}
+pop_order <- c("bodega_tomales_bay", "santa_cruz", "elkhorn", "pacific_grove", "big_creek", "santa_barbara", "point_dume", "redondo_beach", "laguna_beach", "la_jolla_san_diego", "isla_san_jeronimo", "catalina_island", "san_clemente_island", "guadalupe_island")
+
+pop_distance_matrix_plot <- pop_distance_matrix[pop_order_b, pop_order_b] |>
+  reshape2::melt(value.name = c("dist")) |> 
+  plot_matrix() +
+  theme(
+    axis.text        = element_text(angle = 45, vjust = 0.5, hjust = 0),
+    panel.background = element_blank()
+  )
+  
+save_open_plot(
+  path   = here("output", "plots", "pop_distance_matrix_plot.pdf"),
+  plot   = pop_distance_matrix_plot,
+  width  = 8,
+  height = 7
+)
+
+pop_distance_matrix_sub_plot <- pop_distance_matrix_sub[pop_order_b, pop_order_b] |>
+  reshape2::melt(value.name = c("dist")) |> 
+  plot_matrix() +
+  theme(
+    axis.text        = element_text(angle = 45, vjust = 0.5, hjust = 0),
+    panel.background = element_blank()
+  )
+  
+save_open_plot(
+  path   = here("output", "plots", "pop_distance_matrix_sub_plot.pdf"),
+  plot   = pop_distance_matrix_sub_plot,
+  width  = 8,
+  height = 7
+)
+```
+
+```{r}
+NJ_Tree_lcwgs_pops_rooted <- pop_distance_matrix |> NJ() |> root("guadalupe_island")
+
+NJ_Tree_lcwgs_pops_rooted_plot <- NJ_Tree_lcwgs_pops_rooted |>
+  ggtree() +
+  geom_tiplab() +
+  geom_treescale(x = 800000, y = 0) +
+  xlim(0, 1125000)
+
+save_open_plot(
+  path   = here("output", "plots", "dist_tree_pop_rooted.pdf"),
+  plot   = NJ_Tree_lcwgs_pops_rooted_plot,
+  width  = 12,
+  height = 8
+)
+
+```
+
+#### Coast + isj vs Islands
+
+```{r}
+pop_distance_matrix_2 <- aggregate_by_population(EJA_lcwgs_dist, popmap_tb$pop2)
+pop_distance_matrix_2_sub <- Substract_diagonal(pop_distance_matrix_2)
+```
+
+```{r}
+pop_distance_matrix_2[plot_order_coast, plot_order_coast] |>
+  as.data.frame() |>
+  write.csv(here("output", "EJA_coast_vs_isl_allele_distances.csv"))
+
+pop_distance_matrix_2_sub[plot_order_coast, plot_order_coast] |>
+  as.data.frame() |>
+  write.csv(here("output", "EJA_coast_vs_isl_allele_distances_substracted.csv"))
+```
+
+```{r}
+plot_order_coast <- c("coast_isj", "catalina_island", "san_clemente_island", "guadalupe_island")
+
+pop_distance_matrix_2_plot <- pop_distance_matrix_2[plot_order_coast, plot_order_coast] |>
+  reshape2::melt(value.name = c("dist")) |> 
+  plot_matrix() +
+  theme(
+    axis.text        = element_text(angle = 45, vjust = 0.5, hjust = 0),
+    panel.background = element_blank()
+  )
+  
+save_open_plot(
+  path   = here("output", "plots", "pop_distance_matrix_coast_vs_isl_plot.pdf"),
+  plot   = pop_distance_matrix_2_plot,
+  width  = 8,
+  height = 7
+)
+
+pop_distance_matrix_2_sub_plot <- pop_distance_matrix_2_sub[plot_order_coast, plot_order_coast] |>
+  reshape2::melt(value.name = c("dist")) |> 
+  plot_matrix() +
+  theme(
+    axis.text        = element_text(angle = 45, vjust = 0.5, hjust = 0),
+    panel.background = element_blank()
+  )
+  
+save_open_plot(
+  path   = here("output", "plots", "pop_distance_matrix_coast_vs_isl_sub_plot.pdf"),
+  plot   = pop_distance_matrix_2_sub_plot,
+  width  = 8,
+  height = 7
+)
+```
+
+### Weir and Cocherham pairwise Fst
+
+#### Write cluster maps for plink
+
+```{r}
+read_table(here("plink2", "8-Embiotoca_filtered.fam"), col_names = FALSE) |>
+  select(X1, X2) |>
+  mutate(
+    pop = here("data", "individuals_coordinates.csv") |>
+      read_csv2() |>
+      pull(Localisation),
+    pop2 = here("data", "individuals_coordinates.csv") |>
+      read_csv2() |>
+      pull(Localisation_b)
+  ) |>
+  write.table(
+    here("plink2", "8-Embiotoca_filtered.txt"),
+    quote     = FALSE,
+    row.names = FALSE,
+    col.names = c("FID", "IID", "pop", "pop2"),
+    sep       = "\t"
+  )
+```
+
+#### All pops
+
+##### Compute pairwise Fst with plink
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --out Embiotoca_filtered_Fst --allow-extra-chr --autosome-num 95 --const-fid --pheno 8-Embiotoca_filtered.txt --fst pop 'method='wc
+```
+
+##### Load and format results
+
+```{r}
+lookup <- popmap_tb |> select(c(Code, pop)) |> distinct(.keep_all = TRUE)
+
+Fst_all <- here("plink2", "Embiotoca_filtered_Fst.fst.summary") |>
+  read_table(skip = 1, col_names = c("Var1", "Var2", "dist")) |> 
+  mutate(
+    dist = as.numeric(dist)
+  ) |> 
+  reshape2::acast(Var1 ~ Var2)
+
+Fst_all <- cbind(matrix(rep(NA, 14), 14, 1, dimnames = list(rownames(Fst_all), "BBA")), Fst_all)
+Fst_all <- rbind(Fst_all, matrix(rep(NA, 15), 1, 15, dimnames = list("TB", colnames(Fst_all))))
+Fst_all[is.na(Fst_all)] <- 0
+Fst_all <- Fst_all + t(Fst_all)
+
+colnames(Fst_all) <-  rownames(Fst_all) <- lookup$pop[match(colnames(Fst_all), lookup$Code)]
+rm(lookup)
+```
+
+##### Save results
+
+```{r}
+pop_order_b <- c("bodega_bay", "tomales_bay", "santa_cruz_harbour", "elkhorn", "pacific_grove", "big_creek", "santa_barbara", "point_dume", "redondo_beach", "laguna_beach", "la_jolla_san_diego", "isla_san_jeronimo", "catalina_island", "san_clemente_island", "guadalupe_island")
+
+Fst_all[pop_order_b, pop_order_b] |>
+  as.data.frame() |>
+  write.csv(here("output", "EJA_all_pop_pairwise_Fst.csv"))
+```
+
+##### Plot results
+
+```{r}
+pop_Fst_matrix_plot <- reshape2::melt(
+  Fst_all[pop_order_b , pop_order_b ]*1000000,
+  value.name = "dist"
+) |> 
+  plot_matrix() +
+  scale_fill_viridis("Fst", option = "turbo") +
+  theme(
+    axis.text        = element_text(angle = 45, vjust = 0.5, hjust = 1),
+    panel.background = element_blank()
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "pop_Fst_matrix_plot.pdf"),
+  plot   = pop_Fst_matrix_plot,
+  width  = 8,
+  height = 7
+)
+```
+
+#### Coast + isj vs Islands
+
+##### Compute pairwise Fst with plink
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --out Embiotoca_filtered_coast_Fst --allow-extra-chr --autosome-num 95 --const-fid --pheno 8-Embiotoca_filtered.txt --fst pop2 'method='wc
+```
+
+##### Load and format results
+
+```{r}
+lookup <- popmap_tb |> select(c(Code_b, pop2)) |> distinct(.keep_all = TRUE)
+
+Fst_coast_vs_isl <- here("plink2", "Embiotoca_filtered_coast_Fst.fst.summary") |>
+  read_table(skip = 1, col_names = c("Var1", "Var2", "dist")) |> 
+  mutate(
+    dist = as.numeric(dist)
+  ) |> 
+  reshape2::acast(Var1 ~ Var2)
+
+Fst_coast_vs_isl <- cbind(matrix(rep(NA, 3), 3, 1, dimnames = list(rownames(Fst_coast_vs_isl), "CAT")), Fst_coast_vs_isl)
+Fst_coast_vs_isl <- rbind(Fst_coast_vs_isl, matrix(rep(NA, 4), 1, 4, dimnames = list("SCL", colnames(Fst_coast_vs_isl))))
+Fst_coast_vs_isl[is.na(Fst_coast_vs_isl)] <- 0
+Fst_coast_vs_isl <- Fst_coast_vs_isl + t(Fst_coast_vs_isl)
+
+colnames(Fst_coast_vs_isl) <-  rownames(Fst_coast_vs_isl) <- lookup$pop2[match(colnames(Fst_coast_vs_isl), lookup$Code_b)]
+
+rm(lookup)
+```
+
+##### Save results
+
+```{r}
+Fst_coast_vs_isl[plot_order_coast, plot_order_coast] |>
+  as.data.frame() |>
+  write.csv(here("output", "EJA_coast_vs_isl_pop_pairwise_Fst.csv"))
+```
+
+##### Plot results
+
+```{r}
+plot_order_coast <- c("coast_isj", "catalina_island", "san_clemente_island", "guadalupe_island")
+
+pop_Fst_coast_vs_isl_matrix_plot <- reshape2::melt(Fst_coast_vs_isl[plot_order_coast, plot_order_coast]*1000000, value.name = c("dist")) |> 
+  plot_matrix() +
+  scale_fill_viridis("Fst", option = "turbo") +
+  theme(
+    axis.text        = element_text(angle = 45, vjust = 0.5, hjust = 0),
+    panel.background = element_blank()
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "pop_Fst_coast_vs_isl_matrix_plot.pdf"),
+  plot   = pop_Fst_coast_vs_isl_matrix_plot,
+  width  = 8,
+  height = 7
+)
+```
+
+#### Combined plots
+
+##### All pops
+
+```{r}
+pop_order_b <- c("bodega_bay", "tomales_bay", "santa_cruz_harbour", "elkhorn", "pacific_grove", "big_creek", "santa_barbara", "point_dume", "redondo_beach", "laguna_beach", "la_jolla_san_diego", "isla_san_jeronimo", "catalina_island", "san_clemente_island", "guadalupe_island")
+
+Fst_all <- Fst_all[pop_order_b, pop_order_b]
+Fst_all[lower.tri(Fst_all)] <- NA
+
+pop_distance_matrix_sub_t <- pop_distance_matrix_sub[pop_order_b, pop_order_b]
+pop_distance_matrix_sub_t[upper.tri(pop_distance_matrix_sub_t)] <- NA
+
+df1 <- Fst_all |> reshape2::melt(value.name = "Fst") |> tibble()
+df2 <- pop_distance_matrix_sub_t |> reshape2::melt(value.name = "dist") |> tibble()
+
+
+all_distances_biplot <- ggplot() + 
+  geom_raster(df1, mapping = aes(x = Var1, y = Var2, fill  = Fst)) +
+  geom_text(df1,   mapping = aes(x = Var1, y = Var2, label = round(Fst, digits = 2))) +
+  scale_fill_viridis(name = "Fst", na.value = "transparent") +
+  new_scale_fill() +
+  geom_raster(df2,  mapping = aes(x = Var1, y = Var2, fill  = dist/1000000)) +
+  geom_text(df2,    mapping = aes(x = Var1, y = Var2, label = round(dist/1000000, digits = 2))) +
+  scale_fill_viridis(name = "Distance in Mb", option = "turbo", na.value = "transparent") +
+  labs(x = "", y = "") +
+  scale_x_discrete(position = "top") +
+  scale_y_discrete(limits = rev(levels(df1$Var2))) +
+  theme(
+    axis.text        = element_text(angle = 45, vjust = 0.5, hjust = 0),
+    panel.background = element_blank()
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "pop_Fst_and_distances_all_matrix_plot.pdf"),
+  plot   = all_distances_biplot,
+  width  = 8,
+  height = 6.5
+)
+```
+
+##### Coast + isj vs islands
+
+```{r}
+
+Fst_coast_vs_isl_t <- Fst_coast_vs_isl[plot_order_coast, plot_order_coast]
+Fst_coast_vs_isl_t[lower.tri(Fst_coast_vs_isl_t)] <- NA
+
+pop_distance_matrix_2_sub_t <- pop_distance_matrix_2_sub[plot_order_coast, plot_order_coast]
+pop_distance_matrix_2_sub_t[upper.tri(pop_distance_matrix_2_sub_t)] <- NA
+
+df1 <- Fst_coast_vs_isl_t |> reshape2::melt(value.name = "Fst") |> tibble()
+df2 <- pop_distance_matrix_2_sub_t |> reshape2::melt(value.name = "dist") |> tibble()
+
+
+coast_distances_biplot <- ggplot() + 
+  geom_raster(df1, mapping = aes(x = Var1, y = Var2, fill = Fst)) +
+  geom_text(df1,  mapping = aes(x = Var1, y = Var2, label = round(Fst, digits = 2))) +
+  scale_fill_viridis(name = "Fst", na.value = "transparent") +
+  new_scale_fill() +
+  geom_raster(df2,  mapping = aes(x = Var1, y = Var2, fill = dist/1000000)) +
+  geom_text(df2,  mapping = aes(x = Var1, y = Var2, label = round(dist/1000000, digits = 2))) +
+  scale_fill_viridis(name = "Distance in Mb", option = "turbo", na.value = "transparent") +
+  labs(x = "", y = "") +
+  scale_x_discrete(position = "top") +
+  scale_y_discrete(limits = rev(levels(df1$Var2))) +
+  theme(
+    axis.text        = element_text(angle = 45, vjust = 0.5, hjust = 0),
+    panel.background = element_blank()
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "pop_Fst_and_distances_coast_vs_isl_matrix_plot.pdf"),
+  plot   = coast_distances_biplot,
+  width  = 8,
+  height = 6.5
+)
+```
+
+### Edward distance Sendaway
+
+```{r}
+#| eval: false
+
+EJA_gi <- read.vcfR(here("data", "8-Embiotoca_filtered.vcf.gz")) |>
+  vcfR2genind()
+
+popmap_lcwgs <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("catalina_island",      11), # CAT
+  rep("elkhorn",               6), # ELK
+  rep("guadalupe_island",     10), # GUA
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
+  rep("isla_san_jeronimo",    11), # ISJ
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara",        13), # SB
+  rep("san_clemente_island",  10), # SCL
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10) # SCH
+)
+
+EJA_gi@pop <- factor(popmap_lcwgs)
+
+EJA_gen <- genind2genpop(EJA_gi)
+
+saveRDS(EJA_gen, here("output", "EJA_lcwgs_gen.rds"))
+saveRDS(EJA_gi, here("output", "EJA_lcwgs_gi.rds"))
+rm(EJA_vcf, EJA_gi)
+
+EJA_chord_distance <- dist.genpop(EJA_gen, method = 2)
+
+saveRDS(EJA_chord_distance, here("output", "EJA_lcwgs_Edward_distance.rds"))
+
+```
+
+## Isolation by Distance
+
+### Common computing
+
+#### Barrier distance
+
+```{r}
+water <- ne_states(
+  country     = c("united states of america", "mexico"),
+  returnclass = "sv"
+) |>
+  crop(y = ext(-124,-113, 28.5, 38.5)) |>
+  rasterize(y = rast(ext(-124, -113, 28.5, 38.5), ncols = 1100, nrows = 1000)) |> 
+  subst(from = NA, to = 2) |> 
+  subst(from = 1, to = NA) |> 
+  subst(from = 2, to = 1)
+
+barrier_distance <- function(from, to) {
+  background <- water
+  background[from] <- 2
+  grid_map <- gridDist(background, target = 2)
+  extract(grid_map, to) |> as.numeric()
+}
+```
+
+#### Topographic distance
+
+```{r}
+catalina_df_water <- getNOAA.bathy(
+    lon1 = -124, lon2 = -115,
+    lat1 = 28,   lat2 = 39,
+    resolution = .5
+  ) |>
+  fortify.bathy() |>
+  mutate(z = ifelse(z > 0, NA, z)) |> 
+  mutate(z = ifelse(z < 0, -z, z)) |> 
+  raster::rasterFromXYZ()
+```
+
+```{r}
+catalina_df <- getNOAA.bathy(
+    lon1 = -124, lon2 = -115,
+    lat1 = 28,   lat2 = 39,
+    resolution = .5
+  ) |> 
+  fortify.bathy() |>
+  mutate(z = ifelse(z > 0, NA, z)) # Remove landmass data
+
+states <- ne_states(
+  country     = c("united states of america", "mexico"),
+  returnclass = "sf"
+)
+```
+
+### All populations
+
+#### Barrier distance
+
+##### Computing barrier distance matrix
+```{r}
+geo_dist_cells <- here("data", "low_coverage_sampling_sites.csv") |> 
+  read_csv2(show_col_types = FALSE) |> 
+  select(c(Code, Longitude, Latitude, Popmap)) |> 
+  rename(pop = Popmap) |> 
+  mutate(
+    pop  = as.factor(pop),
+    Code = as.factor(Code)
+  ) |>
+  arrange(pop) |> 
+  (\(x) {
+    mutate(x, cell_id = cellFromXY(water, as.matrix(x[, 2:3])))
+  })() |> 
+  pull(cell_id, name = pop)
+```
+
+```{r}
+barrier_dist_mat <- proxy::dist(geo_dist_cells, method = barrier_distance)
+```
+
+##### Test Euclidean and barrrier distance correlation
+
+```{r}
+mantel_plot(IBD$Dgeo, barrier_dist_mat)
+```
+
+Distances correlate -> don't use barrier distance
+
+#### Geographic distance considering batymetry
+
+##### Compute distance
+
+```{r}
+coordinates <- here("data", "low_coverage_sampling_sites.csv") |>
+  read_csv2() |>
+  select(Popmap, Longitude, Latitude) |> 
+  mutate(Popmap = as.factor(Popmap)) |> 
+  arrange(Popmap) |> 
+  column_to_rownames(var = "Popmap") |> 
+  as.matrix()
+```
+
+```{r}
+Topo_Dist_w <- topoDist(catalina_df_water, coordinates, paths = TRUE)
+```
+
+##### Draw paths 
+
+```{r}
+bathy_paths <- ggplot() +
+  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
+  scale_fill_hypso_tint_c(palette = "colombia_bathy", limits = range(catalina_df$z, na.rm = TRUE)) +
+  geom_sf(data = states) +
+  gg(data = Topo_Dist_w[[2]]) +
+  geom_point(data = coordinates, mapping = aes(x = Longitude, y = Latitude), size = 2) +
+  coord_sf(xlim = c(-124, -115), ylim = c(28, 39), expand = FALSE) +
+  labs(x = "Longitude", y = "Latitude")
+
+save_open_plot(
+  here("output", "plots", "IBD_bathy_map.png"),
+  plot   = bathy_paths,
+  width  = 9,
+  height = 7
+)
+```
+
+#### Load PCA distances
+
+```{r}
+pcadapt_lcwgs <- read_rds(here("output", "pcadapt_lcwgs.rds"))
+popmap_lcwgs <- popmap_lcwgs <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("catalina_island",      11), # CAT
+  rep("elkhorn",               6), # ELK
+  rep("guadalupe_island",     10), # GUA
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
+  rep("isla_san_jeronimo",    11), # ISJ
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara",        13), # SB
+  rep("san_clemente_island",  10), # SCL
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10) # SCH
+)
+```
+
+```{r}
+PCA_distance <- tibble(
+  PCA1 = pcadapt_lcwgs$scores[, 1],
+  PCA2 = pcadapt_lcwgs$scores[, 2],
+  PCA3 = pcadapt_lcwgs$scores[, 3],
+  PCA4 = pcadapt_lcwgs$scores[, 4],
+  pop  = popmap_lcwgs
+) |> 
+  group_by(pop) |> 
+  summarise(
+    PCA1_popmean = mean(PCA1),
+    PCA2_popmean = mean(PCA2),
+    PCA3_popmean = mean(PCA3),
+    PCA4_popmean = mean(PCA4)
+  ) |>
+  column_to_rownames(var = "pop") |> 
+  dist()
+
+rm(pcadapt_lcwgs, popmap_lcwgs)
+```
+
+#### Load Edward distance
+
+```{r}
+Edward_distance <- readRDS(here("output", "EJA_lcwgs_Edward_distance.rds"))
+```
+
+#### All comparisons
+
+```{r}
+mantel.randtest(dist(coordinates), PCA_distance)
+p1 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), PCA_distance, xlab = "Euclidean", ylab = "PCA")
+
+mantel.randtest(as.dist(Topo_Dist_w[[1]]), PCA_distance)
+p2 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), PCA_distance, xlab = "Bathy", ylab = "PCA")
+
+mantel.randtest(dist(coordinates), Edward_distance)
+p3 <- mantel_plot(dist(coordinates), Edward_distance, xlab = "Euclidean", ylab = "Chord distance")
+
+mantel.randtest(as.dist(Topo_Dist_w[[1]]), Edward_distance)
+p4 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), Edward_distance, xlab = "Bathy", ylab = "Chord distance")
+
+combined <- (p1 | p2) / (p3 | p4)
+
+save_open_plot(
+  path   = here("output", "plots", "IBD_all_pops_K3.png"),
+  plot   = combined,
+  width  = 8,
+  height = 8
+)
+```
+
+```{r}
+rm(combined, p1, p2, p3, p4, p5, p6)
+rm(Topo_Dist_w, PCA_distance)
+```
+
+#### Adegenet analysis
+
+```{r}
+Dgen <- Edward_distance
+Dgeo <- dist(coordinates)
+
+ibd <- mantel.randtest(Dgen, Dgeo)
+vegan::mantel(Dgen, Dgeo)
+ibd
+plot(ibd)
+```
+
+### Coast + ISJ
+
+#### Prep
+
+```{r}
+#| echo: false
+
+lcwgs_gl <- readRDS(file = here("data", "Embiotoca_lcwgs_gl.rds"))
+
+lcwgs_gl_islanders <- lcwgs_gl[!lcwgs_gl$pop %in% c("guadalupe_island", "catalina_island", "san_clemente_island"), ] |>
+  gl.filter.monomorphs(lcwgs_gl_islanders, verbose = 5) |> 
+  gl.recalc.metrics(lcwgs_gl_islanders, verbose = 5)
+
+lcwgs_gl_islanders@other$latlon <- here("data", "low_coverage_sampling.csv") |> 
+  read_csv2() |>
+  select(Popmap, Latitude, Longitude) |>
+  right_join(tibble(Popmap = pop(lcwgs_gl_islanders))) |> 
+  rename(lat = Latitude, lon = Longitude) |> 
+  select(-c(Popmap))
+
+saveRDS(
+  lcwgs_gl_islanders,
+  file = here("data", "Embiotoca_lcwgs_islanders_gl.rds")
+)
+
+rm(lcwgs_gl)
+```
+
+#### Compute geographic euclidean distance
+```{r}
+Dist_geo_isl <- here("data", "low_coverage_sampling_sites.csv") |> 
+  read_csv2(show_col_types = FALSE) |> 
+  select(c(Code, Longitude, Latitude, Popmap)) |>
+  rename(pop = Popmap) |> 
+  arrange(pop) |> 
+  filter(
+    !pop %in% c("guadalupe_island", "catalina_island", "san_clemente_island")
+  ) |>
+  as.data.frame()
+
+rownames(Dist_geo_isl) <- Dist_geo_isl$pop
+
+Dist_geo_isl <- Dist_geo_isl[, 2:3] |> dist()
+```
+
+#### Barrier distance
+
+##### Compute geographic barrier distance
+```{r}
+coordinates_coast_isj <- here("data", "low_coverage_sampling_sites.csv") |>
+  read_csv2() |>
+  dplyr::select(Popmap, Longitude, Latitude) |> 
+  mutate(Popmap = as.factor(Popmap)) |> 
+  arrange(Popmap) |> 
+  filter(
+    !Popmap %in% c("guadalupe_island", "catalina_island", "san_clemente_island")
+  ) |> 
+  column_to_rownames(var = "Popmap") |> 
+  as.matrix()
+```
+
+##### Test if Euclidean and barrier geographic distances are different
+```{r}
+vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgeo)
+```
+
+#### Geographic distance considering batymetry
+
+##### Compute
+
+```{r}
+Topo_Dist_w_coast_isj <- topoDist(catalina_df_water, coordinates_coast_isj, paths = TRUE)
+```
+
+##### Draw paths 
+
+```{r}
+bathy_paths_coast <- ggplot() +
+  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
+  scale_fill_hypso_tint_c(palette = "colombia_bathy", limits = range(catalina_df$z, na.rm = TRUE)) +
+  geom_sf(data = states) +
+  gg(data = Topo_Dist_w_coast[[2]]) +
+  geom_point(data = coordinates_coast, mapping = aes(x = Longitude, y = Latitude), size = 2) +
+  coord_sf(xlim = c(-124, -115), ylim = c(28, 39), expand = FALSE) +
+  labs(x = "Longitude", y = "Latitude")
+
+save_open_plot(
+  here("output", "plots", "IBD_bathy_map_coast.png"),
+  plot   = bathy_paths_coast,
+  width  = 9,
+  height = 7
+)
+```
+
+#### Load PCA distance
+
+```{r}
+pcadapt_lcwgs_coast_isj <- read_rds(here("output", "pcadapt_lcwgs_coast_isj.rds"))
+popmap_lcwgs_coast_isj <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("elkhorn",               6), # ELK
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+  rep("isla_san_jeronimo",    11), # ISJ
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara",        13), # SB
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10)  # SCH
+)
+
+PCA_distances_coast_isj <- tibble(
+  PCA1 = pcadapt_lcwgs_coast_isj$scores[, 1],
+  PCA2 = pcadapt_lcwgs_coast_isj$scores[, 2],
+  pop  = popmap_lcwgs_coast_isj
+) |> 
+  group_by(pop) |> 
+  summarise(
+    PCA1_popmean = mean(PCA1),
+    PCA2_popmean = mean(PCA2)
+  ) |> 
+  column_to_rownames(var = "pop") |> 
+  dist()
+
+rm(pcadapt_lcwgs_coast_isj, popmap_lcwgs_coast_isj)
+```
+
+#### Load Edward
+
+```{r}
+pops_coast_isj <- c("bodega_bay",    "big_creek",         "elkhorn",
+                    "pacific_grove", "isla_san_jeronimo", "laguna_beach",
+                    "point_dume",    "santa_barbara",     "la_jolla_san_diego",
+                    "tomales_bay",   "redondo_beach",     "santa_cruz_harbour")
+)
+
+Edward_distance_coast_isj <- here("output", "EJA_lcwgs_Edward_distance.rds") |> 
+  readRDS() |>
+  as.matrix() |> 
+  _[pops_coast_isj, pops_coast_isj] |> 
+  as.dist()
+```
+
+#### All comparisons
+
+```{r}
+mantel.randtest(dist(coordinates_coast_isj), PCA_distances_coast_isj)
+p1 <- mantel_plot(dist(coordinates_coast_isj), PCA_distances_coast_isj, xlab = "Euclidean", ylab = "PCA")
+
+mantel.randtest(as.dist(Topo_Dist_w_coast_isj[[1]]), PCA_distances_coast_isj)
+p2 <- mantel_plot(as.dist(Topo_Dist_w_coast_isj[[1]]), PCA_distances_coast_isj, xlab = "Bathy", ylab = "PCA")
+
+mtest <- mantel.randtest(as.dist(geosphere::distm(coordinates_coast_isj)), Edward_distance_coast_isj)
+p3 <- mantel_plot(as.dist(geosphere::distm(coordinates_coast_isj)), Edward_distance_coast_isj, xlab = "Euclidean", ylab = "Chord distance")
+
+mantel.randtest(as.dist(Topo_Dist_w_coast_isj[[1]]), Edward_distance_coast_isj)
+p4 <- mantel_plot(as.dist(Topo_Dist_w_coast_isj[[1]]), Edward_distance_coast_isj, xlab = "Bathy", ylab = "Chord distance")
+
+combined <- (p1 | p2) / (p3 | p4)
+
+save_open_plot(
+  path   = here("output", "plots", "IBD_coast_isj_pops.png"),
+  plot   = combined,
+  width  = 8,
+  height = 8
+  )
+
+save_open_plot(
+  path   = here("output", "plots", "IBD_coast_isj_Euclidean_Edward.pdf"),
+  plot   = p3,
+  width  = 6,
+  height = 6
+  )
+```
+
+```{r}
+rm(combined, p1, p2, p3, p4)
+```
+
+### Coast
+
+#### Compute geographic euclidean distance
+```{r}
+coordinates_coast <- here("data", "low_coverage_sampling_sites.csv") |>
+  read_csv2() |>
+  dplyr::select(Popmap, Longitude, Latitude) |> 
+  mutate(Popmap = as.factor(Popmap)) |> 
+  arrange(Popmap) |> 
+  filter(
+    !Popmap %in% c("guadalupe_island", "catalina_island", "san_clemente_island", "isla_san_jeronimo")
+  ) |> 
+  column_to_rownames(var = "Popmap") |> 
+  as.matrix()
+```
+
+#### PCA distance
+
+```{r}
+pcadapt_lcwgs_coast <- read_rds(here("output", "pcadapt_lcwgs_coast.rds"))
+popmap_lcwgs_coast <- c(
+  rep("bodega_bay",            5), # BB
+  rep("big_creek",            13), # BIGC -> BCR
+  rep("elkhorn",               6), # ELK
+  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+  rep("laguna_beach",         13), # LB
+  rep("point_dume",            5), # PD
+  rep("santa_barbara",        13), # SB
+  rep("la_jolla_san_diego",   13), # SD
+  rep("tomales_bay",           1), # TB
+  rep("redondo_beach",        10), # RB
+  rep("santa_cruz_harbour",   10)  # SCH
+)
+
+PCA_distances_coast <- tibble(
+  PCA1 = pcadapt_lcwgs_coast$scores[, 1],
+  PCA2 = pcadapt_lcwgs_coast$scores[, 2],
+  pop  = popmap_lcwgs_coast
+) |> 
+  group_by(pop) |> 
+  summarise(
+    PCA1_popmean = mean(PCA1),
+    PCA2_popmean = mean(PCA2)
+  ) |> 
+  column_to_rownames(var = "pop") |> 
+  dist()
+
+rm(pcadapt_lcwgs_coast, popmap_lcwgs_coast)
+```
+
+#### Geographic distance considering batymetry
+
+##### Compute
+
+```{r}
+Topo_Dist_w_coast <- topoDist(catalina_df_water, coordinates_coast, paths = TRUE)
+```
+
+##### Draw paths
+
+```{r}
+bathy_paths_coast <- ggplot() +
+  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
+  scale_fill_hypso_tint_c(palette = "colombia_bathy", limits = range(catalina_df$z, na.rm = TRUE)) +
+  geom_sf(data = states) +
+  gg(data = Topo_Dist_w_coast[[2]]) +
+  geom_point(data = coordinates_coast, mapping = aes(x = Longitude, y = Latitude), size = 2) +
+  coord_sf(xlim = c(-124, -115), ylim = c(28, 39), expand = FALSE) +
+  labs(x = "Longitude", y = "Latitude")
+
+save_open_plot(
+  here("output", "plots", "IBD_bathy_map_coast.png"),
+  plot   = bathy_paths_coast,
+  width  = 9,
+  height = 7
+)
+```
+
+#### Load Edward distance
+
+```{r}
+pops_coast <- c("bodega_bay",    "big_creek",          "elkhorn",
+                "pacific_grove", "laguna_beach",       "point_dume",
+                "santa_barbara", "la_jolla_san_diego", "tomales_bay",
+                "redondo_beach", "santa_cruz_harbour")
+
+Edward_distance_coast <-  here("output", "EJA_lcwgs_Edward_distance.rds") |> 
+  readRDS() |>
+  as.matrix() |> 
+  _[pops_coast, pops_coast] |> 
+  as.dist()
+```
+
+#### All comparisons
+
+```{r}
+mantel.randtest(dist(coordinates_coast), PCA_distances_coast) |> plot()
+p1 <- mantel_plot(dist(coordinates_coast),
+                  PCA_distances_coast,
+                  xlab = "Euclidean", ylab = "PCA")
+
+mantel.randtest(as.dist(Topo_Dist_w_coast[[1]]), PCA_distances_coast) |> plot()
+p2 <- mantel_plot(as.dist(Topo_Dist_w_coast[[1]]),
+                  PCA_distances_coast,
+                  xlab = "Bathy", ylab = "PCA")
+
+mantel.randtest(dist(coordinates_coast), chord_distance) |> plot()
+p3 <- mantel_plot(dist(coordinates_coast),
+                  Edward_distance_coast,
+                  xlab = "Euclidean", ylab = "Chord distance")
+
+mantel.randtest(as.dist(Topo_Dist_w_coast[[1]]), chord_distance) |> plot()
+p4 <- mantel_plot(as.dist(Topo_Dist_w_coast[[1]]),
+                  Edward_distance_coast,
+                  xlab = "Bathy", ylab = "Chord distance")
+
+combined <- (p1 | p2) / (p3 | p4)
+
+save_open_plot(
+  path   = here("output", "plots", "IBD_coast_pops.png"),
+  plot   = combined,
+  width  = 8,
+  height = 8
+  )
+```
+
+```{r}
+rm(combined, p1, p2, p3, p4, p5, p6)
+```
+
+#### Tree tests
+
+```{r}
+IBD$Dgen |> nj() |> root(outgroup = "guadalupe_island") |> ladderize() |> plot()
+```
+
+```{r}
+PCA_distance <- tibble(
+  PCA1 = pcadapt_lcwgs$scores[, 1],
+  PCA2 = pcadapt_lcwgs$scores[, 2],
+  PCA3 = pcadapt_lcwgs$scores[, 3],
+  pop  = popmap_lcwgs
+) |> 
+  group_by(pop) |> 
+  summarise(
+    PCA1_popmean = mean(PCA1),
+    PCA2_popmean = mean(PCA2),
+    PCA3_popmean = mean(PCA3)
+  ) |>
+  column_to_rownames(var = "pop") |> 
+  dist()
+```
+
+```{r}
+PCA_distance |> nj() |> root(outgroup = "guadalupe_island") |> ladderize() |> plot()
+```
+
+```{r}
+Edward_distance |> nj() |> root(outgroup = "guadalupe_island") |> ladderize() |> plot()
+```
+
+## Admixture analysis
+
+### Convert data to ped format for LEA import using plink2
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+./plink2 --vcf 8-Embiotoca_filtered.vcf.gz --export ped --out 8-Embiotoca_filtered
+```
+
+### Read and convert data
+```{r}
+#| label: VcfConvert
+#| eval: false
+
+ped2geno(
+  input.file  = here("plink2", "8-Embiotoca_filtered.ped"),
+  output.file = here("data", "SNPs", "8-Embiotoca_filtered.geno")
+)
+```
+
+### Run analysis
+```{r}
+#| label: snmfAnalysisSingle
+#| eval: false
+
+snmf_analysis <- snmf(
+  here("data", "SNPs", "8-Embiotoca_filtered.geno"),
+  K           = 4:8,
+  project     = "continue",
+  repetitions = 50,
+  entropy     = TRUE
+)
+```
+
+### Load analysis
+
+```{r}
+EJA_snmf_analysis <- load.snmfProject(here("data", "lcwgs", "8-Embiotoca_filtered.snmfProject"))
+```
+
+#### Plot all cross-entropies to check distribution
+
+```{r}
+cross_entropies <- tibble(
+  `c-e`   = map(4:9, \(x) cross.entropy(EJA_snmf_analysis, K = x) |> as.vector()) |> unlist(),
+  K_value = factor(c(rep(4, 50), rep(5, 50), rep(6, 50), rep(7, 50), rep(8, 50), rep(9, 10)))
+)
+
+cross_entropies |> 
+  ggplot(aes(x = K_value, y = `c-e`)) +
+  geom_boxplot(alpha = .3) +
+  # geom_violin(alpha = .3) +
+  geom_point(alpha = .1) +
+  labs(x = "Number of ancestral population", y = "Cross-entropy Criterion") +
+  theme_classic()
+
+cross_entropies |>
+  filter(K_value == 7) |>
+  mutate(run = row_number()) |> 
+  ggplot() +
+  geom_point(aes(x = run, y = `c-e`))
+
+rm(cross_entropies)
+```
+
+### Plot minimal cross entropy to chose optimal ancestral population amount
+
+```{r}
+#| label: snmfCrossEntropy
+
+plot(snmf_analysis)
+
+snmf_tb <- tibble(K = as.numeric(unique(snmf_analysis@K)))
+
+cross_entropy <- rep(0, dim(snmf_tb)[1])
+
+for (i in 1:length(snmf_tb$K)) {
+  cross_entropy[i] <- min(cross.entropy(snmf_analysis, K = snmf_tb$K[i]))
+}
+
+snmf_plot <- snmf_tb |>
+  mutate(cross_entropy = cross_entropy) |> 
+  ggplot() +
+  geom_point(aes(x = K, y = cross_entropy)) +
+  theme_classic()
+
+ggsave(
+  filename = here("output", "plots", "snmf_cross_entropy.png"),
+  plot     = snmf_plot,
+  width    = 8,
+  height   = 5
+)
+```
+
+K = 7 has the minimum cross-entropy.
+
+#### Select best run to plot for each K value
+
+```{r}
+which.min(cross.entropy(EJA_snmf_analysis, K = 5))
+which.min(cross.entropy(EJA_snmf_analysis, K = 6))
+which.min(cross.entropy(EJA_snmf_analysis, K = 7))
+which.min(cross.entropy(EJA_snmf_analysis, K = 8))
+which.min(cross.entropy(EJA_snmf_analysis, K = 9))
+```
+
+### Plot results for K = 7
+
+```{r}
+#| label: snmfBarPlot
+
+barchart(
+  snmf_analysis,
+  K         = 7,
+  run       = which.min(cross.entropy(snmf_analysis, K = 7)),
+  col       = viridis::turbo(n = 6),
+  sort.by.Q = FALSE
+)
+```
+
+See `EJA_populations_lcwgs_Figures.qmd` for pretty plots.
+
+## Triangle plots
+
+### For North-South Gradient
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered_coastal --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal
+```
+
+```{r}
+lcwgs_coast_vcf <- read.vcfR(here("plink2", "8-Embiotoca_filtered_coastal.vcf"))
+
+popmap_lcwgs_coast <- read_csv2(here("data", "individuals_coordinates.csv")) |> 
+  select(Indiv, Localisation) |>
+  rename(id = Indiv, pop = Localisation) |> 
+  filter(pop != c("CAT")) |> 
+  filter(pop != c("ISJ")) |>
+  filter(pop != c("SCL")) |> 
+  filter(pop != c("GUA")) |> 
+  data.frame()
+```
+
+```{r}
+lcwgs_coast_vcf_diffs <- vector(mode = 'list', length = 3)
+parameters <- c(.5, .75, 1)
+
+for (i in 1:3) {
+  lcwgs_coast_vcf_diffs[[i]] <- alleleFreqDiff(lcwgs_coast_vcf,
+                                               pm = popmap_lcwgs_coast,
+                                               p1 = "BBA", p2 = "SD",
+                                               difference = parameters[i])
+}
+
+rm(lcwgs_coast_vcf)
+```
+with 1 difference : "8456 sites passed allele frequency difference threshold"
+
+Difference = .75 76178
+
+Difference = .5 : 276405 sites
+
+```{r}
+hi_het_coast <- vector(mode = 'list', length = 3)
+
+for (i in 1:3) {
+  hi_het_coast[[i]] <- hybridIndex(lcwgs_coast_vcf_diffs[[i]],
+                                   pm = popmap_lcwgs_coast,
+                                   p1 = "BBA", p2 = "SD")
+}
+```
+
+```{r}
+#| eval: false
+
+write_rds(hi_het_coast, here("output", "Triangle_analysis_coast.rds"))
+```
+
+```{r}
+hi_het_coast_plots <- vector(mode = 'list', length = 3)
+
+for (i in 1:3) {
+  hi_het_coast_plots[[i]] <- hi_het_coast[[i]] |>
+    mutate(
+      pop = factor(
+        pop,
+        levels = c("BBA", "TB", "SCH", "ELK", "HOP",
+                   "BIGC", "SB", "PD", "RB", "LAG", "SD")
+      )
+    ) |> 
+    arrange(pop) |>
+    triangle.plot(colors = turbo(n = 11)) +
+    labs(title = paste0("d = ", as.character(parameters[i])))
+}
+
+save_open_plot(
+  path   = here("output", "plots", "coast_Triangle_plots.pdf"),
+  plot   = Reduce("+", hi_het_coast_plots) +
+    plot_layout(axis_titles = "collect", guides = "collect"),
+  width  = 14,
+  height = 4
+)
+```
+
+```{r}
+rm(lcwgs_coast_vcf_diffs, hi_het_coast, hi_het_coast_plots)
+gc()
+```
+
+
+### For Coastal + ISJ
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered_coastal_isj --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_isj
+```
+
+```{r}
+EJA_lcwgs_coast_isj_vcf <- read.vcfR(here("plink2", "8-Embiotoca_filtered_coastal_isj.vcf"))
+
+popmap_lcwgs_coast_isj <- read_csv2(here("data", "individuals_coordinates.csv")) |> 
+  select(Indiv, Localisation) |>
+  rename(id = Indiv, pop = Localisation) |> 
+  filter(pop != c("CAT")) |> 
+  filter(pop != c("SCL")) |> 
+  filter(pop != c("GUA")) |> 
+  data.frame()
+```
+
+```{r}
+EJA_lcwgs_coast_isj_vcf_diff <- vector(mode='list', length=3)
+parameters <- c(.5, .75, 1)
+
+for (i in 1:3) {
+  EJA_lcwgs_coast_isj_vcf_diff[[i]] <- alleleFreqDiff(EJA_lcwgs_coast_isj_vcf,
+                                                      pm = popmap_lcwgs_coast_isj,
+                                                      p1 = "BBA", p2 = "ISJ",
+                                                      difference = parameters[i])
+}
+
+rm(EJA_lcwgs_coast_isj_vcf)
+gc()
+```
+With 1 : "32484 sites passed allele frequency difference threshold"
+With .75 : "166077 sites passed allele frequency difference threshold"
+With .5 : "424389 sites passed allele frequency difference threshold"
+
+```{r}
+hi_het_coast_isj <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_coast_isj[[i]] <- hybridIndex(EJA_lcwgs_coast_isj_vcf_diff[[i]],
+                                       pm = popmap_lcwgs_coast_isj,
+                                       p1 = "BBA", p2 = "ISJ")
+}
+```
+
+```{r}
+#| eval: false
+
+write_rds(hi_het_coast_isj, here("output", "Triangle_analysis_coast_isj.rds"))
+```
+
+```{r}
+hi_het_coast_isj_plots <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_coast_isj_plots[[i]] <- hi_het_coast_isj[[i]] |>
+    mutate(
+      pop = factor(
+        pop,
+        levels = c("BBA", "TB", "SCH", "ELK", "HOP", "BIGC",
+                   "SB",  "PD", "RB",  "LAG", "SD",  "ISJ")
+      )
+    ) |> 
+    arrange(pop) |>
+    triangle.plot(colors = turbo(n = 12)) +
+    labs(title = paste0("d = ", as.character(parameters[i])))
+}
+
+save_open_plot(
+  path   = here("output", "plots", "coast_isj_Triangle_plots.pdf"),
+  plot   = Reduce("+", hi_het_coast_isj_plots) +
+    plot_layout(axis_titles = "collect", guides = "collect"),
+  width  = 14,
+  height = 4
+)
+```
+
+```{r}
+rm(EJA_lcwgs_coast_isj_vcf_diff, hi_het_coast_isj, hi_het_coast_isj_plots)
+gc()
+```
+
+### For North
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered_north --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_north
+```
+
+```{r}
+EJA_lcwgs_north_vcf <- read.vcfR(here("plink2", "8-Embiotoca_filtered_north.vcf"))
+
+popmap_lcwgs_north <- read_csv2(here("data", "individuals_coordinates.csv")) |> 
+  select(Indiv, Localisation) |>
+  rename(id = Indiv, pop = Localisation) |> 
+  filter(pop %in% c("BBA", "BIGC", "ELK", "HOP", "SB", "TB", "SCH")) |> 
+  data.frame()
+```
+
+```{r}
+EJA_lcwgs_north_vcf_diff <- vector(mode='list', length=3)
+parameters <- c(.5, .75, 1)
+
+for (i in 1:3) {
+  EJA_lcwgs_north_vcf_diff[[i]] <- alleleFreqDiff(EJA_lcwgs_north_vcf,
+                                                  pm = popmap_lcwgs_north,
+                                                  p1 = "BBA", p2 = "SB",
+                                                  difference = parameters[i])
+}
+
+rm(EJA_lcwgs_north_vcf)
+gc()
+```
+
+Difference = 1.0 : 2348 sites
+Difference = 0.9 : 9364 sites
+Difference = 0.8 : 26991 sites (>1% SNPs)
+Difference = 0.75 : 38762
+Difference = 0.7 : 55736 sites
+Difference = 0.5 : 183805 sites
+
+```{r}
+hi_het_north <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_north[[i]] <- hybridIndex(EJA_lcwgs_north_vcf_diff[[i]],
+                                   pm = popmap_lcwgs_north,
+                                   p1 = "BBA", p2 = "SB")
+}
+```
+
+```{r}
+#| eval: false
+
+write_rds(hi_het_north, here("output", "Triangle_analysis_north.rds"))
+```
+
+```{r}
+hi_het_north_plots <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_north_plots[[i]] <- hi_het_north[[i]] |>
+    mutate(
+      pop = factor(
+        pop,
+        levels = c("BBA", "TB", "SCH", "ELK", "HOP", "BIGC", "SB")
+      )
+    ) |> 
+    arrange(pop) |>
+    triangle.plot(colors = turbo(n = 7)) +
+    labs(title = paste0("d = ", as.character(parameters[i])))
+}
+
+save_open_plot(
+  path   = here("output", "plots", "north_Triangle_plots.pdf"),
+  plot   = Reduce("+", hi_het_north_plots) +
+    plot_layout(axis_titles = "collect", guides = "collect"),
+  width  = 14,
+  height = 4
+)
+```
+
+
+```{r}
+rm(EJA_lcwgs_north_vcf_diff, hi_het_north, hi_het_north_plots)
+gc()
+```
+
+### For South
+
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered_south --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_south
+```
+
+```{r}
+EJA_lcwgs_south_vcf <- read.vcfR(here("plink2", "8-Embiotoca_filtered_south.vcf"))
+
+popmap_lcwgs_south <- read_csv2(here("data", "individuals_coordinates.csv")) |> 
+  select(Indiv, Localisation) |>
+  rename(id = Indiv, pop = Localisation) |> 
+  filter(pop %in% c("SB", "PD", "RB", "LAG", "SD")) |> 
+  data.frame()
+```
+
+```{r}
+EJA_lcwgs_south_vcf_diff <- vector(mode='list', length=3)
+parameters <- c(.5, .75, 1)
+
+for (i in 1:3) {
+  EJA_lcwgs_south_vcf_diff[[i]] <- alleleFreqDiff(EJA_lcwgs_south_vcf,
+                                                  pm = popmap_lcwgs_south,
+                                                  p1 = "SB", p2 = "SD",
+                                                  difference = parameters[i])
+}
+
+rm(EJA_lcwgs_south_vcf)
+gc()
+```
+
+With 1 : 234
+.75 : 3367
+.5 : 54787
+
+```{r}
+hi_het_south <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_south[[i]] <- hybridIndex(EJA_lcwgs_south_vcf_diff[[i]],
+                                   pm = popmap_lcwgs_south,
+                                   p1 = "SB", p2 = "SD")
+}
+```
+
+```{r}
+#| eval: false
+
+write_rds(hi_het_south, here("output", "Triangle_analysis_south.rds"))
+```
+
+```{r}
+hi_het_south_plots <- vector(mode='list', length=3)
+
+for (i in 1:3) {
+  hi_het_south_plots[[i]] <- hi_het_south[[i]] |>
+    mutate(
+      pop = factor(
+        pop,
+        levels = c("SB", "PD", "RB", "LAG", "SD")
+      )
+    ) |> 
+    arrange(pop) |>
+    triangle.plot(colors = turbo(n = 5)) +
+    labs(title = paste0("d = ", as.character(parameters[i])))
+}
+
+save_open_plot(
+  path   = here("output", "plots", "south_Triangle_plots.pdf"),
+  plot   = Reduce("+", hi_het_south_plots) +
+    plot_layout(axis_titles = "collect", guides = "collect"),
+  width  = 14,
+  height = 4
+)
+```
+
+```{r}
+rm(EJA_lcwgs_south_vcf_diff, hi_het_south, hi_het_south_plots)
+gc()
+```
+
+<!-- # Genotype-Environment Association -->
+
+<!-- ## Prep -->
+
+<!-- ```{r} -->
+<!-- #| eval: false -->
+
+<!-- Temperatures <- read_rds(here("data", "Copernicus", "annual_average_SST.rds")) |>  -->
+<!--   terra::unwrap() -->
+
+<!-- Coordinates <- read_csv2(here("data", "individuals_coordinates_temps.csv")) |> -->
+<!--   select(Longitude, Latitude) |>  -->
+<!--   as.data.frame() -->
+
+<!-- Temp_data <- terra::extract( -->
+<!--   x = Temperatures, -->
+<!--   y = data.frame(Coordinates), -->
+<!--   cells = FALSE -->
+<!-- ) -->
+
+<!-- read_csv2(here("data", "individuals_coordinates_temps.csv")) |>  -->
+<!--   mutate("Temp (Celsius)" = Temp_data$mean) |>  -->
+<!--   write_csv2(here("data", "individuals_coordinates_temps.csv")) -->
+
+<!-- rm(Temperatures, Coordinates, Temp_data) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- ggplot() + -->
+<!--   geom_spatraster(data = Temperatures) + -->
+<!--   geom_point(data = Coordinates, aes(x = Longitude, y = Latitude), shape = 21) -->
+<!-- ``` -->
+
+<!-- ## All pops -->
+
+<!-- ### Data preparation -->
+
+<!-- ```{r} -->
+<!-- Temp_data <- read_csv2(here("data", "individuals_coordinates_temps.csv")) |>  -->
+<!--   pull(`Temp (Celsius)`) |>  -->
+<!--   as.matrix() -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- Genotype <- LEA::read.geno(here("data", "8-Embiotoca_filtered.geno")) -->
+
+<!-- Genotype_noNA <- Genotype[, !apply(Genotype, 2, function(col) any(col == 9))] -->
+
+<!-- snmf(here("data", "8-Embiotoca_filtered.geno"), K = 7,  project = "new",) -->
+
+<!-- impute( -->
+<!--   object     = load.snmfProject( -->
+<!--     here("data", "snmf", "8-Embiotoca_filtered.snmfProject") -->
+<!--   ), -->
+<!--   input.file = here("data", "8-Embiotoca_filtered.geno"), -->
+<!--   method      = "mode", -->
+<!--   K          = 7, -->
+<!--   run        = 1 -->
+<!-- ) -->
+
+<!-- Genotype_imputed <- read.lfmm(here("data", "8-Embiotoca_filtered.lfmm_imputed.lfmm")) -->
+
+<!-- rm(Genotype) -->
+<!-- ``` -->
+
+<!-- ### Analysis -->
+
+<!-- ```{r} -->
+<!-- mod_lfmm <- LEA::lfmm2( -->
+<!--   input        = Genotype_noNA, -->
+<!--   env          = Temp_data,  -->
+<!--   K            = 4,  -->
+<!--   effect.sizes = TRUE -->
+<!-- ) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- pv <-  lfmm2.test(mod_lfmm,  -->
+<!--                   input = Genotype_noNA,  -->
+<!--                   env   = Temp_data,  -->
+<!--                   full  = TRUE) -->
+
+<!-- plot(-log10(pv$pvalue), cex = .3, pch = 19, col = "blue") -->
+<!-- ``` -->
+
+<!-- ## Coast -->
+
+<!-- ### Data preparation -->
+
+<!-- ```{r} -->
+<!-- #| eval: false -->
+
+<!-- vcf2geno( -->
+<!--   input.file  = here("plink2", "8-Embiotoca_filtered_coastal.vcf"), -->
+<!--   output.file = here("data", "8-Embiotoca_filtered_coastal.geno") -->
+<!-- ) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- Genotype_coast <- LEA::read.geno(here("data", "8-Embiotoca_filtered_coastal.geno")) -->
+
+<!-- Genotype_coast_noNA <- Genotype_coast[, !apply(Genotype_coast, 2, function(col) any(col == 9))] -->
+
+<!-- rm(Genotype_coast) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- Temp_data_coast <- read_csv2(here("data", "individuals_coordinates_temps.csv")) |>  -->
+<!--   filter(Localisation != "CAT") |> -->
+<!--   filter(Localisation != "GUA") |> -->
+<!--   filter(Localisation != "ISJ") |> -->
+<!--   filter(Localisation != "SCL") |> -->
+<!--   pull(`Temp (Celsius)`) |>  -->
+<!--   as.matrix() -->
+<!-- ``` -->
+
+
+<!-- ### Analysis -->
+
+<!-- ```{r} -->
+<!-- mod_lfmm_coast <- LEA::lfmm2( -->
+<!--   input        = Genotype_coast_noNA, -->
+<!--   env          = Temp_data_coast,  -->
+<!--   K            = 3, -->
+<!--   effect.sizes = TRUE -->
+<!-- ) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- pv_coast <- lfmm2.test( -->
+<!--     object = mod_lfmm_coast, -->
+<!--     input  = Genotype_coast_noNA,  -->
+<!--     env    = Temp_data_coast,  -->
+<!--     full   = TRUE -->
+<!--   ) -->
+
+<!-- plot(-log10(pv_coast$pvalue), cex = .3, pch = 19, col = "blue") -->
+<!-- ``` -->
