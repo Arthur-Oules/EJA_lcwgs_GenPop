@@ -51,7 +51,7 @@ chromosome_map <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |>
 ```{r}
 #| label: ManhattanPlot
 
-manhattan_plot_lcwgs_K9 <- here("output", "pcadapt_lcwgs_gua_isj.rds") |>
+manhattan_plot_lcwgs_K9 <- here("output", "pcadapt_lcwgs_K9.rds") |>
   read_rds() |> 
   manhattan_plot_custom_2(
     SNP_positions   = SNP_positions,
@@ -59,12 +59,12 @@ manhattan_plot_lcwgs_K9 <- here("output", "pcadapt_lcwgs_gua_isj.rds") |>
   )
 
 ggsave(
-  here("output", "plots",
-       "manhattan_plot_custom_lcwgs_gua_isj.png"),
+  here("output", "plots", "manhattan_plot_custom_lcwgsK9.png"),
   plot   = manhattan_plot_lcwgs_K9,
-  width  = 6000,
+  width  = 30000,
   height = 2000,
-  units  = "px"
+  units  = "px",
+  limitsize = FALSE
 )
 ```
 
