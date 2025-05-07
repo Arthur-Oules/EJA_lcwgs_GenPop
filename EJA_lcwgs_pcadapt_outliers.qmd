@@ -3,6 +3,7 @@ title: "EJA Population Genomics Low coverage"
 author: "Arthur Oulès"
 format: html
 editor: source
+engine: knitr
 ---
 # Load packages
 
@@ -507,7 +508,7 @@ popmap_lcwgs <- c(
 
 pcadapt_lcwgs <- here("plink2", "8-Embiotoca_filtered.bed") |> 
   read.pcadapt(type = "bed") |>
-  pcadapt(K = 20)
+  pcadapt(K = 6)
 ```
 
 ```{r}
@@ -538,6 +539,25 @@ pcadapt_lcwgs$pvalues |> hist(
   breaks = 50,
   col    = "orange"
 )
+```
+
+```{r}
+colnames(pcadapt_lcwgs$loadings) <- paste0("PC", seq(1, 6))
+
+for (i in paste0("PC", seq(1, 6))) {
+  ggsave(
+    plot = pcadapt_lcwgs$loadings |>
+      data.frame() |> 
+      mutate(index = row_number()) |> 
+      ggplot() +
+      geom_point(aes_string(x = "index", y = i)) +
+      theme_bw(),
+    filename  = here(paste0("pcadapt_all_pops_K9_loadings_", i, ".png")),
+    width     = 60,
+    limitsize = FALSE
+  )
+}
+
 ```
 
 ## Coastal populations
@@ -1563,197 +1583,360 @@ lcwgs_EJA_outliers_blast_A_ocellaris_tib_filtered |>
   write.csv2(here("output", "lcwgs_outliers_match_A_ocellaris.csv"))
 ```
 
-# Outliers with `genomics_general`
+# Outliers with `outFLANK`
 
-```{r}
+## Convert all beds to vcfs
 
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+bed_names=();
+for f in *.bed; do
+    bed_names+=("${f%.bed}");
+done;
+
+for bed in ${bed_names[@]}; do ./plink2 --bfile $bed --keep-allele-order --recode vcf --out $bed; done;
 ```
 
-# Outliers with `outFLANK`
+Coast *vs.* Gua and Cat
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua_cat.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua_cat
+
+./plink2 --bfile 8-Embiotoca_filtered_coastal_gua_cat --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_gua_cat
+```
+
+Coast *vs.* Gua and Scl
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua_scl.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua_scl
+
+./plink2 --bfile 8-Embiotoca_filtered_coastal_gua_scl --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_gua_scl
+```
+
+Coast *vs.* Gua, Cat and Scl
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua_cat_scl.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua_cat_scl
+
+./plink2 --bfile 8-Embiotoca_filtered_coastal_gua_cat_scl --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_gua_cat_scl
+```
+
+## prep
 
 ```{r}
 library(OutFLANK)
 ```
-Load data and convert to format:
+
+```{r}
+popmaps <- list(
+  "vcf_paths" = list.files(here("plink2"), pattern = ".vcf$"),
+  "names"     = list("all", "cat_isj", "cat_scl", "coastal", "coastal_cat",
+                     "coastal_gua", "coastal_gua_cat", "coastal_gua_cat_scl",
+                     "coastal_gua_scl", "coastal_isj", "coastal_scl", "gua_cat",
+                     "gua_isj", "gua_scl", "isl", "north", "scl_isj", "south"),
+  "maps"      = list(
+    "all" = c(
+      rep("bodega_bay",            5), # BB
+      rep("big_creek",            13), # BIGC -> BCR
+      rep("catalina_island",      11), # CAT
+      rep("elkhorn",               6), # ELK
+      rep("guadalupe_island",     10), # GUA
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
+      rep("isla_san_jeronimo",    11), # ISJ
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara",        13), # SB
+      rep("san_clemente_island",  10), # SCL
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz_harbour",   10) # SCH
+    ), "cat_isj" = c(
+      rep("catalina_island",      11), # CAT
+      rep("isla_san_jeronimo",    11)  # ISJ
+    ), "cat_scl" = c(
+      rep("catalina_island",      11), # CAT
+      rep("san_clemente_island",  10)  # SCL
+    ), "coastal" = c(
+      rep("bodega_bay",            5), # BB
+      rep("big_creek",            13), # BIGC -> BCR
+      rep("elkhorn",               6), # ELK
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara",        13), # SB
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz_harbour",   10)  # SCH
+    ), "coastal_cat" = c(
+      rep("bodega_bay",            5), # BB
+      rep("big_creek",            13), # BIGC -> BCR
+      rep("catalina_island",      11), # CAT
+      rep("elkhorn",               6), # ELK
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara",        13), # SB
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz_harbour",   10)  # SCH
+    ), "coastal_gua" = c(
+      rep("bodega_bay",            5), # BB
+      rep("big_creek",            13), # BIGC -> BCR
+      rep("elkhorn",               6), # ELK
+      rep("guadalupe_island",     10), # GUA
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara",        13), # SB
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz_harbour",   10)  # SCH
+    ), "coastal_gua_cat" = c(
+      rep("bodega_bay",            5), # BB
+      rep("big_creek",            13), # BIGC -> BCR
+      rep("catalina_island",      11), # CAT
+      rep("elkhorn",               6), # ELK
+      rep("guadalupe_island",     10), # GUA
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara",        13), # SB
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz_harbour",   10)  # SCH
+    ), "coastal_gua_cat_scl" = c(
+      rep("bodega_bay",            5), # BB
+      rep("big_creek",            13), # BIGC -> BCR
+      rep("catalina_island",      11), # CAT
+      rep("elkhorn",               6), # ELK
+      rep("guadalupe_island",     10), # GUA
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara",        13), # SB
+      rep("san_clemente_island",  10), # SCL
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz_harbour",   10)  # SCH
+    ), "coastal_gua_scl" = c(
+      rep("bodega_bay",            5), # BB
+      rep("big_creek",            13), # BIGC -> BCR
+      rep("elkhorn",               6), # ELK
+      rep("guadalupe_island",     10), # GUA
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara",        13), # SB
+      rep("san_clemente_island",  10), # SCL
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz_harbour",   10)  # SCH
+    ), "coastal_isj" = c(
+      rep("bodega_bay",            5), # BB
+      rep("big_creek",            13), # BIGC -> BCR
+      rep("elkhorn",               6), # ELK
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+      rep("isla_san_jeronimo",    11), # ISJ
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara",        13), # SB
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz_harbour",   10)  # SCH
+    ), "coastal_scl" = c(
+      rep("bodega_bay",            5), # BB
+      rep("big_creek",            13), # BIGC -> BCR
+      rep("elkhorn",               6), # ELK
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara",        13), # SB
+      rep("san_clemente_island",  10), # SCL
+      rep("la_jolla_san_diego",   13), # SD
+      rep("tomales_bay",           1), # TB
+      rep("redondo_beach",        10), # RB
+      rep("santa_cruz_harbour",   10)  # SCH
+    ), "gua_cat" = c(
+      rep("catalina_island",      11), # CAT
+      rep("guadalupe_island",     10)  # GUA
+    ), "gua_isj" = c(
+      rep("guadalupe_island",     10), # GUA
+      rep("isla_san_jeronimo",    11)  # ISJ
+    ), "gua_scl" =  c(
+      rep("guadalupe_island",     10), # GUA
+      rep("san_clemente_island",  10)  # SCL
+    ), "isl" =  c(
+      rep("catalina_island",      11), # CAT
+      rep("guadalupe_island",     10), # GUA
+      rep("isla_san_jeronimo",    11), # ISJ
+      rep("san_clemente_island",  10)  # SCL
+    ), "north" = c(
+      rep("bodega_bay",            5), # BB
+      rep("big_creek",            13), # BIGC -> BCR
+      rep("elkhorn",               6), # ELK
+      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+      rep("santa_barbara",        13), # SB
+      rep("tomales_bay",           1), # TB
+      rep("santa_cruz_harbour",   10)  # SCH
+    ), "scl_isj" = c(
+      rep("isla_san_jeronimo",    11), # ISJ
+      rep("san_clemente_island",  10)  # SCL
+    ), "south" =   c(
+      rep("laguna_beach",         13), # LB
+      rep("point_dume",            5), # PD
+      rep("santa_barbara",        13), # SB
+      rep("la_jolla_san_diego",   13), # SD
+      rep("redondo_beach",        10) # RB
+    )
+  )
+)
+```
+
+## Load data and convert to format:
+
 ```{r}
 #| echo: false
 
-EJA_vcf <- read.vcfR(here("data", "8-Embiotoca_filtered.vcf.gz"))
-
-geno <- extract.gt(EJA_vcf) # Character matrix containing the genotypes
-position <- getPOS(EJA_vcf) # Positions in bp
-chromosome <- getCHROM(EJA_vcf) # Chromosome information
-
-popnames <- c(
-  rep("bodega_bay",            5), # BB
-  rep("big_creek",            13), # BIGC -> BCR
-  rep("catalina_island",      11), # CAT
-  rep("elkhorn",               6), # ELK
-  rep("guadalupe_island",     10), # GUA
-  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
-  rep("isla_san_jeronimo",    11), # ISJ
-  rep("laguna_beach",         13), # LB
-  rep("point_dume",            5), # PD
-  rep("santa_barbara",        13), # SB
-  rep("san_clemente_island",  10), # SCL
-  rep("la_jolla_san_diego",   13), # SD
-  rep("tomales_bay",           1), # TB
-  rep("redondo_beach",        10), # RB
-  rep("santa_cruz_harbour",   10) # SCH
+Vectorize(convert_to_outflank)(
+  vcf_path  = here("plink2", popmaps$vcf_paths),
+  popmap    = popmaps$maps,
+  path_save = here(
+    "data",
+    paste0("8-Embiotoca_filtered_", popmaps$names,"_outflank.rds")
+  )
 )
+```
 
-pop_num <- c(
-  rep(1,   5), # BB
-  rep(2,  13), # BIGC -> BCR
-  rep(3,  11), # CAT
-  rep(4,   6), # ELK
-  rep(5,  10), # GUA
-  rep(6,  13), # HOP -> Pacific Grove PGR 
-  rep(7,  11), # ISJ
-  rep(8,  13), # LB
-  rep(9,   5), # PD
-  rep(10, 13), # SB
-  rep(11, 10), # SCL
-  rep(12, 13), # SD
-  rep(13,  1), # TB
-  rep(14, 10), # RB
-  rep(15, 10) # SCH
-)
+## Compute Fst and He
 
-G <- matrix(NA, nrow = nrow(geno), ncol = ncol(geno))
+```{r}
+for (file in list.files(here("data"), pattern = "_outflank.rds$")) {
+  if (
+    !file.exists(
+      here(
+          "data",
+          str_replace(file, pattern = "outflank.rds", replacement = "HeFst.rds")
+      )
+    )
+  ) {
+    print(paste0("Processing ", file))
+    
+    tryCatch({
+      here("data", file) |> 
+        readRDS() |> 
+        (\(x) MakeDiploidFSTMat(
+          t(x$G),
+          locusNames = x$position,
+          popNames   = x$pop
+        ))() |> 
+        saveRDS(
+          here(
+            "data",
+            str_replace(file, pattern = "outflank.rds", replacement = "HeFst.rds")
+          )
+        )
+    }, error = function(e){cat("ERROR :",conditionMessage(e), "\n")})
 
-G[geno %in% c("0/0", "0|0")] <- 0
-G[geno  %in% c("0/1", "1/0", "1|0", "0|1")] <- 1
-G[geno %in% c("1/1", "1|1")] <- 2
-G[is.na(G)] <- 9
+  }
+}
+```
 
-table(as.vector(G))
+## Plot FstHe
 
-EJA_outFLANK <- list("position" = position, "chromosome" = chromosome, "G" = G, "pop" = pop)
-
-rm(geno, position, chromosome, pop, G)
-saveRDS(EJA_outFLANK, file = here("data", "8-Embiotoca_filtered_outflank.rds"))
+```{r}
+for (file in list.files(here("data"), pattern = "HeFst.rds$")) {
+  if (!file.exists(here("output", "plots",
+                    paste0("Fst_He_",
+                           file |>
+                             str_remove(pattern = "8-Embiotoca_filtered_") |>
+                             str_remove(pattern = "_HeFst.rds"),
+                           ".png")))) {
+    print(paste0("Plotting ", file))
+    
+    ggsave(
+      plot = ggplot(readRDS(here("data", file))) +
+        geom_point(aes(x = He, y = FST), alpha = .01) +
+        labs(x = "Heterozygosity", y = "Fst") +
+        theme_classic(),
+      filename = here("output", "plots",
+                      paste0("Fst_He_",
+                             file |>
+                               str_remove(pattern = "8-Embiotoca_filtered_") |>
+                               str_remove(pattern = "_HeFst.rds"),
+                             ".png")),
+      width  = 8,
+      height = 4
+    )
+  }
+}
 ```
 
 ```{r}
-EJA_outFLANK <- readRDS(here("data", "8-Embiotoca_filtered_outflank.rds"))
-
-EJA_Fst <- MakeDiploidFSTMat(
-  t(EJA_outFLANK$G),
-  locusNames = EJA_outFLANK$position,
-  popNames   = EJA_outFLANK$pop
-)
-head(EJA_Fst)
-
-saveRDS(EJA_Fst, here("data", "outFLANK_Fst.rds"))
-```
-
-```{r}
-EJA_Fst <- readRDS(here("data", "outFLANK_Fst.rds"))
-```
-
-```{r}
-EJA_Fst |> ggplot(aes(x = He, y = FST)) + 
-  geom_bin2d(bins = 100) +
-  scale_fill_viridis(option = "turbo") +
-  theme_classic()
-
-EJA_Fst |>
-  filter(FST <= .3) |> 
-  ggplot(aes(x = He, y = FST)) + 
-  geom_bin2d(bins = 50) +
-  scale_fill_viridis(option = "turbo") +
-  theme_classic()
-
-plot(EJA_Fst$He, EJA_Fst$FST, alpha = .1)
-```
-
-```{r}
-EJA_Fst |> ggplot(aes(x = FST, y = FSTNoCorr)) + 
-  geom_bin2d(bins = 100) +
-  scale_fill_viridis(option = "turbo") +
-  geom_abline(slope = 1, color = "red") +
-  theme_classic()
-
-plot(EJA_Fst$FST, EJA_Fst$FSTNoCorr)
+plot(EJA_Fst$FST, EJA_Fst$FSTNoCorr, col = alpha("black", alpha = .01))
 abline(0, 1)
 ```
 
+## Coast vs GUA vs CAT
+
 ```{r}
-trimmed <- OutFLANK(EJA_Fst, NumberOfSamples = 15, qthreshold = 0.05, Hmin = .1)
-
-OutFLANKResultsPlotter(trimmed, withOutliers = TRUE,
-                       NoCorr = TRUE, Hmin = 0.1, binwidth = 0.001, Zoom =
-                         FALSE, RightZoomFraction = 0.05, titletext = NULL)
-
-OutFLANKResultsPlotter(trimmed, withOutliers = TRUE,
-                       NoCorr = TRUE, Hmin = 0.1, binwidth = 0.001, Zoom =
-                         TRUE, RightZoomFraction = 0.15, titletext = NULL)
+ here("data", "8-Embiotoca_filtered_coastal_gua_cat_outflank.rds") |> 
+        readRDS() |> 
+        (\(x) MakeDiploidFSTMat(
+          t(x$G),
+          locusNames = x$position,
+          popNames   = x$pop
+        ))() |> 
+        saveRDS(
+          here(
+            "data",
+            str_replace("8-Embiotoca_filtered_coastal_gua_cat_outflank.rds", pattern = "outflank.rds", replacement = "HeFst.rds")
+          )
+        )
 ```
 
 ```{r}
-hist(trimmed$results$pvaluesRightTail)
+ here("data", "8-Embiotoca_filtered_coastal_gua_scl_outflank.rds") |> 
+        readRDS() |> 
+        (\(x) MakeDiploidFSTMat(
+          t(x$G),
+          locusNames = x$position,
+          popNames   = x$pop
+        ))() |> 
+        saveRDS(
+          here(
+            "data",
+            str_replace("8-Embiotoca_filtered_coastal_gua_scl_outflank.rds", pattern = "outflank.rds", replacement = "HeFst.rds")
+          )
+        )
 ```
-```{r}
-P1 <- pOutlierFinderChiSqNoCorr(
-  EJA_Fst,
-  Fstbar     = trimmed$FSTNoCorrbar,
-  dfInferred = trimmed$dfInferred,
-  qthreshold = 0.05,
-  Hmin       = 0.1
-)
-
-my_out <- P1$OutlierFlag == TRUE
-plot(P1$He, P1$FST, pch = 19, col = rgb(0, 0, 0, 0.1))
-points(P1$He[my_out], P1$FST[my_out], col = "blue")
-```
-
-```{r}
-plot(P1$LocusName[P1$He>0.1], P1$FST[P1$He>0.1],
-     xlab="Position", ylab="FST", col=rgb(0,0,0,0.2))
-  points(P1$LocusName[my_out], P1$FST[my_out], col="magenta", pch=20)  
-```
-
 
 ```{r}
-library(bigsnpr)
-library(bigstatsr)
+ here("data", "8-Embiotoca_filtered_coastal_gua_cat_scl_outflank.rds") |> 
+        readRDS() |> 
+        (\(x) MakeDiploidFSTMat(
+          t(x$G),
+          locusNames = x$position,
+          popNames   = x$pop
+        ))() |> 
+        saveRDS(
+          here(
+            "data",
+            str_replace("8-Embiotoca_filtered_coastal_gua_cat_scl_outflank.rds", pattern = "outflank.rds", replacement = "HeFst.rds")
+          )
+        )
 ```
-Filter neutral SNPs to infer neutral ditribution
-
-```{r}
-chrom_to_int <- read_tsv(here("data", "JAKOON01_catalog", "JAKOON01_contigs.tsv")) |> 
-  arrange(desc(length)) |> 
-  select(sequence_name, accession) |> 
-  mutate(num = row_number()) |> 
-  select(-c(sequence_name))
-```
-
-
-```{r}
-temp <- t(EJA_outFLANK$G)
-temp[temp == 9 ] <- NA
-
-keep <- which(colSums(is.na(temp)) == 0)
-
-rm(temp)
-
-G <- add_code256(
-  big_copy(t(EJA_outFLANK$G[keep, ]), type = "raw"),
-  code = bigsnpr:::CODE_012
-)
-
-newpc <- snp_autoSVD(
-  G = G,
-  infos.chr = left_join(tibble(accession = EJA_outFLANK$chromosome[keep]), chrom_to_int) |> pull(num),
-  infos.pos = EJA_outFLANK$position[keep]
-)
-
-which_pruned <- attr(newpc, which = "subset") # Indexes of remaining SNPS after pruning
-length(which_pruned)
-```
-
-
 # Outliers with `bayscan`
 
 ```{r}
