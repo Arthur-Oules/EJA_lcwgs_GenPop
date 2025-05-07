@@ -398,3 +398,25 @@ lm_eqn <- function(df, r = manteltest$statistic, pp = manteltest$signif) {
   )
   as.character(as.expression(eq))
 }
+
+convert_to_outflank <- function(vcf_path, popmap, path_save = NULL) {
+  if (!file.exists(path_save)) {
+    print(paste0("Converting ", vcf_path))
+    
+    vcfR <- read.vcfR(vcf_path)
+    geno <- extract.gt(vcfR) # Character matrix containing the genotypes
+    position <- getPOS(vcfR) # Positions in bp
+    chromosome <- getCHROM(vcfR) # Chromosome information
+    
+    G <- matrix(NA, nrow = nrow(geno), ncol = ncol(geno))
+    
+    G[geno %in% c("0/0", "0|0")] <- 0
+    G[geno  %in% c("0/1", "1/0", "1|0", "0|1")] <- 1
+    G[geno %in% c("1/1", "1|1")] <- 2
+    G[is.na(G)] <- 9
+    
+    EJA_outFLANK <- list("position" = position, "chromosome" = chromosome, "G" = G, "pop" = popmap)
+    
+    saveRDS(EJA_outFLANK, file = path_save)
+  }
+}
