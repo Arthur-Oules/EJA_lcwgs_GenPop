@@ -741,8 +741,8 @@ p1 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), PCA_distance, xlab = "Euclidean", y
 mantel.randtest(as.dist(Topo_Dist_w[[1]]), PCA_distance)
 p2 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), PCA_distance, xlab = "Bathy", ylab = "PCA")
 
-mantel.randtest(dist(coordinates), Edward_distance)
-p3 <- mantel_plot(dist(coordinates), Edward_distance, xlab = "Euclidean", ylab = "Chord distance")
+mantel.randtest(as.dist(geosphere::distm(coordinates)), Edward_distance)
+p3 <- mantel_plot(as.dist(geosphere::distm(coordinates)), Edward_distance, xlab = "Euclidean", ylab = "Chord distance")
 
 mantel.randtest(as.dist(Topo_Dist_w[[1]]), Edward_distance)
 p4 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), Edward_distance, xlab = "Bathy", ylab = "Chord distance")
@@ -839,7 +839,7 @@ save_open_plot(
 #### Load PCA distance
 
 ```{r}
-pcadapt_lcwgs_coast_isj <- read_rds(here("output", "pcadapt_lcwgs_coast_isj.rds"))
+pcadapt_lcwgs_coast_isj <- read_rds(here("output", "pcadapt_lcwgs_coast_isj_K6.rds"))
 popmap_lcwgs_coast_isj <- c(
   rep("bodega_bay",            5), # BB
   rep("big_creek",            13), # BIGC -> BCR
@@ -874,11 +874,10 @@ rm(pcadapt_lcwgs_coast_isj, popmap_lcwgs_coast_isj)
 #### Load Edward
 
 ```{r}
-pops_coast_isj <- c("bodega_bay",    "big_creek",         "elkhorn",
-                    "pacific_grove", "isla_san_jeronimo", "laguna_beach",
-                    "point_dume",    "santa_barbara",     "la_jolla_san_diego",
-                    "tomales_bay",   "redondo_beach",     "santa_cruz_harbour")
-)
+pops_coast_isj <- c("big_creek",         "bodega_bay",         "elkhorn",
+                    "isla_san_jeronimo", "la_jolla_san_diego", "laguna_beach",
+                    "pacific_grove",     "point_dume",         "redondo_beach",
+                    "santa_barbara",     "santa_cruz_harbour", "tomales_bay")
 
 Edward_distance_coast_isj <- here("output", "EJA_lcwgs_Edward_distance.rds") |> 
   readRDS() |>
@@ -897,7 +896,8 @@ mantel.randtest(as.dist(Topo_Dist_w_coast_isj[[1]]), PCA_distances_coast_isj)
 p2 <- mantel_plot(as.dist(Topo_Dist_w_coast_isj[[1]]), PCA_distances_coast_isj, xlab = "Bathy", ylab = "PCA")
 
 mtest <- mantel.randtest(as.dist(geosphere::distm(coordinates_coast_isj)), Edward_distance_coast_isj)
-p3 <- mantel_plot(as.dist(geosphere::distm(coordinates_coast_isj)), Edward_distance_coast_isj, xlab = "Euclidean", ylab = "Chord distance")
+p3 <- mantel_plot(as.dist(geosphere::distm(coordinates_coast_isj, fun = 
+geosphere::distVincentyEllipsoid)), Edward_distance_coast_isj, xlab = "Ellipsoid Distance", ylab = " Cavalli-Sforza and Edward Chord Distance")
 
 mantel.randtest(as.dist(Topo_Dist_w_coast_isj[[1]]), Edward_distance_coast_isj)
 p4 <- mantel_plot(as.dist(Topo_Dist_w_coast_isj[[1]]), Edward_distance_coast_isj, xlab = "Bathy", ylab = "Chord distance")
@@ -1000,12 +1000,12 @@ rm(pcadapt_lcwgs_coast, popmap_lcwgs_coast)
 #### Load Edward distance
 
 ```{r}
-pops_coast <- c("bodega_bay",    "big_creek",          "elkhorn",
-                "pacific_grove", "laguna_beach",       "point_dume",
-                "santa_barbara", "la_jolla_san_diego", "tomales_bay",
-                "redondo_beach", "santa_cruz_harbour")
+pops_coast <-  c("big_creek",         "bodega_bay",         "elkhorn",
+                 "la_jolla_san_diego", "laguna_beach", "pacific_grove",
+                 "point_dume",         "redondo_beach", "santa_barbara",
+                 "santa_cruz_harbour", "tomales_bay")
 
-Edward_distance_coast <-  here("output", "EJA_lcwgs_Edward_distance.rds") |> 
+Edward_distance_coast <- here("output", "EJA_lcwgs_Edward_distance.rds") |> 
   readRDS() |>
   as.matrix() |> 
   _[pops_coast, pops_coast] |> 
@@ -1025,17 +1025,24 @@ p2 <- mantel_plot(as.dist(Topo_Dist_w_coast[[1]]),
                   PCA_distances_coast,
                   xlab = "Bathy", ylab = "PCA")
 
-mantel.randtest(dist(coordinates_coast), chord_distance) |> plot()
-p3 <- mantel_plot(dist(coordinates_coast),
+mantel.randtest(dist(coordinates_coast), Edward_distance_coast) |> plot()
+p3 <- mantel_plot(as.dist(geosphere::distm(coordinates_coast)),
                   Edward_distance_coast,
-                  xlab = "Euclidean", ylab = "Chord distance")
+                  xlab = "Euclidean", ylab = "Edward Chord distance")
 
-mantel.randtest(as.dist(Topo_Dist_w_coast[[1]]), chord_distance) |> plot()
+mantel.randtest(as.dist(Topo_Dist_w_coast[[1]]), Edward_distance_coast) |> plot()
 p4 <- mantel_plot(as.dist(Topo_Dist_w_coast[[1]]),
                   Edward_distance_coast,
-                  xlab = "Bathy", ylab = "Chord distance")
+                  xlab = "Bathy", ylab = "Edward Chord distance")
 
 combined <- (p1 | p2) / (p3 | p4)
+
+save_open_plot(
+  path   = here("output", "plots", "IBD_coast_Euclidean_Edward.png"),
+  plot   = p3,
+  width  = 8,
+  height = 8
+)
 
 save_open_plot(
   path   = here("output", "plots", "IBD_coast_pops.png"),
@@ -1123,8 +1130,10 @@ EJA_snmf_analysis <- load.snmfProject(here("data", "lcwgs", "8-Embiotoca_filtere
 
 ```{r}
 cross_entropies <- tibble(
-  `c-e`   = map(4:9, \(x) cross.entropy(EJA_snmf_analysis, K = x) |> as.vector()) |> unlist(),
-  K_value = factor(c(rep(4, 50), rep(5, 50), rep(6, 50), rep(7, 50), rep(8, 50), rep(9, 10)))
+  `c-e`   = map(4:9, \(x) cross.entropy(EJA_snmf_analysis, K = x) |>
+                            as.vector()) |> unlist(),
+  K_value = factor(c(rep(4, 50), rep(5, 50), rep(6, 50),
+                     rep(7, 50), rep(8, 50), rep(9, 10)))
 )
 
 cross_entropies |> 
@@ -1685,3 +1694,5 @@ gc()
 
 <!-- plot(-log10(pv_coast$pvalue), cex = .3, pch = 19, col = "blue") -->
 <!-- ``` -->
+
+## Speciation with Pixy
