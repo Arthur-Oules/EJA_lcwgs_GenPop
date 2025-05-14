@@ -11,7 +11,7 @@ editor: source
 c("here", "tidyverse",
   "ncdf4", "rnaturalearth", "rnaturalearthdata", "rnaturalearthhires", "marmap",
   "patchwork", "plotly", "sf", "ggrepel", "ggspatial", "ggtree", "RColorBrewer", "viridis", 
-  "scales", "ggnewscale", "terra", "tidyterra", "tess3r") |>
+  "ggnewscale", "terra", "tidyterra", "tess3r") |>
   lapply(library, character.only = TRUE) |> invisible()
 ```
 
@@ -346,6 +346,25 @@ rm(SNP_positions, chromosome_map,
 gc()
 ```
 
+### Raw dataframes
+
+```{r}
+list.files(here("output")) |>
+  str_subset("pcadapt") |> 
+  lapply(
+    \(x) {
+      here("output", x) |>
+        read_rds() |> 
+        manhattan_plot_custom_2(
+          SNP_positions   = SNP_positions,
+          chromosome_map  = chromosome_map,
+          data.only       = TRUE
+        ) |> 
+        write.csv(here("output", x |> str_replace("rds", "csv")))
+    }
+  )
+```
+
 ## Figure 2 - PCA & map
 
 ### PCA plot All 1&2
@@ -410,7 +429,7 @@ popmap_lcwgs <- tibble(
 
 PCA <- PCA_plot(
   pcadapt_output = pcadapt_lcwgs,
-  popmap         = popmap_lcwgs,
+  popmap         = popmap_lcwgs$long_names,
   axis_one       = -2,
   axis_two       = -1
 )
@@ -474,7 +493,7 @@ save_open_plot(
 
 PCA_plot(
   pcadapt_output = pcadapt_lcwgs,
-  popmap         = popmap_lcwgs,
+  popmap         = popmap_lcwgs$long_names,
   x_offsets      = rep(.01, 15),
   y_offsets      = rep(.05, 15)
 ) |>
@@ -511,44 +530,10 @@ rm(pcadapt_lcwgs, PCA, PCA_crop)
 gc()
 ```
 
-### PCA plot All 2 to 5
-
-```{r}
-#| label: PCAMapPCAPlot
-
-PCA2_3 <- PCA_plot(
-  pcadapt_output = pcadapt_lcwgs,
-  popmap         = popmap_lcwgs,
-  axis_one       = 2,
-  axis_two       = 3
-) + theme(aspect.ratio = 1)
-
-PCA3_4 <- PCA_plot(
-  pcadapt_output = pcadapt_lcwgs,
-  popmap         = popmap_lcwgs,
-  axis_one       = 3,
-  axis_two       = 4
-) + theme(aspect.ratio = 1)
-
-PCA4_5 <- PCA_plot(
-  pcadapt_output = pcadapt_lcwgs,
-  popmap         = popmap_lcwgs,
-  axis_one       = 4,
-  axis_two       = 5
-) + theme(aspect.ratio = 1)
-
-multiPCA <- PCA2_3 | PCA3_4 | PCA4_5 + plot_layout(widths = 1)
-
-save_open_plot(
-  path   = here("output", "plots", "PCA2to5.pdf"),
-  plot   = multiPCA,
-  width  = 27,
-  height = 9
-)
-```
-
 ### Map - SST and current 
+
 #### Formatting Copernicus data
+
 ```{r}
 #| label: PCAMapMapFormatCurrents
 #| eval: false
@@ -601,6 +586,7 @@ rm(SST_maps)
 ```
 
 #### Import map data
+
 ```{r}
 #| label: PCAMapMapLoad
 
@@ -614,6 +600,7 @@ SST_annual_mean <- readRDS(
 ```
 
 #### Landmass
+
 ```{r}
 #| label: PCAMapMapPrep
 
@@ -794,6 +781,7 @@ lcwgs_map <- ggplot() +
 ```
 
 ### Memory cleanup
+
 ```{r}
 #| label: PCAMapMapSave
 
@@ -812,6 +800,7 @@ gc()
 ```
 
 ### Fuse PCA plot and map
+
 ```{r}
 #| label: PCAMapFuse
 
@@ -953,6 +942,7 @@ rm(currents_tibble_annual_mean, catalina_df, states, bathy)
 Change individuals order in the file `Individuals_plot_order.txt`
 
 ### K = 5 populations
+
 ```{r}
 admixture_data_5 <- read_table(
   here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K5", "run16",
@@ -1000,6 +990,7 @@ save_open_plot(
 ### K = 6 populations
 
 #### Load data
+
 ```{r}
 #| label: AdmPlotPrep
 
@@ -1020,6 +1011,7 @@ admixture_data_6 <- read_table(
 ```
 
 #### plot
+
 ```{r}
 #| label: AdmPlot
 
@@ -1060,6 +1052,7 @@ rm(Indiv_list, admixture_data, admixture_plot)
 ```
 
 ### K = 7 populations
+
 ```{r}
 admixture_data_7 <- here("output", "admixture", "8-Embiotoca_filtered_r46.7.Q") |> 
   read_admixture(pops = 7)
@@ -1122,6 +1115,7 @@ save_open_plot(
 ```
 
 ### K = 8 populations
+
 ```{r}
 admixture_data_8 <- read_table(
   here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K8", "run8",
@@ -1406,5 +1400,3 @@ save_open_plot(
   height = 9
 )
 ```
-
-## Figure 7 - IBD

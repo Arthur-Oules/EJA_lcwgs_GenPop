@@ -64,7 +64,6 @@ lcwgs_gl@pop <- factor(popmap_lcwgs)
 lcwgs_gl |> saveRDS(file = here("data", "Embiotoca_lcwgs_gl.rds"))
 ```
 
-
 ```{r}
 #| echo: false
 

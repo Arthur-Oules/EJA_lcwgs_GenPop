@@ -1,3 +1,5 @@
+library("scales")
+
 save_open_plot <- function(path,         plot,
                            width = NA,   height = NA,
                            units = "in", dpi = 300) {
@@ -53,19 +55,19 @@ PCA_plot <- function(pcadapt_output,   popmap,
                      x_offsets = NULL, y_offsets = NULL) {
   # Format data frame
   PCA_df <- tibble(
-    x      = axis_one/abs(axis_one)*pcadapt_output$scores[, abs(axis_one)],
-    y      = axis_two/abs(axis_two)*pcadapt_output$scores[, abs(axis_two)],
-    labels = popmap$long_names
+    x           = axis_one/abs(axis_one)*pcadapt_output$scores[, abs(axis_one)],
+    y           = axis_two/abs(axis_two)*pcadapt_output$scores[, abs(axis_two)],
+    populations = popmap
   ) |> 
-    arrange(labels)
+    arrange(populations)
   
   # Compute coords averages by populations
   PCA_average <- PCA_df |>
-    group_by(labels) |>
+    group_by(populations) |>
     summarise(average_x = mean(x), average_y = mean(y)) |> 
     ungroup() |>
     mutate(
-      labels = labels |>
+      labels = populations |>
         gsub(pattern = "_", x = _, replacement = " ") |>
         str_to_title()
     )
@@ -75,7 +77,7 @@ PCA_plot <- function(pcadapt_output,   popmap,
   
   PCA <- PCA_df |> ggplot() +
     geom_point(
-      mapping = aes(x = x, y = y, fill = labels),
+      mapping = aes(x = x, y = y, fill = populations),
       size    = 4,
       shape   = 21
     ) +
@@ -84,7 +86,7 @@ PCA_plot <- function(pcadapt_output,   popmap,
       x = paste0("PC", as.character(axis_one), ": ", PCA_percentages[abs(axis_one)]),
       y = paste0("PC", as.character(axis_two)," : ", PCA_percentages[abs(axis_two)])
     ) +
-    coord_fixed(ratio = 1.2) +
+    coord_fixed(ratio = 1) +
     theme_minimal() +
     theme(legend.position = "none")
   
@@ -92,7 +94,8 @@ PCA_plot <- function(pcadapt_output,   popmap,
   if (is.null(x_offsets) || is.null(y_offsets) == TRUE) {
     PCA + geom_text_repel(
       PCA_average,
-      mapping = aes(x = average_x, y = average_y, label = labels, fontface = "bold"),
+      mapping = aes(x = average_x, y = average_y,
+                    label = populations, fontface = "bold"),
       point.size = 10,
       min.segment.length = 0.3
     )
@@ -107,7 +110,7 @@ PCA_plot <- function(pcadapt_output,   popmap,
     PCA +
     geom_text(
       PCA_average,
-      mapping = aes(x = average_x, y = average_y, label = labels)
+      mapping = aes(x = average_x, y = average_y, label = populations)
     ) +
     theme(legend.position = "none")
   }
@@ -116,7 +119,8 @@ PCA_plot <- function(pcadapt_output,   popmap,
 manhattan_plot_custom_2 <- function(pcadapt,
                                     SNP_positions, chromosome_map,
                                     outliers_positions = NULL,
-                                    outliers_match     = NULL) {
+                                    outliers_match     = NULL,
+                                    data.only = FALSE) {
   
   genome_mapping <- SNP_positions |>
     mutate(logpvalues = Get_pvalues(pcadapt)) |> # Gets log10 of pvalues
@@ -139,6 +143,8 @@ manhattan_plot_custom_2 <- function(pcadapt,
         as.integer() |>
         (`%%`)(2)
     )
+  
+  if (data.only == TRUE) return(df |> select(-c(lab_position, coloured)))
   
   p <- df |> ggplot() +
     geom_point(aes(x = rank, y = logpvalues, colour = factor(coloured))) # Baseplot
@@ -167,7 +173,7 @@ manhattan_plot_custom_2 <- function(pcadapt,
   p + scale_colour_manual(values = c("black", "grey")) +
     scale_x_continuous(
       breaks = df$rank[df$lab_position],
-      labels = df$CHROM[df$lab_position],
+      labels = df$CHROM[df$lab_positin],
       guide  = guide_axis(angle = 45)
     ) +
     labs(x = "chromosome", y = bquote(-log[10]~("p-value"))) +
