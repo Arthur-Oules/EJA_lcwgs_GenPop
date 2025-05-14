@@ -22,10 +22,12 @@
 # Project specific files and folders
 /.quarto/
 /conStruct/
+/BayeScan2.1/
 /data/
 /metadata/
 /output/
 /plink2/
+/genomics_general/
 _quarto.yml
 manuscript_figures.qmd
 MatMet.qmd
