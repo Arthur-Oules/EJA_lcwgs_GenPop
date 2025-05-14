@@ -5,19 +5,19 @@ format: html
 editor: source
 engine: knitr
 ---
-# Load packages
+## Load packages
 
 ```{r}
 #| label: LoadPackages
 #| echo: false
 
 c("here", "tidyverse",
-  "pcadapt", "vcfR", "adegenet", "ape", "LEA", "triangulaR",
-  "viridisLite") |>
+  "vcfR", "pcadapt", "OutFLANK", "adegenet", "ape",
+  "patchwork", "viridisLite") |>
   lapply(library, character.only = TRUE) |> invisible()
 ```
 
-# Load data analysis functions
+## Load data analysis functions
 ```{r}
 #| label: LoadExtFunc
 
@@ -25,7 +25,7 @@ source(here("functions", "lcwgs_tidy_functions.R"))
 source(here("functions", "plot_functions.R"))
 ```
 
-# Helper objects
+## Helper objects
 
 ```{r}
 #| label: GenomeMap
@@ -50,416 +50,390 @@ lcwgs_vcf |>
 rm(lcwgs_vcf)
 ```
 
-# pcadapt analyses
+## Data conversions
 
-## Convert vcf to bed file using plink2
+### Convert vcf to bed file using plink2
 
-### All pops
+#### Initial vcf conversion
+
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --vcf 8-Embiotoca_filtered.vcf.gz --make-bed --out 8-Embiotoca_filtered
 ```
 
-### Generate whitelists and subset bed files
+#### Generate whitelists and subset bed files
 
 ```{r}
-#| label: CoastSaveWhitelist
+#| label: GenerateSaveWhitelists
 #| eval: false
 
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[!(grepl(pattern = "SCL", x = x) |
-        grepl(pattern = "GUA", x = x) |
-        grepl(pattern = "CAT", x = x) |
-        grepl(pattern = "ISJ", x = x))]
-    }}() |> 
+Individuals_list <- here("data", "individuals_coordinates.csv") |>
+  read_csv2() |>
+  pull(Indiv)
+
+Individuals_list |> 
+  str_subset(
+    pattern = paste(c("SCL", "GUA", "CAT", "ISJ"), collapse = "|"),
+    negate  = TRUE
+  ) |> 
   write_lines(here("plink2", "whitelist_coastal.txt"))
+
+Individuals_list |> 
+  str_subset(pattern = paste(c("SCL", "GUA", "CAT", "ISJ"), collapse = "|"))  |>
+  write_lines(here("plink2", "whitelist_islands.txt"))
+
+Individuals_list |> 
+  str_subset(
+    pattern = paste(c("SCL", "GUA", "CAT"), collapse = "|"),
+    negate  = TRUE
+  ) |>
+  write_lines(here("plink2", "whitelist_coastal_isj.txt"))
+
+Individuals_list |> 
+  str_subset(
+    pattern = paste(c("GUA", "CAT", "ISJ"), collapse = "|"),
+    negate  = TRUE
+  ) |>
+  write_lines(here("plink2", "whitelist_coastal_scl.txt"))
+
+Individuals_list |> 
+  str_subset(
+    pattern = paste(c("SCL", "CAT", "ISJ"), collapse = "|"),
+    negate  = TRUE
+  ) |>
+  write_lines(here("plink2", "whitelist_coastal_gua.txt"))
+
+Individuals_list |> 
+  str_subset(
+    pattern = paste(c("SCL", "GUA", "ISJ"), collapse = "|"),
+    negate  = TRUE
+  ) |>
+  write_lines(here("plink2", "whitelist_coastal_cat.txt"))
+
+Individuals_list |> 
+  str_subset(pattern = paste(c("SCL", "CAT"), collapse = "|")) |>
+  write_lines(here("plink2", "whitelist_cat_scl.txt"))
+
+Individuals_list |> 
+  str_subset(pattern = paste(c("GUA", "CAT"), collapse = "|")) |>
+  write_lines(here("plink2", "whitelist_gua_cat.txt"))
+
+Individuals_list |> 
+  str_subset(pattern = paste(c("SCL", "GUA"), collapse = "|")) |> 
+  write_lines(here("plink2", "whitelist_gua_scl.txt"))
+
+Individuals_list |> 
+  str_subset(pattern = paste(c("GUA", "ISJ"), collapse = "|")) |>
+  write_lines(here("plink2", "whitelist_gua_isj.txt"))
+
+Individuals_list |> 
+  str_subset(pattern = paste(c("CAT", "ISJ"), collapse = "|")) |> 
+  write_lines(here("plink2", "whitelist_cat_isj.txt"))
+
+Individuals_list |> 
+  str_subset(pattern = paste(c("SCL", "ISJ"), collapse = "|")) |> 
+  write_lines(here("plink2", "whitelist_scl_isj.txt"))
+
+rm(Individuals_list)
 ```
 
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal.txt --make-bed --out 8-Embiotoca_filtered_coastal
-```
-
-```{r}
-#| label: ISLSaveWhitelist
-#| eval: false
-
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[(grepl(pattern = "CAT", x = x) |
-       grepl(pattern = "GUA", x = x) |
-       grepl(pattern = "ISJ", x = x) |
-       grepl(pattern = "SCL", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_islands.txt"))
-```
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_islands.txt --make-bed --out 8-Embiotoca_filtered_isl
-```
-
-```{r}
-#| label: CoastISJSaveWhitelist
-#| eval: false
-
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[!(grepl(pattern = "SCL", x = x) |
-        grepl(pattern = "GUA", x = x) |
-        grepl(pattern = "CAT", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_coastal_isj.txt"))
-```
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_isj.txt --make-bed --out 8-Embiotoca_filtered_coastal_isj
-```
-
-```{r}
-#| label: CoastSCLSaveWhitelist
-#| eval: false
-
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[!(grepl(pattern = "ISJ", x = x) |
-        grepl(pattern = "GUA", x = x) |
-        grepl(pattern = "CAT", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_coastal_scl.txt"))
-```
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_scl.txt --make-bed --out 8-Embiotoca_filtered_coastal_scl
-```
-
-```{r}
-#| label: CoastGUASaveWhitelist
-#| eval: false
-
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[!(grepl(pattern = "ISJ", x = x) |
-        grepl(pattern = "SCL", x = x) |
-        grepl(pattern = "CAT", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_coastal_gua.txt"))
-```
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua
-```
-
-```{r}
-#| label: CoastCATSaveWhitelist
-#| eval: false
-
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[!(grepl(pattern = "ISJ", x = x) |
-        grepl(pattern = "SCL", x = x) |
-        grepl(pattern = "GUA", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_coastal_cat.txt"))
-```
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_cat.txt --make-bed --out 8-Embiotoca_filtered_coastal_cat
-```
-
-```{r}
-#| label: CATSCLSaveWhitelist
-#| eval: false
-
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[(grepl(pattern = "SCL", x = x) |
-       grepl(pattern = "CAT", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_cat_scl.txt"))
-```
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_cat_scl.txt --make-bed --out 8-Embiotoca_filtered_cat_scl
-```
-
-```{r}
-#| label: GUACATSaveWhitelist
-#| eval: false
-
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[(grepl(pattern = "GUA", x = x) |
-       grepl(pattern = "CAT", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_gua_cat.txt"))
-```
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_gua_cat.txt --make-bed --out 8-Embiotoca_filtered_gua_cat
-```
-
-```{r}
-#| label: GUASCLSaveWhitelist
-#| eval: false
-
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[(grepl(pattern = "SCL", x = x) |
-       grepl(pattern = "GUA", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_gua_scl.txt"))
-```
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_gua_scl.txt --make-bed --out 8-Embiotoca_filtered_gua_scl
-```
-
-```{r}
-#| label: GUAISJSaveWhitelist
-#| eval: false
-
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[(grepl(pattern = "GUA", x = x) |
-       grepl(pattern = "ISJ", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_gua_isj.txt"))
-```
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_GUA_ISJ.txt --make-bed --out 8-Embiotoca_filtered_GUA_ISJ
-```
-
-```{r}
-#| label: CATISJSaveWhitelist
-#| eval: false
-
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[(grepl(pattern = "CAT", x = x) |
-       grepl(pattern = "ISJ", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_cat_isj.txt"))
-```
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_cat_isj.txt --make-bed --out 8-Embiotoca_filtered_cat_isj
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_scl_isj.txt --make-bed --out 8-Embiotoca_filtered_scl_isj
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_north.txt --make-bed --out 8-Embiotoca_filtered_north
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_south.txt --make-bed --out 8-Embiotoca_filtered_south
 ```
+
+#### Corresponding popmaps
 
 ```{r}
-#| label: SCLISJSaveWhitelist
-#| eval: false
+#| label: GenerateSavePopMaps
+#| echo: false
 
-read_csv2(here("data", "individuals_coordinates.csv")) |>
-  pull(Indiv) |> 
-  {\(x) {
-    x[(grepl(pattern = "ISJ", x = x) |
-       grepl(pattern = "SCL", x = x))]
-    }}() |> 
-  write_lines(here("plink2", "whitelist_scl_isj.txt"))
+popmaps <- tibble(
+  vcf_paths = here("plink2") |> list.files(pattern = ".vcf$"),
+  bed_paths = here("plink2") |> list.files(pattern = ".bed$"),
+  ) |> 
+  mutate(
+    names = bed_paths |>
+      str_remove("8-Embiotoca_filtered") |>
+      str_remove(".bed") |>
+      str_remove("_"),
+    maps     = list(
+      "all" = c(
+        rep("bodega_bay",            5), # BB
+        rep("big_creek",            13), # BIGC -> BCR
+        rep("catalina_island",      11), # CAT
+        rep("elkhorn",               6), # ELK
+        rep("guadalupe_island",     10), # GUA
+        rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
+        rep("isla_san_jeronimo",    11), # ISJ
+        rep("laguna_beach",         13), # LB
+        rep("point_dume",            5), # PD
+        rep("santa_barbara",        13), # SB
+        rep("san_clemente_island",  10), # SCL
+        rep("la_jolla_san_diego",   13), # SD
+        rep("tomales_bay",           1), # TB
+        rep("redondo_beach",        10), # RB
+        rep("santa_cruz_harbour",   10) # SCH
+      ), "cat_isj" = c(
+        rep("catalina_island",      11), # CAT
+        rep("isla_san_jeronimo",    11)  # ISJ
+      ), "cat_scl" = c(
+        rep("catalina_island",      11), # CAT
+        rep("san_clemente_island",  10)  # SCL
+      ), "coastal" = c(
+        rep("bodega_bay",            5), # BB
+        rep("big_creek",            13), # BIGC -> BCR
+        rep("elkhorn",               6), # ELK
+        rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+        rep("laguna_beach",         13), # LB
+        rep("point_dume",            5), # PD
+        rep("santa_barbara",        13), # SB
+        rep("la_jolla_san_diego",   13), # SD
+        rep("tomales_bay",           1), # TB
+        rep("redondo_beach",        10), # RB
+        rep("santa_cruz_harbour",   10)  # SCH
+      ), "coastal_cat" = c(
+        rep("bodega_bay",            5), # BB
+        rep("big_creek",            13), # BIGC -> BCR
+        rep("catalina_island",      11), # CAT
+        rep("elkhorn",               6), # ELK
+        rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+        rep("laguna_beach",         13), # LB
+        rep("point_dume",            5), # PD
+        rep("santa_barbara",        13), # SB
+        rep("la_jolla_san_diego",   13), # SD
+        rep("tomales_bay",           1), # TB
+        rep("redondo_beach",        10), # RB
+        rep("santa_cruz_harbour",   10)  # SCH
+      ), "coastal_gua" = c(
+        rep("bodega_bay",            5), # BB
+        rep("big_creek",            13), # BIGC -> BCR
+        rep("elkhorn",               6), # ELK
+        rep("guadalupe_island",     10), # GUA
+        rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+        rep("laguna_beach",         13), # LB
+        rep("point_dume",            5), # PD
+        rep("santa_barbara",        13), # SB
+        rep("la_jolla_san_diego",   13), # SD
+        rep("tomales_bay",           1), # TB
+        rep("redondo_beach",        10), # RB
+        rep("santa_cruz_harbour",   10)  # SCH
+      ), "coastal_gua_cat" = c(
+        rep("bodega_bay",            5), # BB
+        rep("big_creek",            13), # BIGC -> BCR
+        rep("catalina_island",      11), # CAT
+        rep("elkhorn",               6), # ELK
+        rep("guadalupe_island",     10), # GUA
+        rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+        rep("laguna_beach",         13), # LB
+        rep("point_dume",            5), # PD
+        rep("santa_barbara",        13), # SB
+        rep("la_jolla_san_diego",   13), # SD
+        rep("tomales_bay",           1), # TB
+        rep("redondo_beach",        10), # RB
+        rep("santa_cruz_harbour",   10)  # SCH
+      ), "coastal_gua_cat_scl" = c(
+        rep("bodega_bay",            5), # BB
+        rep("big_creek",            13), # BIGC -> BCR
+        rep("catalina_island",      11), # CAT
+        rep("elkhorn",               6), # ELK
+        rep("guadalupe_island",     10), # GUA
+        rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+        rep("laguna_beach",         13), # LB
+        rep("point_dume",            5), # PD
+        rep("santa_barbara",        13), # SB
+        rep("san_clemente_island",  10), # SCL
+        rep("la_jolla_san_diego",   13), # SD
+        rep("tomales_bay",           1), # TB
+        rep("redondo_beach",        10), # RB
+        rep("santa_cruz_harbour",   10)  # SCH
+      ), "coastal_gua_scl" = c(
+        rep("bodega_bay",            5), # BB
+        rep("big_creek",            13), # BIGC -> BCR
+        rep("elkhorn",               6), # ELK
+        rep("guadalupe_island",     10), # GUA
+        rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+        rep("laguna_beach",         13), # LB
+        rep("point_dume",            5), # PD
+        rep("santa_barbara",        13), # SB
+        rep("san_clemente_island",  10), # SCL
+        rep("la_jolla_san_diego",   13), # SD
+        rep("tomales_bay",           1), # TB
+        rep("redondo_beach",        10), # RB
+        rep("santa_cruz_harbour",   10)  # SCH
+      ), "coastal_isj" = c(
+        rep("bodega_bay",            5), # BB
+        rep("big_creek",            13), # BIGC -> BCR
+        rep("elkhorn",               6), # ELK
+        rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+        rep("isla_san_jeronimo",    11), # ISJ
+        rep("laguna_beach",         13), # LB
+        rep("point_dume",            5), # PD
+        rep("santa_barbara",        13), # SB
+        rep("la_jolla_san_diego",   13), # SD
+        rep("tomales_bay",           1), # TB
+        rep("redondo_beach",        10), # RB
+        rep("santa_cruz_harbour",   10)  # SCH
+      ), "coastal_scl" = c(
+        rep("bodega_bay",            5), # BB
+        rep("big_creek",            13), # BIGC -> BCR
+        rep("elkhorn",               6), # ELK
+        rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+        rep("laguna_beach",         13), # LB
+        rep("point_dume",            5), # PD
+        rep("santa_barbara",        13), # SB
+        rep("san_clemente_island",  10), # SCL
+        rep("la_jolla_san_diego",   13), # SD
+        rep("tomales_bay",           1), # TB
+        rep("redondo_beach",        10), # RB
+        rep("santa_cruz_harbour",   10)  # SCH
+      ), "gua_cat" = c(
+        rep("catalina_island",      11), # CAT
+        rep("guadalupe_island",     10)  # GUA
+      ), "gua_isj" = c(
+        rep("guadalupe_island",     10), # GUA
+        rep("isla_san_jeronimo",    11)  # ISJ
+      ), "gua_scl" =  c(
+        rep("guadalupe_island",     10), # GUA
+        rep("san_clemente_island",  10)  # SCL
+      ), "isl" =  c(
+        rep("catalina_island",      11), # CAT
+        rep("guadalupe_island",     10), # GUA
+        rep("isla_san_jeronimo",    11), # ISJ
+        rep("san_clemente_island",  10)  # SCL
+      ), "north" = c(
+        rep("bodega_bay",            5), # BB
+        rep("big_creek",            13), # BIGC -> BCR
+        rep("elkhorn",               6), # ELK
+        rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
+        rep("santa_barbara",        13), # SB
+        rep("tomales_bay",           1), # TB
+        rep("santa_cruz_harbour",   10)  # SCH
+      ), "scl_isj" = c(
+        rep("isla_san_jeronimo",    11), # ISJ
+        rep("san_clemente_island",  10)  # SCL
+      ), "south" =   c(
+        rep("laguna_beach",         13), # LB
+        rep("point_dume",            5), # PD
+        rep("santa_barbara",        13), # SB
+        rep("la_jolla_san_diego",   13), # SD
+        rep("redondo_beach",        10) # RB
+      )
+    ) |>
+      map(
+        .f = \(x) x |> 
+          factor(
+              levels = c("big_creek", "bodega_bay", "catalina_island", "santa_cruz_harbour",
+                 "guadalupe_island", "isla_san_jeronimo", "la_jolla_san_diego",
+                 "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
+                 "san_clemente_island", "santa_barbara",
+                 "elkhorn", "redondo_beach")
+          )
+      )
+  )
+
+popmaps$names[[1]] <- "all"
+
+saveRDS(popmaps, here("data", "popmaps.rds"))
 ```
+
+### Convert all beds to vcfs
 
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
-./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_scl_isj.txt --make-bed --out 8-Embiotoca_filtered_scl_isj
+bed_names=();
+for f in *.bed; do
+    bed_names+=("${f%.bed}");
+done;
+
+for bed in ${bed_names[@]}; do ./plink2 --bfile $bed --keep-allele-order --recode vcf --out $bed; done;
 ```
 
-## All preanalysis to determine optimal K value
+Coast *vs.* Gua and Cat
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
-```{r}
-#| label: PreAnalyses
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua_cat.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua_cat
 
-bed_files <- tibble(paths = list.files(here("plink2")) |> str_subset(".bed")) |> 
-  mutate(
-    suffixes = paths |>
-      str_remove("8-Embiotoca_filtered") |>
-      str_remove(".bed") |>
-      str_remove("_")
-  )
-
-bed_files$suffixes[[1]] <- "all"
-
-bed_files$popmaps <- list(
-  c(
-    rep("bodega_bay",            5), # BB
-    rep("big_creek",            13), # BIGC -> BCR
-    rep("catalina_island",      11), # CAT
-    rep("elkhorn",               6), # ELK
-    rep("guadalupe_island",     10), # GUA
-    rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
-    rep("isla_san_jeronimo",    11), # ISJ
-    rep("laguna_beach",         13), # LB
-    rep("point_dume",            5), # PD
-    rep("santa_barbara",        13), # SB
-    rep("san_clemente_island",  10), # SCL
-    rep("la_jolla_san_diego",   13), # SD
-    rep("tomales_bay",           1), # TB
-    rep("redondo_beach",        10), # RB
-    rep("santa_cruz_harbour",   10) # SCH
-  ), c(
-    rep("catalina_island",      11), # CAT
-    rep("isla_san_jeronimo",    11)  # ISJ
-  ), c(
-    rep("catalina_island",      11), # CAT
-    rep("san_clemente_island",  10)  # SCL
-  ), c(
-    rep("bodega_bay",            5), # BB
-    rep("big_creek",            13), # BIGC -> BCR
-    rep("elkhorn",               6), # ELK
-    rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-    rep("laguna_beach",         13), # LB
-    rep("point_dume",            5), # PD
-    rep("santa_barbara",        13), # SB
-    rep("la_jolla_san_diego",   13), # SD
-    rep("tomales_bay",           1), # TB
-    rep("redondo_beach",        10), # RB
-    rep("santa_cruz_harbour",   10)  # SCH
-  ), c(
-    rep("bodega_bay",            5), # BB
-    rep("big_creek",            13), # BIGC -> BCR
-    rep("catalina_island",      11), # CAT
-    rep("elkhorn",               6), # ELK
-    rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-    rep("laguna_beach",         13), # LB
-    rep("point_dume",            5), # PD
-    rep("santa_barbara",        13), # SB
-    rep("la_jolla_san_diego",   13), # SD
-    rep("tomales_bay",           1), # TB
-    rep("redondo_beach",        10), # RB
-    rep("santa_cruz_harbour",   10)  # SCH
-  ), c(
-    rep("bodega_bay",            5), # BB
-    rep("big_creek",            13), # BIGC -> BCR
-    rep("elkhorn",               6), # ELK
-    rep("guadalupe_island",     10), # GUA
-    rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-    rep("laguna_beach",         13), # LB
-    rep("point_dume",            5), # PD
-    rep("santa_barbara",        13), # SB
-    rep("la_jolla_san_diego",   13), # SD
-    rep("tomales_bay",           1), # TB
-    rep("redondo_beach",        10), # RB
-    rep("santa_cruz_harbour",   10)  # SCH
-  ), c(
-    rep("bodega_bay",            5), # BB
-    rep("big_creek",            13), # BIGC -> BCR
-    rep("elkhorn",               6), # ELK
-    rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-    rep("isla_san_jeronimo",    11), # ISJ
-    rep("laguna_beach",         13), # LB
-    rep("point_dume",            5), # PD
-    rep("santa_barbara",        13), # SB
-    rep("la_jolla_san_diego",   13), # SD
-    rep("tomales_bay",           1), # TB
-    rep("redondo_beach",        10), # RB
-    rep("santa_cruz_harbour",   10)  # SCH
-  ), c(
-    rep("bodega_bay",            5), # BB
-    rep("big_creek",            13), # BIGC -> BCR
-    rep("elkhorn",               6), # ELK
-    rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-    rep("laguna_beach",         13), # LB
-    rep("point_dume",            5), # PD
-    rep("santa_barbara",        13), # SB
-    rep("san_clemente_island",  10), # SCL
-    rep("la_jolla_san_diego",   13), # SD
-    rep("tomales_bay",           1), # TB
-    rep("redondo_beach",        10), # RB
-    rep("santa_cruz_harbour",   10)  # SCH
-  ), c(
-    rep("catalina_island",      11), # CAT
-    rep("guadalupe_island",     10)  # GUA
-  ), c(
-    rep("guadalupe_island",     10), # GUA
-    rep("isla_san_jeronimo",    11)  # ISJ
-  ), c(
-    rep("guadalupe_island",     10), # GUA
-    rep("san_clemente_island",  10)  # SCL
-  ), c(
-    rep("catalina_island",      11), # CAT
-    rep("guadalupe_island",     10), # GUA
-    rep("isla_san_jeronimo",    11), # ISJ
-    rep("san_clemente_island",  10)  # SCL
-  ), c(
-    rep("bodega_bay",            5), # BB
-    rep("big_creek",            13), # BIGC -> BCR
-    rep("elkhorn",               6), # ELK
-    rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-    rep("santa_barbara",        13), # SB
-    rep("tomales_bay",           1), # TB
-    rep("santa_cruz_harbour",   10)  # SCH
-  ), c(
-    rep("isla_san_jeronimo",    11), # ISJ
-    rep("san_clemente_island",  10)  # SCL
-  ), c(
-    rep("laguna_beach",         13), # LB
-    rep("point_dume",            5), # PD
-    rep("santa_barbara",        13), # SB
-    rep("la_jolla_san_diego",   13), # SD
-    rep("redondo_beach",        10) # RB
-  )
-)
+./plink2 --bfile 8-Embiotoca_filtered_coastal_gua_cat --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_gua_cat
 ```
 
+Coast *vs.* Gua and Scl
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua_scl.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua_scl
+
+./plink2 --bfile 8-Embiotoca_filtered_coastal_gua_scl --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_gua_scl
+```
+
+Coast *vs.* Gua, Cat and Scl
+```{bash}
+cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
+
+./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua_cat_scl.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua_cat_scl
+
+./plink2 --bfile 8-Embiotoca_filtered_coastal_gua_cat_scl --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_gua_cat_scl
+```
+
+## pcadapt analyses
+
+### All preanalysis to determine optimal K value
+
 ```{r}
-for (i in 1:dim(bed_files)[1]) {
-  pcadapt <- here("plink2", bed_files$paths[[i]]) |> 
+for (i in 1:dim(popmaps)[1]) {
+  pcadapt <- here("plink2", popmaps$bed_paths[[i]]) |> 
     read.pcadapt(type = "bed") |> 
-    pcadapt(K = 20)
+    pcadapt(K = 10)
   
-  pcadapt |>
-    pcadapt_screeplot() |> 
+  pcadapt_screeplot(pcadapt) |> 
     ggsave(
-      here("output", "plots", paste0("pcadapt_", bed_files$suffixes[[i]], "_screeplot.pdf")),
+      here("output", "plots", "pcadapt", paste0("pcadapt_", popmaps$names[[i]], "_screeplot.pdf")),
       plot = _,
       width = 10, height = 8
     )
+
+  pca_plots <- PCA_plot(pcadapt, popmap = popmaps$maps[[i]], axis_one = 1, axis_two = 2) +
+    PCA_plot(pcadapt, popmap = popmaps$maps[[i]], axis_one = 3, axis_two = 4) +
+    PCA_plot(pcadapt, popmap = popmaps$maps[[i]], axis_one = 5, axis_two = 6) +
+    PCA_plot(pcadapt, popmap = popmaps$maps[[i]], axis_one = 7, axis_two = 8) +
+    plot_layout(design = "AB\nCD")
   
-  for (j in 1:19) {
-    pcadapt |>
-      plot(option = "scores", pop = bed_files$popmaps[[i]], i = j, j = j + 1) |> 
-      ggsave(
-        here("output", "plots", "pcadapt",
-             paste0("pcadapt_", bed_files$suffixes[[i]], "_PCA_", as.character(j),"_", as.character(j + 1), ".pdf")),
-        plot = _,
-        width = 10, height = 8
-      )
-  }
+  ggsave(
+    here("output", "plots", "pcadapt",
+         paste0("pcadapt_", popmaps$names[[i]], "_PCA_1-8.pdf")),
+    plot  = pca_plots,
+    width = 10, height = 8
+  )
 }
 
 # map2(bed_files$paths, bed_files$suffixes,
@@ -483,65 +457,61 @@ for (i in 1:dim(bed_files)[1]) {
 #      })
 ```
 
-## All populations
-
 ```{r}
-#| label: pcadapt
-
-popmap_lcwgs <- c(
-  rep("bodega_bay",            5), # BB
-  rep("big_creek",            13), # BIGC -> BCR
-  rep("catalina_island",      11), # CAT
-  rep("elkhorn",               6), # ELK
-  rep("guadalupe_island",     10), # GUA
-  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
-  rep("isla_san_jeronimo",    11), # ISJ
-  rep("laguna_beach",         13), # LB
-  rep("point_dume",            5), # PD
-  rep("santa_barbara",        13), # SB
-  rep("san_clemente_island",  10), # SCL
-  rep("la_jolla_san_diego",   13), # SD
-  rep("tomales_bay",           1), # TB
-  rep("redondo_beach",        10), # RB
-  rep("santa_cruz_harbour",   10) # SCH
-)
-
-pcadapt_lcwgs <- here("plink2", "8-Embiotoca_filtered.bed") |> 
-  read.pcadapt(type = "bed") |>
-  pcadapt(K = 6)
+popmaps <- popmaps |> mutate(K = c(6, 1, 1, 2, 3,
+                                   3, 4, 5, 4, 3,
+                                   3, 1, 1, 1, 3,
+                                   3, 1, 2))
 ```
 
-```{r}
-#| eval: false
-
-write_rds(pcadapt_lcwgs, file = here("output", "pcadapt_lcwgs_K9.rds"))
-```
+### All analyses with correct value of K
 
 ```{r}
-#| label: ExploPlots
-
-for (i in 1:19) {
-  pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = i, j = i + 1)
-}
-
-pcadapt_lcwgs |> plot(option = "scores", pop = popmap_lcwgs, i = 1, j = 2) |> ggsave(
-        here("output", "plots", paste0("pcadapt_all_PCA_1_2.pdf")),
-        plot = _,
-        width = 10, height = 8
+for (i in 1:dim(popmaps)[1]) {
+  here("plink2", popmaps$bed_paths[[i]]) |> 
+    read.pcadapt(type = "bed") |> 
+    pcadapt(K = popmaps$K[i]) |> 
+    write_rds(
+      file = here(
+        "output",
+        paste0("pcadapt_lcwgs", popmaps$names[[i]], "K", as.character(popmaps$K[i]), ".rds")
       )
+    )
   
+  pcadapt <- readRDS(
+    here(
+        "output",
+        paste0("pcadapt_lcwgs", popmaps$names[[i]], "K", as.character(popmaps$K[i]), ".rds")
+      )
+  )
 
-pcadapt_lcwgs |> plot(option = "qqplot")
+  plot(pcadapt, option = "qqplot") |> 
+    ggsave(
+      here("output", "plots", "pcadapt",
+           paste0("pcadapt_", popmaps$names[[i]], "_qqplot.pdf")),
+      plot  = _,
+      width = 10, height = 8
+    )
+  
+  png(here("output", "plots", "pcadapt",
+           paste0("pcadapt_", popmaps$names[[i]], "_pvalues_hist.pdf")))
 
-pcadapt_lcwgs$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
+  pcadapt$pvalues |> hist(
+    xlab   = "p-values",
+    main   = NULL,
+    breaks = 50,
+    col    = "orange"
+  )
+  
+  dev.off()
+}
 ```
 
+### Loading plots example
+
 ```{r}
+#| label: LoadingsPlots
+
 colnames(pcadapt_lcwgs$loadings) <- paste0("PC", seq(1, 6))
 
 for (i in paste0("PC", seq(1, 6))) {
@@ -557,742 +527,11 @@ for (i in paste0("PC", seq(1, 6))) {
     limitsize = FALSE
   )
 }
-
 ```
 
-## Coastal populations
+## Outliers determination and annotation
 
-```{r}
-#| label: Coastpcadapt
-
-popmap_lcwgs_coast <- c(
-  rep("bodega_bay",            5), # BB
-  rep("big_creek",            13), # BIGC -> BCR
-  rep("elkhorn",               6), # ELK
-  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-  rep("laguna_beach",         13), # LB
-  rep("point_dume",            5), # PD
-  rep("santa_barbara",        13), # SB
-  rep("la_jolla_san_diego",   13), # SD
-  rep("tomales_bay",           1), # TB
-  rep("redondo_beach",        10), # RB
-  rep("santa_cruz_harbour",   10)  # SCH
-)
-
-pcadapt_lcwgs_coast <- pcadapt(EJA_lcwgs_coast, K = 5)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_coast |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_coast_K5.rds"))
-```
-
-```{r}
-#| label: CoastExploPlots
-
-pcadapt_lcwgs_coast |> plot(option = "manhattan")
-
-pcadapt_lcwgs_coast |>
-  plot(option = "scores", pop = popmap_lcwgs_coast, i = 1, j = 2)
-
-pcadapt_lcwgs_coast |>
-  plot(option = "scores", pop = popmap_lcwgs_coast, i = 2, j = 3)
-
-pcadapt_lcwgs_coast |>
-  plot(option = "scores", pop = popmap_lcwgs_coast, i = 3, j = 4)
-
-pcadapt_lcwgs_coast |>
-  plot(option = "scores", pop = popmap_lcwgs_coast, i = 4, j = 5)
-
-plot(pcadapt_lcwgs_coast, option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_coast$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: CoastMemclean
-
-rm(EJA_lcwgs_coast, coast_PCA_1_2, coast_manhattan)
-```
-
-## North Coastal populations
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
-
-./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_north.txt --make-bed --out 8-Embiotoca_filtered_north
-```
-
-```{r}
-#| label: Northpcadapt
-
-popmap_lcwgs_north <- c(
-  rep("bodega_bay",            5), # BB
-  rep("big_creek",            13), # BIGC -> BCR
-  rep("elkhorn",               6), # ELK
-  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-  rep("santa_barbara",        13), # SB
-  rep("tomales_bay",           1), # TB
-  rep("santa_cruz_harbour",   10)  # SCH
-)
-
-pcadapt_lcwgs_north <- pcadapt(EJA_lcwgs_north, K = 3)
-```
-
-```{r}
-#| eval: false
-
-write_rds(pcadapt_lcwgs_north, file = here("output", "pcadapt_lcwgs_north.rds"))
-```
-
-```{r}
-#| label: NorthExploPlots
-
-north_PCA_1_2 <- pcadapt_lcwgs_north |>
-  plot(option = "scores", pop = popmap_lcwgs_north, i = 1, j = 2) +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "north_PCA_1_2.pdf"),
-  plot   = north_PCA_1_2,
-  width  = 10,
-  height = 8
-)
-
-plot(pcadapt_lcwgs_north, option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_north$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: NorthMemclean
-
-rm(EJA_lcwgs_north, north_PCA_1_2, north_manhattan)
-```
-
-## South Coastal populations
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
-
-./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_south.txt --make-bed --out 8-Embiotoca_filtered_south
-```
-
-```{r}
-#| label: Southpcadapt
-
-popmap_lcwgs_south <- c(
-  rep("laguna_beach",         13), # LB
-  rep("point_dume",            5), # PD
-  rep("santa_barbara",        13), # SB
-  rep("la_jolla_san_diego",   13), # SD
-  rep("redondo_beach",        10) # RB
-)
-
-pcadapt_lcwgs_south <- pcadapt(EJA_lcwgs_south, K = 2)
-```
-
-```{r}
-#| eval: false
-
-write_rds(pcadapt_lcwgs_south, file = here("output", "pcadapt_lcwgs_south.rds"))
-```
-
-```{r}
-#| label: SouthExploPlots
-
-south_PCA_1_2 <- pcadapt_lcwgs_south |>
-  plot(option = "scores", pop = popmap_lcwgs_south, i = 1, j = 2) +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "south_PCA_1_2.pdf"),
-  plot   = south_PCA_1_2,
-  width  = 10,
-  height = 8
-)
-
-plot(pcadapt_lcwgs_south, option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_south$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: CoastMemclean
-
-rm(EJA_lcwgs_south, south_PCA_1_2, south_manhattan)
-```
-
-## Islands
-
-```{r}
-#| label: ISLpcadapt
-
-popmap_lcwgs_isl <- c(
-  rep("catalina_island",      11), # CAT
-  rep("guadalupe_island",     10), # GUA
-  rep("isla_san_jeronimo",    11), # ISJ
-  rep("san_clemente_island",  10)  # SCL
-)
-
-pcadapt_lcwgs_isl <- lcwgs_isl |> pcadapt(K = 3)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_isl |>
-  write_rds(file = here("output", "pcadapt_lcwgs_isl.rds"))
-```
-
-```{r}
-#| label: ISLExploPlots
-
-isl_PCA_1_2 <- pcadapt_lcwgs_isl |>
-  plot(option = "scores", pop = popmap_lcwgs_isl, i = 1, j = 2) +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "isl_PCA_1_2.pdf"),
-  plot   = isl_PCA_1_2,
-  width  = 10,
-  height = 8
-)
-
-isl_PCA_2_3 <- pcadapt_lcwgs_isl |>
-  plot(option = "scores", pop = popmap_lcwgs_isl, i = 2, j = 3) +
-  theme_minimal()
-
-save_open_plot(
-  here("output", "plots", "isl_PCA_2_3.pdf"),
-  plot   = isl_PCA_2_3,
-  width  = 10,
-  height = 8
-)
-
-pcadapt_lcwgs_isl |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_isl$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: ISLMemclean
-
-rm(lcwgs_isl, isl_PCA_1_2, isl_PCA_2_3, isl_manhattan)
-```
-
-## Coast + ISJ
-
-```{r}
-#| label: CoastISJpcadapt
-
-popmap_lcwgs_coast_isj <- c(
-  rep("bodega_bay",            5), # BB
-  rep("big_creek",            13), # BIGC -> BCR
-  rep("elkhorn",               6), # ELK
-  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-  rep("isla_san_jeronimo",    11), # ISJ
-  rep("laguna_beach",         13), # LB
-  rep("point_dume",            5), # PD
-  rep("santa_barbara",        13), # SB
-  rep("la_jolla_san_diego",   13), # SD
-  rep("tomales_bay",           1), # TB
-  rep("redondo_beach",        10), # RB
-  rep("santa_cruz_harbour",   10)  # SCH
-)
-
-pcadapt_lcwgs_coast_isj <- EJA_lcwgs_coast_isj |> pcadapt(K = 6)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_coast_isj |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_coast_isj_K6.rds"))
-```
-
-```{r}
-#| label: CoastISJExploPlots
-
-pcadapt_lcwgs_coast_isj |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 1, j = 2)
-pcadapt_lcwgs_coast_isj |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 2, j = 3)
-pcadapt_lcwgs_coast_isj |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 3, j = 4)
-pcadapt_lcwgs_coast_isj |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 4, j = 5)
-pcadapt_lcwgs_coast_isj |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_isj, i = 5, j = 6)
-
-pcadapt_lcwgs_coast_isj |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_coast_isj$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: CoastMemclean
-
-rm(EJA_lcwgs_coast_isj, coast_isj_PCA_1_2, coast_isj_PCA_2_3, coast_isj_manhattan)
-```
-
-## Coast + SCL
-
-```{r}
-#| label: CoastSCLpcadapt
-
-popmap_lcwgs_coast_scl <- c(
-  rep("bodega_bay",            5), # BB
-  rep("big_creek",            13), # BIGC -> BCR
-  rep("elkhorn",               6), # ELK
-  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-  rep("laguna_beach",         13), # LB
-  rep("point_dume",            5), # PD
-  rep("santa_barbara",        13), # SB
-  rep("san_clemente_island",  10), # SCL
-  rep("la_jolla_san_diego",   13), # SD
-  rep("tomales_bay",           1), # TB
-  rep("redondo_beach",        10), # RB
-  rep("santa_cruz_harbour",   10)  # SCH
-)
-
-pcadapt_lcwgs_coast_scl <- lcwgs_coast_scl |> pcadapt(K = 6)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_coast_scl |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_coast_scl_K6.rds"))
-```
-
-```{r}
-#| label: CoastSCLExploPlots
-
-pcadapt_lcwgs_coast_scl |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 1, j = 2)
-
-pcadapt_lcwgs_coast_scl |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 2, j = 3)
-
-pcadapt_lcwgs_coast_scl |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 3, j = 4)
-
-pcadapt_lcwgs_coast_scl |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 4, j = 5)
-
-pcadapt_lcwgs_coast_scl |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_scl, i = 5, j = 6)
-
-pcadapt_lcwgs_coast_scl |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_coast_scl$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: CoastSCLMemclean
-
-rm(lcwgs_coast_scl, coast_scl_PCA_1_2, coast_scl_PCA_2_3, coast_scl_manhattan)
-```
-
-## Coast + GUA
-
-```{r}
-#| label: CoastGUApcadapt
-
-popmap_lcwgs_coast_gua <- c(
-  rep("bodega_bay",            5), # BB
-  rep("big_creek",            13), # BIGC -> BCR
-  rep("elkhorn",               6), # ELK
-  rep("guadalupe_island",     10), # GUA
-  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-  rep("laguna_beach",         13), # LB
-  rep("point_dume",            5), # PD
-  rep("santa_barbara",        13), # SB
-  rep("la_jolla_san_diego",   13), # SD
-  rep("tomales_bay",           1), # TB
-  rep("redondo_beach",        10), # RB
-  rep("santa_cruz_harbour",   10)  # SCH
-)
-
-pcadapt_lcwgs_coast_gua <- lcwgs_coast_gua |> pcadapt(K = 6)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_coast_gua |>
-  write_rds(file = here("output", "pcadapt_lcwgs_coast_gua_K6.rds"))
-```
-
-```{r}
-#| label: CoastGUAExploPlots
-
-coast_gua_PCA_1_2 <- pcadapt_lcwgs_coast_gua |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 1, j = 2)
-
-coast_gua_PCA_2_3 <- pcadapt_lcwgs_coast_gua |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 2, j = 3)
-
-coast_gua_PCA_2_3 <- pcadapt_lcwgs_coast_gua |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 3, j = 4)
-
-coast_gua_PCA_2_3 <- pcadapt_lcwgs_coast_gua |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 4, j = 5)
-
-coast_gua_PCA_2_3 <- pcadapt_lcwgs_coast_gua |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_gua, i = 5, j = 6)
-
-pcadapt_lcwgs_coast_gua |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_coast_gua$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: CoastGUAMemclean
-
-rm(lcwgs_coast_gua, coast_gua_PCA_1_2, coast_gua_PCA_2_3, coast_gua_manhattan)
-```
-
-## Coast + CAT
-
-```{r}
-#| label: CoastCATpcadapt
-
-popmap_lcwgs_coast_cat <- c(
-  rep("bodega_bay",            5), # BB
-  rep("big_creek",            13), # BIGC -> BCR
-  rep("catalina_island",      11), # CAT
-  rep("elkhorn",               6), # ELK
-  rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-  rep("laguna_beach",         13), # LB
-  rep("point_dume",            5), # PD
-  rep("santa_barbara",        13), # SB
-  rep("la_jolla_san_diego",   13), # SD
-  rep("tomales_bay",           1), # TB
-  rep("redondo_beach",        10), # RB
-  rep("santa_cruz_harbour",   10)  # SCH
-)
-
-pcadapt_lcwgs_coast_cat <- lcwgs_coast_cat |> pcadapt(K = 6)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_coast_cat |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_coast_cat_K6.rds"))
-```
-
-```{r}
-#| label: CoastCATExploPlots
-
-pcadapt_lcwgs_coast_cat |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 1, j = 2)
-
-pcadapt_lcwgs_coast_cat |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 2, j = 3)
-  
-pcadapt_lcwgs_coast_cat |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 3, j = 4)
-
-pcadapt_lcwgs_coast_cat |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 4, j = 5)
-
-pcadapt_lcwgs_coast_cat |>
-  plot(option = "scores", pop = popmap_lcwgs_coast_cat, i = 5, j = 6)
-
-
-pcadapt_lcwgs_coast_cat |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_coast_cat$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: CoastCATMemclean
-
-rm(lcwgs_coast_cat, coast_cat_PCA_1_2, coast_cat_PCA_2_3, coast_cat_manhattan)
-```
-
-## CAT + SCL
-
-```{r}
-#| label: CATSCLpcadapt
-
-popmap_lcwgs_cat_scl <- c(
-  rep("catalina_island",      11), # CAT
-  rep("san_clemente_island",  10)  # SCL
-)
-
-pcadapt_lcwgs_cat_scl <- lcwgs_cat_scl |> pcadapt(K = 1)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_cat_scl |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_cat_scl.rds"))
-```
-
-```{r}
-#| label: CATSCLExploPlots
-
-pcadapt_lcwgs_cat_scl |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_cat_scl$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: CoastCATMemclean
-
-rm(lcwgs_cat_scl, cat_scl_manhattan)
-```
-
-## GUA + CAT
-
-```{r}
-#| label: GUACATpcadapt
-
-popmap_lcwgs_gua_cat <- c(
-  rep("catalina_island",      11), # CAT
-  rep("guadalupe_island",     10)  # GUA
-)
-
-pcadapt_lcwgs_gua_cat <- lcwgs_gua_cat |> pcadapt(K = 1)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_gua_cat |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_gua_cat.rds"))
-```
-
-```{r}
-#| label: GUACATExploPlots
-
-pcadapt_lcwgs_gua_cat |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_gua_cat$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: GUACATMemclean
-
-rm(lcwgs_gua_cat, gua_cat_manhattan)
-```
-
-## GUA + SCL
-
-```{r}
-#| label: GUASCLpcadapt
-
-popmap_lcwgs_gua_scl <- c(
-  rep("guadalupe_island",     10), # GUA
-  rep("san_clemente_island",  10)  # SCL
-)
-
-pcadapt_lcwgs_gua_scl <- lcwgs_gua_scl |> pcadapt(K = 1)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_gua_scl |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_gua_scl.rds"))
-```
-
-```{r}
-#| label: GUASCLExploPlots
-
-pcadapt_lcwgs_gua_scl |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_gua_scl$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: GUASCLMemclean
-
-rm(lcwgs_gua_scl, gua_scl_manhattan)
-```
-
-## GUA + ISJ
-
-```{r}
-#| label: GUAISJpcadapt
-
-popmap_lcwgs_GUA_ISJ <- c(
-  rep("guadalupe_island",     10), # GUA
-  rep("isla_san_jeronimo",    11)  # ISJ
-)
-
-pcadapt_lcwgs_GUA_ISJ <- lcwgs_gua_isj |> pcadapt(K = 1)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_GUA_ISJ |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_gua_isj.rds"))
-```
-
-```{r}
-#| label: GUAISJExploPlots
-
-pcadapt_lcwgs_GUA_ISJ |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_GUA_ISJ$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: GUAISJMemclean
-
-rm(lcwgs_GUA_ISJ, GUA_ISJ_manhattan)
-```
-
-## CAT + ISJ
-
-```{r}
-#| label: CATISJpcadapt
-
-popmap_lcwgs_cat_isj <-  c(
-  rep("catalina_island",      11), # CAT
-  rep("isla_san_jeronimo",    11)  # ISJ
-)
-
-pcadapt_lcwgs_cat_isj <- lcwgs_cat_isj |> pcadapt(K = 1)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_cat_isj |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_cat_isj.rds"))
-```
-
-```{r}
-#| label: CATISJExploPlots
-
-pcadapt_lcwgs_cat_isj |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_cat_isj$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: CATISJMemclean
-
-rm(lcwgs_cat_isj, cat_isj_manhattan)
-```
-
-## SCL + ISJ
-
-```{r}
-#| label: SCLISJpcadapt
-
-popmap_lcwgs_scl_isj <- c(
-  rep("isla_san_jeronimo",    11), # ISJ
-  rep("san_clemente_island",  10)  # SCL
-)
-
-pcadapt_lcwgs_scl_isj <- lcwgs_scl_isj |> pcadapt(K = 1)
-```
-
-```{r}
-#| eval: false
-
-pcadapt_lcwgs_scl_isj |> 
-  write_rds(file = here("output", "pcadapt_lcwgs_scl_isj.rds"))
-```
-
-```{r}
-#| label: SCLISJExploPlots
-
-pcadapt_lcwgs_scl_isj |> plot(option = "qqplot") + theme_minimal()
-
-pcadapt_lcwgs_scl_isj$pvalues |> hist(
-  xlab   = "p-values",
-  main   = NULL,
-  breaks = 50,
-  col    = "orange"
-)
-```
-
-```{r}
-#| label: SCLISJMemclean
-
-rm(lcwgs_scl_isj, scl_isj_manhattan)
-```
-
-# Outliers determination and annotation
-
-## Load species Metadata
+### Load species Metadata
 
 ```{r}
 EJA_annotations <- here("data", "EJA_annotations.gff") |> # Load annotated genome
@@ -1305,7 +544,7 @@ chromosomes_info <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |>  
   select(c(`GenBank seq accession`, `RefSeq seq accession`))
 ```
 
-### All outliers
+#### All outliers
 
 ```{r}
 read_write_locations <- tibble(
@@ -1334,7 +573,7 @@ map2(
 
 Summary is saved in `EJA_lcwgs_outliers_log.log`.
 
-## For only one
+### For only one
 
 ```{r}
 test <- here("output", "pcadapt_lcwgs_K9.rds") |>
@@ -1345,7 +584,7 @@ test <- here("output", "pcadapt_lcwgs_K9.rds") |>
   write_csv2(here("output", "EJA_lcwgs_cat_isj_5E-2_outliers_annotations.csv"))
 ```
 
-## Add Principal Components association to tables
+### Add Principal Components association to tables
 
 ```{r}
 tibble(
@@ -1372,9 +611,9 @@ tibble(
   })()
 ```
 
-## Add Allele frequencies
+### Add Allele frequencies
 
-### Send-away code
+#### Send-away code
 
 ```{r}
 #| eval: false
@@ -1394,7 +633,7 @@ EJA_allele_frequencies_tb <- EJA_allele_frequencies |>
 saveRDS(EJA_allele_frequencies_tb, here("output", "EJA_allele_frequencies_tb.rds"))
 ```
 
-### Add results to tables
+#### Add results to tables
 
 ```{r}
 EJA_allele_freq <- readRDS(here("output", "EJA_allele_frequencies_tb.rds")) |> 
@@ -1491,7 +730,7 @@ rm(chromosomes_length,
 gc()
 ```
 
-# Outliers Protein sequences for KEGG
+## Outliers Protein sequences for KEGG
 
 ### Get BLAST results
 
@@ -1585,225 +824,6 @@ lcwgs_EJA_outliers_blast_A_ocellaris_tib_filtered |>
 
 # Outliers with `outFLANK`
 
-## Convert all beds to vcfs
-
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
-
-bed_names=();
-for f in *.bed; do
-    bed_names+=("${f%.bed}");
-done;
-
-for bed in ${bed_names[@]}; do ./plink2 --bfile $bed --keep-allele-order --recode vcf --out $bed; done;
-```
-
-Coast *vs.* Gua and Cat
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
-
-./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua_cat.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua_cat
-
-./plink2 --bfile 8-Embiotoca_filtered_coastal_gua_cat --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_gua_cat
-```
-
-Coast *vs.* Gua and Scl
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
-
-./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua_scl.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua_scl
-
-./plink2 --bfile 8-Embiotoca_filtered_coastal_gua_scl --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_gua_scl
-```
-
-Coast *vs.* Gua, Cat and Scl
-```{bash}
-cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
-
-./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_coastal_gua_cat_scl.txt --make-bed --out 8-Embiotoca_filtered_coastal_gua_cat_scl
-
-./plink2 --bfile 8-Embiotoca_filtered_coastal_gua_cat_scl --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_gua_cat_scl
-```
-
-## prep
-
-```{r}
-library(OutFLANK)
-```
-
-```{r}
-popmaps <- list(
-  "vcf_paths" = list.files(here("plink2"), pattern = ".vcf$"),
-  "names"     = list("all", "cat_isj", "cat_scl", "coastal", "coastal_cat",
-                     "coastal_gua", "coastal_gua_cat", "coastal_gua_cat_scl",
-                     "coastal_gua_scl", "coastal_isj", "coastal_scl", "gua_cat",
-                     "gua_isj", "gua_scl", "isl", "north", "scl_isj", "south"),
-  "maps"      = list(
-    "all" = c(
-      rep("bodega_bay",            5), # BB
-      rep("big_creek",            13), # BIGC -> BCR
-      rep("catalina_island",      11), # CAT
-      rep("elkhorn",               6), # ELK
-      rep("guadalupe_island",     10), # GUA
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
-      rep("isla_san_jeronimo",    11), # ISJ
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("san_clemente_island",  10), # SCL
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz_harbour",   10) # SCH
-    ), "cat_isj" = c(
-      rep("catalina_island",      11), # CAT
-      rep("isla_san_jeronimo",    11)  # ISJ
-    ), "cat_scl" = c(
-      rep("catalina_island",      11), # CAT
-      rep("san_clemente_island",  10)  # SCL
-    ), "coastal" = c(
-      rep("bodega_bay",            5), # BB
-      rep("big_creek",            13), # BIGC -> BCR
-      rep("elkhorn",               6), # ELK
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz_harbour",   10)  # SCH
-    ), "coastal_cat" = c(
-      rep("bodega_bay",            5), # BB
-      rep("big_creek",            13), # BIGC -> BCR
-      rep("catalina_island",      11), # CAT
-      rep("elkhorn",               6), # ELK
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz_harbour",   10)  # SCH
-    ), "coastal_gua" = c(
-      rep("bodega_bay",            5), # BB
-      rep("big_creek",            13), # BIGC -> BCR
-      rep("elkhorn",               6), # ELK
-      rep("guadalupe_island",     10), # GUA
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz_harbour",   10)  # SCH
-    ), "coastal_gua_cat" = c(
-      rep("bodega_bay",            5), # BB
-      rep("big_creek",            13), # BIGC -> BCR
-      rep("catalina_island",      11), # CAT
-      rep("elkhorn",               6), # ELK
-      rep("guadalupe_island",     10), # GUA
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz_harbour",   10)  # SCH
-    ), "coastal_gua_cat_scl" = c(
-      rep("bodega_bay",            5), # BB
-      rep("big_creek",            13), # BIGC -> BCR
-      rep("catalina_island",      11), # CAT
-      rep("elkhorn",               6), # ELK
-      rep("guadalupe_island",     10), # GUA
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("san_clemente_island",  10), # SCL
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz_harbour",   10)  # SCH
-    ), "coastal_gua_scl" = c(
-      rep("bodega_bay",            5), # BB
-      rep("big_creek",            13), # BIGC -> BCR
-      rep("elkhorn",               6), # ELK
-      rep("guadalupe_island",     10), # GUA
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("san_clemente_island",  10), # SCL
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz_harbour",   10)  # SCH
-    ), "coastal_isj" = c(
-      rep("bodega_bay",            5), # BB
-      rep("big_creek",            13), # BIGC -> BCR
-      rep("elkhorn",               6), # ELK
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-      rep("isla_san_jeronimo",    11), # ISJ
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz_harbour",   10)  # SCH
-    ), "coastal_scl" = c(
-      rep("bodega_bay",            5), # BB
-      rep("big_creek",            13), # BIGC -> BCR
-      rep("elkhorn",               6), # ELK
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("san_clemente_island",  10), # SCL
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz_harbour",   10)  # SCH
-    ), "gua_cat" = c(
-      rep("catalina_island",      11), # CAT
-      rep("guadalupe_island",     10)  # GUA
-    ), "gua_isj" = c(
-      rep("guadalupe_island",     10), # GUA
-      rep("isla_san_jeronimo",    11)  # ISJ
-    ), "gua_scl" =  c(
-      rep("guadalupe_island",     10), # GUA
-      rep("san_clemente_island",  10)  # SCL
-    ), "isl" =  c(
-      rep("catalina_island",      11), # CAT
-      rep("guadalupe_island",     10), # GUA
-      rep("isla_san_jeronimo",    11), # ISJ
-      rep("san_clemente_island",  10)  # SCL
-    ), "north" = c(
-      rep("bodega_bay",            5), # BB
-      rep("big_creek",            13), # BIGC -> BCR
-      rep("elkhorn",               6), # ELK
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR
-      rep("santa_barbara",        13), # SB
-      rep("tomales_bay",           1), # TB
-      rep("santa_cruz_harbour",   10)  # SCH
-    ), "scl_isj" = c(
-      rep("isla_san_jeronimo",    11), # ISJ
-      rep("san_clemente_island",  10)  # SCL
-    ), "south" =   c(
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("la_jolla_san_diego",   13), # SD
-      rep("redondo_beach",        10) # RB
-    )
-  )
-)
-```
-
 ## Load data and convert to format:
 
 ```{r}
@@ -1888,7 +908,7 @@ plot(EJA_Fst$FST, EJA_Fst$FSTNoCorr, col = alpha("black", alpha = .01))
 abline(0, 1)
 ```
 
-## Coast vs GUA vs CAT
+## Coast *vs.* GUA *vs.* CAT
 
 ```{r}
  here("data", "8-Embiotoca_filtered_coastal_gua_cat_outflank.rds") |> 
@@ -1906,6 +926,8 @@ abline(0, 1)
         )
 ```
 
+## Coast *vs.* GUA *vs.* SCL
+
 ```{r}
  here("data", "8-Embiotoca_filtered_coastal_gua_scl_outflank.rds") |> 
         readRDS() |> 
@@ -1922,6 +944,8 @@ abline(0, 1)
         )
 ```
 
+## Coast *vs.* GUA *vs.* CAT *vs.* SCL
+
 ```{r}
  here("data", "8-Embiotoca_filtered_coastal_gua_cat_scl_outflank.rds") |> 
         readRDS() |> 
@@ -1937,6 +961,7 @@ abline(0, 1)
           )
         )
 ```
+
 # Outliers with `bayscan`
 
 ```{r}
@@ -1956,4 +981,3 @@ EJA_geste <- genomic_converter(
   parallel.core = 1
 )
 ```
-
