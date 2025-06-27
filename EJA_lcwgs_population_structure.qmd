@@ -20,9 +20,9 @@ c("here", "tidyverse", "vcfR", "dartR", "adegenet",
 ## Load functions
 
 ```{r}
-#| label: LoadPlot
+#| label: LoadExtFunc
 
-source(here("functions", "lcwgs_tidy_functions.R"))
+source(here("functions", "tidy_functions.R"))
 source(here("functions", "plot_functions.R"))
 ```
 

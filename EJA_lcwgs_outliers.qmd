@@ -22,7 +22,7 @@ c("here", "tidyverse",
 ```{r}
 #| label: LoadExtFunc
 
-source(here("functions", "lcwgs_tidy_functions.R"))
+source(here("functions", "tidy_functions.R"))
 source(here("functions", "plot_functions.R"))
 ```
 

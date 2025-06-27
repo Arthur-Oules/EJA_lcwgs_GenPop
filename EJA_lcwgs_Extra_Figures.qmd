@@ -4,6 +4,15 @@ format: html
 editor: source
 ---
 
+## Load functions
+
+```{r}
+#| label: LoadExtFunc
+
+source(here("functions", "tidy_functions.R"))
+source(here("functions", "plot_functions.R"))
+```
+
 ## Figure 2 - Islands Bathymetry
 
 ### Data
