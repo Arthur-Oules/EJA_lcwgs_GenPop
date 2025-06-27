@@ -42,6 +42,7 @@ popmap_tb <- read_csv2(here("data", "individuals_coordinates.csv")) |>
 ## Data conversion
 
 ### Convert vcf to genlight
+
 ```{r}
 #| echo: false
 
@@ -61,7 +62,7 @@ lcwgs_gl@other$latlon <- tibble(
 
 lcwgs_gl@pop <- factor(popmap_lcwgs)
 
-lcwgs_gl |> saveRDS(file = here("data", "Embiotoca_lcwgs_gl.rds"))
+saveRDS(lcwgs_gl, file = here("data", "Embiotoca_lcwgs_gl.rds"))
 ```
 
 ```{r}
@@ -488,7 +489,6 @@ save_open_plot(
 ##### Coast + isj vs islands
 
 ```{r}
-
 Fst_coast_vs_isl_t <- Fst_coast_vs_isl[plot_order_coast, plot_order_coast]
 Fst_coast_vs_isl_t[lower.tri(Fst_coast_vs_isl_t)] <- NA
 
@@ -526,6 +526,7 @@ save_open_plot(
 ### Edward distance Sendaway
 
 ```{r}
+#| label: EdwardSendaway
 #| eval: false
 
 EJA_gi <- read.vcfR(here("data", "8-Embiotoca_filtered.vcf.gz")) |>
@@ -557,7 +558,7 @@ saveRDS(EJA_gen, here("output", "EJA_lcwgs_gen.rds"))
 saveRDS(EJA_gi, here("output", "EJA_lcwgs_gi.rds"))
 rm(EJA_vcf, EJA_gi)
 
-EJA_chord_distance <- dist.genpop(EJA_gen, method = 2)
+EJA_chord_distance <- dist.genpop(EJA_gen, method = 2) #Chose method = 2 for Edward's distance
 
 saveRDS(EJA_chord_distance, here("output", "EJA_lcwgs_Edward_distance.rds"))
 
@@ -1245,6 +1246,7 @@ for (i in 1:3) {
 
 rm(lcwgs_coast_vcf)
 ```
+
 with 1 difference : "8456 sites passed allele frequency difference threshold"
 
 Difference = .75 76178
@@ -1298,7 +1300,6 @@ rm(lcwgs_coast_vcf_diffs, hi_het_coast, hi_het_coast_plots)
 gc()
 ```
 
-
 ### Coastal + ISJ
 
 ```{bash}
@@ -1333,6 +1334,7 @@ for (i in 1:3) {
 rm(EJA_lcwgs_coast_isj_vcf)
 gc()
 ```
+
 With 1 : "32484 sites passed allele frequency difference threshold"
 With .75 : "166077 sites passed allele frequency difference threshold"
 With .5 : "424389 sites passed allele frequency difference threshold"
@@ -1354,7 +1356,7 @@ write_rds(hi_het_coast_isj, here("output", "Triangle_analysis_coast_isj.rds"))
 ```
 
 ```{r}
-hi_het_coast_isj_plots <- vector(mode='list', length=3)
+hi_het_coast_isj_plots <- vector(mode = 'list', length=3)
 
 for (i in 1:3) {
   hi_het_coast_isj_plots[[i]] <- hi_het_coast_isj[[i]] |>
@@ -1366,7 +1368,7 @@ for (i in 1:3) {
       )
     ) |> 
     arrange(pop) |>
-    triangle.plot(colors = turbo(n = 12)) +
+    triangulaR::triangle.plot(colors = turbo(n = 12)) +
     labs(title = paste0("d = ", as.character(parameters[i])))
 }
 
@@ -1554,7 +1556,7 @@ rm(EJA_lcwgs_south_vcf_diff, hi_het_south, hi_het_south_plots)
 gc()
 ```
 
-## Genotype-Environment Association -->
+## Genotype-Environment Association
 
 <!-- ## Prep -->
 
@@ -1693,5 +1695,3 @@ gc()
 
 <!-- plot(-log10(pv_coast$pvalue), cex = .3, pch = 19, col = "blue") -->
 <!-- ``` -->
-
-## Speciation with Pixy
