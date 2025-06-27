@@ -22,7 +22,6 @@
 # Project specific files and folders
 /.quarto/
 /conStruct/
-/BayeScan2.1/
 /data/
 /metadata/
 /output/
