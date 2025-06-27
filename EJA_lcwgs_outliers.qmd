@@ -13,7 +13,7 @@ engine: knitr
 #| echo: false
 
 c("here", "tidyverse",
-  "vcfR", "pcadapt", "OutFLANK", "adegenet", "ape",
+  "vcfR", "pcadapt", "OutFLANK", "adegenet", "ape", "hierfstat", "radiator",
   "patchwork", "viridisLite") |>
   lapply(library, character.only = TRUE) |> invisible()
 ```
@@ -32,7 +32,7 @@ source(here("functions", "plot_functions.R"))
 #| label: GenomeMap
 #| echo: false
 
-lcwgs_vcf <- read.vcfR(here("data", "SNPS", "8-Embiotoca_filtered.vcf.gz"))
+lcwgs_vcf <- read.vcfR(here("data", "8-Embiotoca_filtered.vcf.gz"))
 
 lcwgs_vcf |>
   getFIX() |>
@@ -468,6 +468,7 @@ for (i in 1:dim(popmaps)[1]) {
 #      })
 ```
 
+#### Save K values for each analysis
 ```{r}
 popmaps <- popmaps |> mutate(K = c(6, 1, 1, 2, 3,
                                    3, 4, 5, 4, 3,
@@ -547,7 +548,7 @@ for (i in paste0("PC", seq(1, 6))) {
 #### Load genome and metadata
 
 Download here: <https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_022577435.1/>
-Annotation features as .GFF and Chromosomes > RefSeq qequence_repot.tsv
+Annotation features as `.GFF` and `Chromosomes > RefSeq > sequence_report.tsv`.
 
 ```{r}
 EJA_annotations <- here("data", "EJA_annotations.gff") |> # Load annotated genome
@@ -984,9 +985,6 @@ abline(0, 1)
 ## Outliers with `BayeScan2.1`
 ### Conversion to .geste file format
 ```{r}
-library(hierfstat)
-library(radiator)
-
 # read_csv2(here("data", "individuals_coordinates.csv")) |> 
 #   select(c(Indiv, Localisation)) |> 
 #   rename(INDIVIDUALS = Indiv, STRATA = Localisation) |> 
