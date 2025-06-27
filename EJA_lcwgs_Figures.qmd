@@ -5,17 +5,17 @@ format: html
 editor: source
 ---
 
-# Load packages
+## Load packages
 
 ```{r}
 c("here", "tidyverse",
   "ncdf4", "rnaturalearth", "rnaturalearthdata", "rnaturalearthhires", "marmap",
-  "patchwork", "plotly", "sf", "ggrepel", "ggspatial", "ggtree", "RColorBrewer", "viridis", 
+  "patchwork", "grid", "plotly", "sf", "ggrepel", "ggspatial", "ggtree", "RColorBrewer", "viridis", 
   "ggnewscale", "terra", "tidyterra", "tess3r") |>
   lapply(library, character.only = TRUE) |> invisible()
 ```
 
-# Load functions
+## Load functions
 
 ```{r}
 #| label: LoadPlot
@@ -24,425 +24,53 @@ source(here("functions", "lcwgs_tidy_functions.R"))
 source(here("functions", "plot_functions.R"))
 ```
 
-## Figure 1 - Manhattan plot home-made
+## Figure 1 - PCA & map
 
-### Load Metadata
+### A - PCA plot All 1&2
 
-```{r}
-#| label: LoadMetadata
-
-SNP_positions <- readRDS(file = here("data", "SNP_positions.rds"))
-
-chromosome_map <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |> 
-  read_tsv() |> 
-  select(`GenBank seq accession`, `Sequence name`, `Seq length`) |> 
-  filter(
-    `GenBank seq accession` %in% (SNP_positions |> distinct(CHROM) |> pull(CHROM))
-  ) |> 
-  add_row(
-    `GenBank seq accession` = "JAKOON010000230.1",
-    `Sequence name`         = NA,
-    `Seq length`            = NA
-  )
-```
-
-### Individual plot example
-
-```{r}
-#| label: ManhattanPlot
-
-manhattan_plot_lcwgs_K9 <- here("output", "pcadapt_lcwgs_K9.rds") |>
-  read_rds() |> 
-  manhattan_plot_custom_2(
-    SNP_positions   = SNP_positions,
-    chromosome_map  = chromosome_map
-  )
-
-ggsave(
-  here("output", "plots", "manhattan_plot_custom_lcwgsK9.png"),
-  plot   = manhattan_plot_lcwgs_K9,
-  width  = 30000,
-  height = 2000,
-  units  = "px",
-  limitsize = FALSE
-)
-```
-
-#### With outliers
-
-```{r}
-#| label: ManhattanPlot
-
-manhattan_plot_lcwgs_gua_isj_outliers <- manhattan_plot_custom_2(
-  pcadapt            = here("output", "pcadapt_lcwgs_gua_isj.rds") |> read_rds(),
-  SNP_positions      = SNP_positions,
-  chromosome_map     = chromosome_map,
-  outliers_positions = here("output", "pcadapt_lcwgs_gua_isj.rds") |>
-    read_rds() |> 
-    Get_outliers(pvalue_threshold = 0.05) |> 
-    select(CHROM, POS)
-)
-
-ggsave(
-  here("output", "plots", "manhattan_new", "outliers",
-       "manhattan_plot_custom_lcwgs_gua_isj_outliers.png"),
-  plot   = manhattan_plot_lcwgs_gua_isj_outliers,
-  width  = 6000,
-  height = 2000,
-  units  = "px"
-)
-
-# manhattan_plot_lcwgs_K9_outliers_crop <- manhattan_plot_lcwgs_K9_outliers + coord_cartesian(ylim = c(-1, 200))
-```
-
-#### With outliers and match
-
-```{r}
-manhattan_plot_lcwgs_gua_isj_outliers_match <- manhattan_plot_custom_2(
-  pcadapt            = here("output", "pcadapt_lcwgs_gua_isj.rds") |>
-    read_rds(),
-  SNP_positions      = SNP_positions,
-  chromosome_map     = chromosome_map,
-  outliers_positions = here("output", "pcadapt_lcwgs_gua_isj.rds") |>
-    read_rds() |> 
-    Get_outliers(pvalue_threshold = 0.05) |> 
-    select(CHROM, POS),
-  outliers_match     = here("output", "EJA_lcwgs_gua_isj_5E-2_outliers_annotations.csv") |> 
-    read_csv2() |>
-    distinct(`GenBank seq accession`, POS) |> 
-    rename("CHROM" = `GenBank seq accession`)
-)
-
-ggsave(
-  here("output", "plots", "manhattan_new", "match",
-       "manhattan_plot_custom_lcwgs_gua_isj_outliers_match.png"),
-  plot   = manhattan_plot_lcwgs_gua_isj_outliers_match,
-  width  = 6000,
-  height = 2000,
-  units  = "px"
-)
-```
-
-### Generate all plots from pcadapt analyses
-
-```{r}
-#| label: PlotsGen
-
-manhattans <- tibble(
-  read_files = list.files(here("output")) |> str_subset("pcadapt")
-) |> 
-  mutate(
-    plots       = here("output", read_files) |>
-      map(
-        \(x) manhattan_plot_custom_2(
-          read_rds(file = x),
-          SNP_positions  = SNP_positions,
-          chromosome_map = chromosome_map
-        )
-      ),
-    write_files = read_files |>
-      str_replace("pcadapt", "manhattan_plot_custom") |>
-      str_replace(".rds", ".png")
-  )
-```
-
-```{r}
-#| label: PlotsSave
-
-manhattans |> (\(x) {
-  map2(x$write_files, x$plots,
-    \(x, y) {
-      ggsave(
-        x |> here("output", "plots", ... = _),
-        plot   = y,
-        width  = 6000,
-        height = 2000,
-        units  = "px"
-      )
-    }
-  )
-})()
-```
-
-#### Coast and Islands Multiplot
-
-```{r}
-layout <-  "
-AA######
-BBCC####
-DDEEFF##
-GGHHIIJJ
-"
-
-multi_plot_coast_islands <- manhattans$plots[[4]]  +
-    manhattans$plots[[5]] + manhattans$plots[[9]]  +
-    manhattans$plots[[3]] + manhattans$plots[[8]]  + manhattans$plots[[1]] +
-    manhattans$plots[[7]] + manhattans$plots[[10]] + manhattans$plots[[13]] + manhattans$plots[[2]] +
-    plot_layout(design = layout, axes = "collect_x", axis_titles = "collect")
-
-ggsave(
-  here("output", "plots", "multi_plot_coast_islands.png"),
-  plot   = multi_plot_coast_islands,
-  width  = 12000,
-  height = 6000,
-  units = "px"
-)
-```
-
-### Generate plots with outliers
-
-```{r}
-#| label: PlotsGenOutliers
-
-manhattans_outliers <- tibble(
-  read_files_pcadapt  = list.files(here("output")) |> str_subset("pcadapt")
-) |> 
-  mutate(
-    plots       = map(
-      read_files_pcadapt,
-      \(x) manhattan_plot_custom_2(
-        pcadapt            = here("output", x) |> read_rds(),
-        SNP_positions      = SNP_positions,
-        chromosome_map     = chromosome_map,
-        outliers_positions = here("output", x) |>
-          read_rds() |>
-          Get_outliers(pvalue_threshold = .05) |> 
-          select(CHROM, POS)
-      )
-    ),
-    write_files = read_files_pcadapt |>
-      str_replace("pcadapt", "manhattan_plot_custom") |>
-      str_replace(".rds", "_outliers.png")
-  )
-```
-
-```{r}
-#| label: PlotsSaveOutliers
-
-map2(
-  manhattans_outliers$write_files, manhattans_outliers$plots,
-  \(x, y) {
-    ggsave(
-      here("output", "plots", "manhattan_new", "outliers", x),
-      plot   = y,
-      width  = 6000,
-      height = 2000,
-      units  = "px"
-    )
-  }
-)
-```
-
-#### Coast and Islands Multiplot
-
-```{r}
-layout <-  "
-AA######
-BBCC####
-DDEEFF##
-GGHHIIJJ
-"
-
-multi_plot_coast_islands_outliers <- manhattans_outliers$plots[[4]]  +
-    manhattans_outliers$plots[[5]] + manhattans_outliers$plots[[9]]  +
-    manhattans_outliers$plots[[3]] + manhattans_outliers$plots[[8]]  + manhattans_outliers$plots[[1]] +
-    manhattans_outliers$plots[[7]] + manhattans_outliers$plots[[10]] + manhattans_outliers$plots[[13]] + manhattans_outliers$plots[[2]] +
-    plot_layout(design = layout, axes = "collect_x", axis_titles = "collect")
-
-ggsave(
-  here("output", "plots", "multi_plot_coast_islands_outliers.png"),
-  plot   = multi_plot_coast_islands_outliers,
-  width  = 12000,
-  height = 6000,
-  units = "px"
-)
-```
-
-### Generate plots with match
-
-```{r}
-#| label: PlotsGenMatch
-
-manhattans_outliers_match <- tibble(
-  read_files_pcadapt = list.files(here("output")) |> str_subset("pcadapt"),
-  read_files_match   = list.files(here("output")) |> str_subset("outliers_annotations")
-) |> 
-  mutate(
-    plots       = map2(
-      read_files_pcadapt, read_files_match,
-      \(x, y) manhattan_plot_custom_2(
-        pcadapt            = here("output", x) |> read_rds(),
-        SNP_positions      = SNP_positions,
-        chromosome_map     = chromosome_map,
-        outliers_positions = here("output", x) |>
-          read_rds() |>
-          Get_outliers(pvalue_threshold = .05) |> 
-          select(CHROM, POS),
-        outliers_match     = here("output", y) |> 
-          read_csv2() |>
-          distinct(`GenBank seq accession`, POS) |> 
-          rename("CHROM" = `GenBank seq accession`)
-      )
-    ),
-    write_files = read_files_pcadapt |>
-      str_replace("pcadapt", "manhattan_plot_custom") |>
-      str_replace(".rds", "_outliers_match.png")
-  )
-```
-
-```{r}
-#| label: PlotsGenMatch
-
-map2(
-  manhattans_outliers_match$write_files, manhattans_outliers_match$plots,
-  \(x, y) {
-    ggsave(
-      here("output", "plots", "manhattan_new", "match", x),
-      plot   = y,
-      width  = 6000,
-      height = 2000,
-      units  = "px"
-    )
-  }
-)
-```
-
-#### Coast and Islands Multiplot
-
-```{r}
-layout <-  "
-AA######
-BBCC####
-DDEEFF##
-GGHHIIJJ
-"
-
-multi_plot_coast_islands_match <- manhattans_outliers_match$plots[[4]]  +
-    manhattans_outliers_match$plots[[5]] + manhattans_outliers_match$plots[[9]]  +
-    manhattans_outliers_match$plots[[3]] + manhattans_outliers_match$plots[[8]]  + manhattans_outliers_match$plots[[1]] +
-    manhattans_outliers_match$plots[[7]] + manhattans_outliers_match$plots[[10]] + manhattans_outliers_match$plots[[13]] + manhattans_outliers_match$plots[[2]] +
-    plot_layout(design = layout, axes = "collect_x", axis_titles = "collect")
-
-ggsave(
-  here("output", "plots", "multi_plot_coast_islands_match.png"),
-  plot   = multi_plot_coast_islands_match,
-  width  = 12000,
-  height = 6000,
-  units = "px"
-)
-```
-
-### Clean memory
-
-```{r}
-#| label: ManhattanMemClean
-
-rm(SNP_positions, chromosome_map,
-   manhattans, multi_plot_coast_islands,
-   multi_plot_coast_islands_outliers, manhattans_outliers_match,
-   manhattans_outliers_match, multi_plot_coast_islands_match,
-   layout)
-
-gc()
-```
-
-### Raw dataframes
-
-```{r}
-list.files(here("output")) |>
-  str_subset("pcadapt") |> 
-  lapply(
-    \(x) {
-      here("output", x) |>
-        read_rds() |> 
-        manhattan_plot_custom_2(
-          SNP_positions   = SNP_positions,
-          chromosome_map  = chromosome_map,
-          data.only       = TRUE
-        ) |> 
-        write.csv(here("output", x |> str_replace("rds", "csv")))
-    }
-  )
-```
-
-## Figure 2 - PCA & map
-
-### PCA plot All 1&2
-
+#### Load Data
 ```{r}
 #| label: LoadPCA
 
-pcadapt_lcwgs <- read_rds(file = here("output", "pcadapt_lcwgs_K9.rds"))
+pcadapt_lcwgs <- read_rds(file = here("output", "pcadapt_lcwgs_all_K6.rds"))
 
-popmap_lcwgs <- tibble(
-  long_names = factor(
-    c(
-      rep("bodega_bay",            5), # BB
-      rep("big_sur",              13), # BIGC -> BCR -> BS
-      rep("catalina_island",      11), # CAT
-      rep("elkhorn",               6), # ELK
-      rep("guadalupe_island",     10), # GUA
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
-      rep("isla_san_jeronimo",    11), # ISJ
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara", 13), # SB
-      rep("san_clemente_island",  10), # SCL
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz",   10) # SCH
-    ),
-    levels = c("big_sur", "bodega_bay", "catalina_island", "santa_cruz",
-               "guadalupe_island", "isla_san_jeronimo", "la_jolla_san_diego",
-               "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
-               "san_clemente_island", "santa_barbara",
-               "elkhorn", "redondo_beach")
+popmap_lcwgs <- factor(
+  c(
+    rep("bodega_bay",          5), # BB
+    rep("big_sur",            13), # BIGC -> BCR -> BS
+    rep("santa_catalina_is.", 11), # CAT
+    rep("elkhorn",             6), # ELK
+    rep("isla_guadalupe",     10), # GUA
+    rep("pacific_grove",      13), # HOP -> Pacific Grove PGR 
+    rep("isla_san_jerónimo",  11), # ISJ
+    rep("laguna_beach",       13), # LB
+    rep("point_dume",          5), # PD
+    rep("santa_barbara",      13), # SB
+    rep("san_clemente_is.",   10), # SCL
+    rep("la_jolla_san_diego", 13), # SD
+    rep("tomales_bay",         1), # TB
+    rep("redondo_beach",      10), # RB
+    rep("santa_cruz",         10) # SCH
   ),
-  short_names = factor(
-    c(
-      rep("BB",   5), # BB
-      rep("BS",  13), # BIGC -> BCR
-      rep("CAT", 11), # CAT
-      rep("ELK",  6), # ELK
-      rep("GUA", 10), # GUA
-      rep("PG",  13), # HOP -> Pacific Grove PGR 
-      rep("ISJ", 11), # ISJ
-      rep("LB",  13), # LB
-      rep("PD",   5), # PD
-      rep("SB",  13), # SB
-      rep("SCL", 10), # SCL
-      rep("SD",  13), # SD
-      rep("TB",   1), # TB
-      rep("RB",  10), # RB
-      rep("SCH", 10) # SCH
-    ),
-    levels = c("BS", "BB", "CAT", "ELK", "GUA",
-               "ISJ", "SD", "LB", "PG", "PD",
-               "TB", "SCL", "SB", "SCH", "RB")
-  )
+  levels = c("big_sur", "bodega_bay", "santa_catalina_is.", "santa_cruz",
+             "isla_guadalupe", "isla_san_jerónimo", "la_jolla_san_diego",
+             "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
+             "san_clemente_is.", "santa_barbara",
+             "elkhorn", "redondo_beach")
 )
 ```
+
+#### Plot PCA
 
 ```{r}
 #| label: PCAMapPCAPlot
 
 PCA <- PCA_plot(
   pcadapt_output = pcadapt_lcwgs,
-  popmap         = popmap_lcwgs$long_names,
+  popmap         = factor(popmap_lcwgs |>  gsub("_", " ", x = _) |> str_to_title(),
+                          levels = c("big_sur", "bodega_bay", "santa_catalina_is.", "santa_cruz", "isla_guadalupe", "isla_san_jerónimo", "la_jolla_san_diego", "laguna_beach", "pacific_grove", "point_dume", "tomales_bay", "san_clemente_is.", "santa_barbara", "elkhorn", "redondo_beach") |>  gsub("_", " ", x = _) |> str_to_title()),
   axis_one       = -2,
   axis_two       = -1
-)
-```
-
-```{r}
-#| label: PCAMapPCASave
-
-save_open_plot(
-  path   = here("output", "plots", "PCA.pdf"),
-  plot   = PCA,
-  width  = 9,
-  height = 9
 )
 ```
 
@@ -453,14 +81,15 @@ save_open_plot(
 
 PCA_crop <- PCA + xlim(-.065, -.0325) + ylim(.095, .1275) +
   # old crop = xlim(-.065, -.05) + ylim(.1125, .1275) +
-  coord_fixed(ratio = 1) +
   theme(
     legend.position = "none",
     axis.title      = element_blank(),
-    plot.background = element_rect(fill = "white", linetype = "longdash")
+    panel.background = element_rect(fill = "white", linetype = "longdash")
   )
 PCA_crop$layers[[2]] <- NULL
 ```
+
+#### Stitch together
 
 ```{r}
 #| label: PCAMapPCAFuse
@@ -475,62 +104,7 @@ theme(legend.position = "none") +
 inset_element(PCA_crop, left = 0.6, bottom = 0.6, right = 1, top = 1)
 ```
 
-```{r}
-#| label: PCAMapPCASave
-
-save_open_plot(
-  path   = here("output", "plots", "pca_crop.pdf"),
-  plot   = PCA_and_crop,
-  width  = 9,
-  height = 9
-)
-```
-
-#### Interactive PCA
-
-```{r}
-#| label: PCAMap2DInteractivePlot
-
-PCA_plot(
-  pcadapt_output = pcadapt_lcwgs,
-  popmap         = popmap_lcwgs$long_names,
-  x_offsets      = rep(.01, 15),
-  y_offsets      = rep(.05, 15)
-) |>
-  ggplotly()
-```
-
-```{r}
-#| label: PCAMapPCAInteractive
-
-TD_PCA_plot <- pcadapt_lcwgs$scores |>
-  as_tibble() |>
-  rename(PC_1 = V1, PC_2 = V2, PC_3 = V3, PC_4 = V4) |> 
-  mutate(pop = popmap_lcwgs$long_names) |> 
-  as.data.frame() |> 
-  plot_ly(
-    x = ~PC_1, y = ~PC_2, z = ~PC_3,
-    color = ~pop, colors = viridis(144, option = "turbo")
-  ) |>
-  add_markers(size = 12)
-
-setwd(here("output", "plots"))
-as_widget(TD_PCA_plot) |> saveWidget(
-  file = here("output", "plots", "3D_PCA.html"),
-  selfcontained = TRUE)
-setwd(here())
-
-rm(TD_PCA_plot)
-```
-
-```{r}
-#| label: PCAMemClean
-
-rm(pcadapt_lcwgs, PCA, PCA_crop)
-gc()
-```
-
-### Map - SST and current 
+### B - SST and current 
 
 #### Formatting Copernicus data
 
@@ -599,7 +173,7 @@ SST_annual_mean <- readRDS(
 )
 ```
 
-#### Landmass
+#### Landmass and plot data
 
 ```{r}
 #| label: PCAMapMapPrep
@@ -611,24 +185,32 @@ states <- ne_states(
 )
 
 # Sampling site coordinates and misc info on map
-sample_sites <- read_csv2(here("data", "low_coverage_sampling_sites.csv")) |>
+sample_sites <- read_csv2(here("data", "individuals_coordinates.csv")) |>
+  select(popmap_clean, Longitude, Latitude) |> 
+  distinct() |> 
+  rename(Popmap = popmap_clean) |> 
+  arrange(desc(Latitude)) |> 
   mutate(
-    Popmap  = factor(
+    Popmap = factor(
       Popmap,
-      levels  = levels(popmap_lcwgs$long_names)
+      levels = c("big_sur", "bodega_bay", "santa_catalina_is.", "santa_cruz", "isla_guadalupe",
+                 "isla_san_jerónimo", "la_jolla_san_diego", "laguna_beach", "pacific_grove", "point_dume",
+                 "tomales_bay", "san_clemente_is.", "santa_barbara", "elkhorn", "redondo_beach")
     ),
-    lab_lon = Longitude + c(.85, .9, .60, .62, .90,
-                            .63, .8, 1.1, .98,  1,
-                              1, -1, .62, .70, .79),
-    lab_lat = Latitude + c( .09, -.13, .25, .10, -.15,
-                            .10,  .20, .06, .05,  .15,
-                           -.17, -.27, .10, .15,  .25)
-  ) |>
-  arrange(Popmap) |> 
-  select(Longitude, Latitude, Sampling_sites, Popmap, lab_lon, lab_lat) |> 
-  mutate(
-    Sampling_sites = gsub("\\n", "\n", Sampling_sites, fixed = TRUE)
+    lab_lon = Longitude + rep(.15, 15) - c( 0,  0, 0, 0, 0,
+                                            0,  0, 0, 0, 0,
+                                           .3, .3, 0, 0, 0),
+    lab_lat = Latitude + c(.07,  -.1,  .17,    0, -.13,
+                             0,  .07,  .15, -.01, -.02,
+                            .1,   .1,   .1,    0,   .1),
   )
+
+sample_sites[14, "Popmap"] <- "isla_san_jerónimo"
+# |> 
+#   select(Longitude, Latitude, Sampling_sites, Popmap, lab_lon, lab_lat) |> 
+#   mutate(
+#     Sampling_sites = gsub("\\n", "\n", Sampling_sites, fixed = TRUE)
+#   )
 
 states_labels <- data.frame(
   "long" = c(-117.5, -115.5, -113.7, -115.4),
@@ -687,19 +269,20 @@ lcwgs_map <- ggplot() +
   new_scale("fill") +
   geom_point(
     sample_sites,
-    mapping     = aes(
-      x    = Longitude,
-      y    = Latitude,
-      fill = Popmap,
-      size = 1.3
-    ),
+    mapping     = aes(x = Longitude, y = Latitude, fill = Popmap, size = 1.3),
     shape       = 21,
     show.legend = FALSE
   ) +
   geom_label(
     sample_sites,
-    mapping = aes(x = lab_lon, y = lab_lat,
-                  label = Sampling_sites, fontface = "bold"),
+    mapping = aes(
+      x        = lab_lon, y = lab_lat,
+      label    = Popmap |> gsub("_", " ", x = _) |> str_to_title(),
+      fontface = "bold"
+    ),
+    hjust   = c("left", "left", "left", "left", "left",
+                "left", "left", "left", "left", "left",
+                "right", "right", "left", "left", "left"),
     label.r = unit(0, "lines"),
     alpha   = .6
   ) +
@@ -749,17 +332,17 @@ lcwgs_map <- ggplot() +
   ) +
   geom_segment(
     aes(x = -122.25, y = 29.25, xend = -121.75, yend = 29.25),
-    size     = .5,
-    arrow    = arrow(
+    linewidth  = .5,
+    arrow      = arrow(
       angle  = 20,
       length = unit(0.035, "inches"),
       type   = "closed"
     ),
-    linejoin = "mitre"
+    linejoin   = "mitre"
   ) +
   # Cartographic scale
   geom_label(
-    aes(x = -119.14, y = 28.69, label = "        "),
+    aes(x = -119.09, y = 28.71, label = "        "),
     label.r = unit(0, "lines")
   ) +
   annotation_scale(location = "bl", width_hint = 0.4) +
@@ -780,411 +363,72 @@ lcwgs_map <- ggplot() +
   )
 ```
 
-### Memory cleanup
-
-```{r}
-#| label: PCAMapMapSave
-
-save_open_plot(
-  here("output", "plots", "temp_current_map_lres.pdf"),
-  plot   = lcwgs_map,
-  width  = 9,
-  height = 9
-)
-
-rm(currents_tibble_annual_mean_lres, SST_annual_mean,
-   states,
-   sample_sites, states_labels, city_labels, ocean_labels,
-   current_uv_scalar)
-gc()
-```
-
-### Fuse PCA plot and map
-
-```{r}
-#| label: PCAMapFuse
-
-PCA_map <- PCA_and_crop + lcwgs_map +
-  plot_annotation(tag_levels = list(c("A", "", "B"))) &
-  theme(
-    text      = element_text(size = 14),
-    axis.text = element_text(size = 12),
-    plot.tag  = element_text(face = "bold")
-    )
-```
-
-```{r}
-#| label: PCAMapSave
-
-save_open_plot(
-  here("output", "plots", "pca_map.png"),
-  plot   = PCA_map,
-  width  = 17.5,
-  height = 11.25
-)
-
-rm(PCA_map, PCA_and_crop, lcwgs_map)
-gc()
-```
-
-## Figure ? - Islands Bathymetry
-
-### Data
-
-```{r}
-#| label: BathyPrep
-
-currents_tibble_annual_mean <- left_join(
-  rast(
-    x     = here("data", "Copernicus", "merged_uv",
-                 "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc"),
-    subds = "uo"
-  ) |>
-    mean() |> # Average on year
-    as.data.frame(xy = TRUE, na.rm = FALSE) |> 
-    as_tibble() |> 
-    rename(u_mean = mean),
-  rast(
-    x     = here("data", "Copernicus", "merged_uv",
-                "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_1721914334862.nc"),
-    subds = "vo"
-  ) |>
-    mean() |> # Average on year
-    as.data.frame(xy = TRUE, na.rm = FALSE) |> 
-    as_tibble() |> 
-    rename(v_mean = mean),
-)
-
-catalina_df <- getNOAA.bathy(
-    lon1 = -121, lon2 = -116,
-    lat1 = 32,   lat2 = 35,
-    resolution = .5
-  ) |> 
-  fortify.bathy() |>
-  mutate(z = ifelse(z > 0, NA, z)) # Remove landmass data
-
-states <- ne_states(
-  country     = c("united states of america", "mexico"),
-  returnclass = "sf"
-)
-```
-
-### Map
-
-```{r}
-#| label: BathyPrep
-
-bathy <- ggplot() +
-  # Plot bathymetry
-  geom_raster(data = catalina_df, mapping = aes(x = x, y = y, fill = z)) +
-  # Plot landmass
-  geom_sf(data = states) +
-  # Plot surface current speed
-  geom_segment(
-    data      = currents_tibble_annual_mean,
-    mapping   = aes(
-      x    = x,
-      y    = y,
-      xend = x + u_mean,
-      yend = y + v_mean
-    ),
-    linewidth = .5,
-    colour    = "#4d4d4d",
-    arrow     = arrow(angle = 20, length = unit(0.035, "inches"), type = "closed"),
-    linejoin  = "mitre",
-    na.rm     = TRUE
-  ) +
-  # Plot scales
-  scale_fill_hypso_tint_c(palette = "colombia_bathy", limits = range(catalina_df$z, na.rm = TRUE)) +
-  geom_label(
-    aes(x = -120.4, y = 32.3, label = ".25 m/s\n"),
-    size = 4.5,
-    label.padding = unit(0.5, "lines")
-  ) +
-  geom_segment(
-    aes(x = -120.52, y = 32.25, xend = -120.27, yend = 32.25),
-    arrow = arrow(angle = 15, length = unit(0.04, "inches"), type = "closed")
-  ) +
-  geom_label(aes(x = -119.705, y = 32.08, label = "        ")) +
-  annotation_scale(location = "bl", width_hint = 0.4) +
-  annotation_north_arrow(
-    location = "tr",
-    style    = north_arrow_fancy_orienteering()
-  ) +
-  # Crop map
-  coord_sf(xlim = c(-121, -116), ylim = c(32, 35), expand = FALSE) +
-  # Axis labels and theme
-  labs(x = "Longitude", y = "Latitude") +
-  scale_y_continuous(
-    breaks = seq(32, 35, 1),
-    labels = unit_format(suffix = "°N", sep = "")
-  ) +
-  theme(
-    legend.position = c(.93, .73),
-    plot.margin     = margin(t = 0, r = 1, b = 0, l = .5, unit = "cm")
-  )
-```
-
-```{r}
-#| label: BathySave
-
-save_open_plot(
-  here("output", "plots", "bathy.pdf"),
-  plot   = bathy,
-  width  = 9,
-  height = 7
-)
-
-rm(currents_tibble_annual_mean, catalina_df, states, bathy)
-```
-
-## Figure 5 - Admixture plot
+### C - Admixture plot K = 7 populations
 Change individuals order in the file `Individuals_plot_order.txt`
 
-### K = 5 populations
-
 ```{r}
-admixture_data_5 <- read_table(
-  here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K5", "run16",
-       "8-Embiotoca_filtered_r16.5.Q"),
-  col_names = paste0("Pop ", seq(1, 5))
-) |> 
-  mutate(Individuals = Indiv_list |> unique()) |> 
-  relocate(Individuals) |> 
-  pivot_longer(
-    -c(Individuals),
-    names_to  = "Populations",
-    values_to = "Ancestry proportions"
-  )
+Indiv_meta <- here("data", "Individuals_coordinates.csv") |>
+  read_csv2(locale = readr::locale(encoding = "latin1")) |>
+  select(Indiv, popmap_clean) |>
+  rename(popmap = popmap_clean)
 
-admixture_plot_5 <- admixture_data_5 |>
-  ggplot(
-    aes(
-      x    = factor(
-        Individuals,
-        levels = here("data", "Individuals_plot_order.txt") |> 
-          read.table() |>
-          unlist() |>
-          as.vector() 
-      ),
-      y    = `Ancestry proportions`,
-      fill = Populations
-    )
-  ) +
-  geom_col(position = "stack", width = 1) +
-  scale_fill_viridis(discrete = TRUE, option = "turbo") +
-  labs(x = "Individuals") +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
-  )
-
-save_open_plot(
-  path   = here("output", "plots", "admixture_plot_K=5.pdf"),
-  plot   = admixture_plot_5,
-  width  = 16,
-  height = 6
-)
-```
-
-### K = 6 populations
-
-#### Load data
-
-```{r}
-#| label: AdmPlotPrep
-
-Indiv_meta <- read_csv2(here("data", "Individuals_coordinates.csv"))
-
-admixture_data_6 <- read_table(
-  here("data", "8-Embiotoca_filtered.snmf", "K6", "run16",
-       "8-Embiotoca_filtered_r16.6.Q"),
-  col_names = paste0("Pop ", seq(1, 6))
-) |> 
-  mutate(Individuals = Indiv_list |> 
-  relocate(Individuals) |> 
-  pivot_longer(
-    -c(Individuals),
-    names_to  = "Populations",
-    values_to = "Ancestry proportions"
-  )
-```
-
-#### plot
-
-```{r}
-#| label: AdmPlot
-
-admixture_plot_6 <- admixture_data_6 |>
-  ggplot(
-    aes(
-      x    = factor(
-        Individuals,
-        levels = here("data", "Individuals_plot_order.txt") |> 
-          read.table() |>
-          unlist() |>
-          as.vector() 
-      ),
-      y    = `Ancestry proportions`,
-      fill = Populations
-    )
-  ) +
-  geom_col(position = "stack", width = 1) +
-  scale_fill_viridis(discrete = TRUE, option = "turbo") +
-  labs(x = "Individuals") +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
-  )
-```
-
-```{r}
-#| label: AdmSave
-
-save_open_plot(
-  path   = here("output", "plots", "admixture_plot_K=6.pdf"),
-  plot   = admixture_plot_6,
-  width  = 16,
-  height = 6
-  )
-
-rm(Indiv_list, admixture_data, admixture_plot)
-```
-
-### K = 7 populations
-
-```{r}
-admixture_data_7 <- here("output", "admixture", "8-Embiotoca_filtered_r46.7.Q") |> 
+admixture_data_7 <- here("output", "admixture", "8-Embiotoca_filtered_r46.7.Q") |>
   read_admixture(pops = 7)
 
-admixture_plot_7 <- admixture_data_7 |> 
-  admixture_plot(pop_map = Indiv_meta |> select(Indiv, popmap))
+admixture_plot_7 <- admixture_data_7 |>
+  admixture_plot(pop_map = Indiv_meta )
 
-save_open_plot(
-  path   = here("output", "plots", "admixture_plot_K=7.pdf"),
-  plot   = admixture_plot_7,
-  width  = 8,
-  height = 3
-)
 ```
 
-### K = 7 populations but higher cross-entropy
+### Fuse PCA, map and admixture
 
 ```{r}
-admixture_data_7_bad <- read_table(
-  here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K7", "run44",
-       "8-Embiotoca_filtered_r44.7.Q"),
-  col_names = paste0("Pop ", seq(1, 7))
-) |> 
-  mutate(Individuals = Indiv_list) |> 
-  relocate(Individuals) |> 
-  pivot_longer(
-    -c(Individuals),
-    names_to  = "Populations",
-    values_to = "Ancestry proportions"
-  )
+layout <- "
+AABB
+AABB
+CCCC
+"
 
-admixture_plot_7_bad <- admixture_data_7_bad |>
-  ggplot(
-    aes(
-      x    = factor(
-        Individuals,
-        levels = here("data", "Individuals_plot_order.txt") |> 
-          read.table() |>
-          unlist() |>
-          as.vector() 
-      ),
-      y    = `Ancestry proportions`,
-      fill = Populations
-    )
-  ) +
-  geom_col(position = "stack", width = 1) +
-  scale_fill_viridis(discrete = TRUE, option = "turbo") +
-  labs(x = "Individuals") +
-  theme_minimal() +
+PCA_map_admixture <- PCA_and_crop + lcwgs_map + admixture_plot_7 +
+  plot_layout(design = layout) +
+  plot_annotation(tag_levels = list(c("A", "", "B", "C"))) &
+  # theme_minimal(base_size = 1) &
   theme(
-    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
+    text      = element_text(size = 20),
+    axis.text = element_text(size = 15),
+    plot.tag  = element_text(face = "bold", size = 30)
   )
 
 save_open_plot(
-  path   = here("output", "plots", "admixture_plot_K=7_bad.pdf"),
-  plot   = admixture_plot_7_bad,
-  width  = 16,
-  height = 6
+  here("output", "article_figures", "Figure_1.pdf"),
+  plot   = PCA_map_admixture,
+  width  = 180,
+  height = 150,
+  units  = "mm",
+  scale  = 2.4
 )
 ```
 
-### K = 8 populations
-
+### Memory Cleanup
 ```{r}
-admixture_data_8 <- read_table(
-  here("data", "lcwgs", "8-Embiotoca_filtered.snmf", "K8", "run8",
-       "8-Embiotoca_filtered_r8.8.Q"),
-  col_names = paste0("Pop ", seq(1, 8))
-) |> 
-  mutate(Individuals = Indiv_list) |> 
-  relocate(Individuals) |> 
-  pivot_longer(
-    -c(Individuals),
-    names_to  = "Populations",
-    values_to = "Ancestry proportions"
-  )
+#| label: PCAMemClean
 
-admixture_plot_8 <- admixture_data_8 |>
-  ggplot(
-    aes(
-      x    = factor(
-        Individuals,
-        levels = here("data", "Individuals_plot_order.txt") |> 
-          read.table() |>
-          unlist() |>
-          as.vector() 
-      ),
-      y    = `Ancestry proportions`,
-      fill = Populations
-    )
-  ) +
-  geom_col(position = "stack", width = 1) +
-  scale_fill_viridis(discrete = TRUE, option = "turbo") +
-  labs(x = "Individuals") +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)
-  )
-
-save_open_plot(
-  path   = here("output", "plots", "admixture_plot_K=8.pdf"),
-  plot   = admixture_plot_8,
-  width  = 16,
-  height = 6
-)
+rm(pcadapt_lcwgs, popmap_lcwgs, PCA, PCA_crop,
+   currents_tibble_annual_mean_lres, SST_annual_mean,
+   states, catalina_df,
+   sample_sites, states_labels, city_labels, ocean_labels,
+   current_uv_scalar,
+   Indiv_meta, admixture_data_7,
+   PCA_and_crop, lcwgs_map, admixture_plot_7, layout, PCA_map_admixture)
+gc()
 ```
 
-## Figure 6 - Repartition range inference with `tess3r`
+## Figure 2 - Repartition range inference with `tess3r`
 
 ### Data prep
 
 ```{r}
 #| eval: false
-
-indiv <- here("data", "Individual_list.rds") |> read_rds() |> unique()
-
-coords <- read_csv2(here("data", "low_coverage_sampling.csv")) |> 
-  select(Longitude, Latitude, Code)
-
-coordinates <- tibble(Indiv = indiv) |>
-  mutate(
-    Code = Indiv |>
-      map(\(x)(x |> str_split("_") |> unlist() |> _[2])) |>
-      unlist()
-  )
-
-coordinates <- left_join(coordinates, coords)
-
-coordinates |> write_csv2(file = here("data", "individuals_coordinates.csv"))
-rm(indiv, coords, coordinates)
-
-
 
 polygon_mask <- cbind("lon" = c(-116.745, -113.826, -113, -113, -116.745),
                            "lat" = c(33.732, 28.5, 28.5, 33.732, 33.732)) |> 
@@ -1247,84 +491,33 @@ states <- ne_states(
 ```
 
 ```{r}
-popmap_lcwgs <- tibble(
-  long_names = factor(
-    c(
-      rep("bodega_bay",            5), # BB
-      rep("big_sur",              13), # BIGC -> BCR -> BS
-      rep("catalina_island",      11), # CAT
-      rep("elkhorn",               6), # ELK
-      rep("guadalupe_island",     10), # GUA
-      rep("pacific_grove",        13), # HOP -> Pacific Grove PGR 
-      rep("isla_san_jeronimo",    11), # ISJ
-      rep("laguna_beach",         13), # LB
-      rep("point_dume",            5), # PD
-      rep("santa_barbara",        13), # SB
-      rep("san_clemente_island",  10), # SCL
-      rep("la_jolla_san_diego",   13), # SD
-      rep("tomales_bay",           1), # TB
-      rep("redondo_beach",        10), # RB
-      rep("santa_cruz",           10) # SCH
-    ),
-    levels = c("big_sur", "bodega_bay", "catalina_island", "santa_cruz",
-               "guadalupe_island", "isla_san_jeronimo", "la_jolla_san_diego",
-               "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
-               "san_clemente_island", "santa_barbara",
-               "elkhorn", "redondo_beach")
-  ),
-  short_names = factor(
-    c(
-      rep("BB",   5), # BB
-      rep("BS",  13), # BIGC -> BCR
-      rep("CAT", 11), # CAT
-      rep("ELK",  6), # ELK
-      rep("GUA", 10), # GUA
-      rep("PG",  13), # HOP -> Pacific Grove PGR 
-      rep("ISJ", 11), # ISJ
-      rep("LB",  13), # LB
-      rep("PD",   5), # PD
-      rep("SB",  13), # SB
-      rep("SCL", 10), # SCL
-      rep("SD",  13), # SD
-      rep("TB",   1), # TB
-      rep("RB",  10), # RB
-      rep("SCH", 10) # SCH
-    ),
-    levels = c("BS", "BB", "CAT", "ELK", "GUA",
-               "ISJ", "SD", "LB", "PG", "PD",
-               "TB", "SCL", "SB", "SCH", "RB")
-  )
-)
-
-sample_sites <- read_csv2(here("data", "low_coverage_sampling_sites.csv")) |>
+sample_sites <- read_csv2(here("data", "individuals_coordinates.csv")) |>
+  select(popmap_clean, Longitude, Latitude) |> 
+  distinct() |> 
+  rename(Popmap = popmap_clean) |> 
+  arrange(desc(Latitude)) |> 
   mutate(
-    Popmap  = factor(
+    Popmap = factor(
       Popmap,
-      levels  = levels(popmap_lcwgs$long_names)
+      levels = c("big_sur", "bodega_bay", "santa_catalina_is.", "santa_cruz", "isla_guadalupe",
+                 "isla_san_jerónimo", "la_jolla_san_diego", "laguna_beach", "pacific_grove", "point_dume",
+                 "tomales_bay", "san_clemente_is.", "santa_barbara", "elkhorn", "redondo_beach")
     ),
-    lab_lon = Longitude + c(.85, .9, .60, .62, .90,
-                            .63, .8, 1.1, .98,  -1,
-                              1, -1, .62, .70, .79),
-    lab_lat = Latitude + c( .09, -.13, .25, .10, -.15,
-                            .10,  .20, .06, .05,  .10,
-                           -.17, -.27, .10, .15,  .25)
-  ) |>
-  arrange(Popmap) |>
-  select(Longitude, Latitude, Sampling_sites, Popmap, lab_lon, lab_lat) |> 
-  mutate(
-    Sampling_sites = gsub("\\n", "\n", Sampling_sites, fixed = TRUE)
+    lab_lon = Longitude + rep(.15, 15) - c( 0,  0, 0, 0, 0,
+                                            0,  0, 0, 0, 0,
+                                           .3, .3, 0, 0, 0),
+    lab_lat = Latitude + c(.07,  -.1,  .17,    0, -.13,
+                             0,  .07,  .15, -.01, -.02,
+                            .1,   .1,   .1,    0,   .1),
   )
 
-states <- ne_states(
-  country     = c("united states of america", "mexico"),
-  returnclass = "sf"
-)
+sample_sites[14, "Popmap"] <- "isla_san_jerónimo"
 ```
 
 ### Plot map
 
 ```{r}
-gg_obj <- ggtess3Q(
+gg_obj <- ggtess3Q( #Interpolates geographic ranges as a gg layer
   q_matrix,
   coordinates,
   resolution      = c(1000, 1000),
@@ -1342,9 +535,8 @@ pop_area <- gg_obj +
     mapping = aes(x = x, y = y, fill = z),
     alpha = .5
   ) +
-  scale_fill_hypso_tint_c(
-    palette = "colombia_bathy",
-    limits  = range(catalina_df$z, na.rm = TRUE)
+  scale_fill_hypso_c(
+    palette = "colombia_bathy"
   ) +
   geom_sf(data = states) +
   coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
@@ -1360,8 +552,12 @@ pop_area <- gg_obj +
   ) +
   geom_label(
     sample_sites,
-    mapping = aes(x = lab_lon, y = lab_lat,
-                  label = Sampling_sites, fontface = "bold"),
+    mapping = aes(x        = lab_lon, y = lab_lat,
+                  label    = Popmap |> gsub("_", " ", x = _) |> str_to_title(),
+                  fontface = "bold"),
+    hjust   = c("left", "left", "left", "left", "left",
+                "left", "left", "left", "left", "left",
+                "right", "right", "left", "left", "left"),
     label.r = unit(0, "lines"),
     alpha   = .6
   ) +
@@ -1375,7 +571,7 @@ pop_area <- gg_obj +
     style    = north_arrow_fancy_orienteering()
   ) +
   labs(
-    title = "Population repartition for K = 7 populations",
+    # title = "Population repartition for K = 7 populations",
     x     = "Longitude",
     y     = "Latitude"
   ) +
@@ -1390,13 +586,779 @@ pop_area <- gg_obj +
   theme_classic()
 
 pop_area$layers <- pop_area$layers[c(2, 1, 3, 4, 5, 6, 7, 8)]
+
+EJA_drawing <- magick::image_read(here("images", "EJA_drawing.png")) |> 
+  magick::image_background("none") |> 
+  grid::rasterGrob()
+```
+
+```{r}
+Figure_2 <- pop_area + annotation_custom(EJA_drawing,
+                                         xmin = -123.4, xmax = -119.1,
+                                         ymin = 28.7,   ymax = 31.7) +
+  theme(
+    text      = element_text(size = 17.45),
+    axis.text = element_text(size = 13.09)
+  )
+
+save_open_plot(
+  here("output", "article_figures", "Figure_2.pdf"),
+  plot   = Figure_2,
+  width  = 80,
+  height = 75,
+  units  = "mm",
+  scale  = 2.75
+)
+```
+
+### Memory Cleanup
+
+```{r}
+rm(polygon_mask, coordinates, q_matrix, catalina_df, states, sample_sites,
+   gg_obj, pop_area, EJA_drawing,
+   Figure_2)
+gc()
+```
+
+## Figure 3 - IBD and Triangle
+
+### IBD Coastal + ISJ Cavalli−Sforza *vs.* Ellispoid Distance
+
+#### Load data
+```{r}
+coordinates_coast_isj <- here("data", "low_coverage_sampling_sites.csv") |>
+  read_csv2() |>
+  dplyr::select(Popmap, Longitude, Latitude) |> 
+  mutate(Popmap = as.factor(Popmap)) |> 
+  arrange(Popmap) |> 
+  filter(
+    !Popmap %in% c("guadalupe_island", "catalina_island", "san_clemente_island")
+  ) |> 
+  column_to_rownames(var = "Popmap") |> 
+  as.matrix()
+
+pops_coast_isj <- c("big_creek",         "bodega_bay",         "elkhorn",
+                    "isla_san_jeronimo", "la_jolla_san_diego", "laguna_beach",
+                    "pacific_grove",     "point_dume",         "redondo_beach",
+                    "santa_barbara",     "santa_cruz_harbour", "tomales_bay")
+
+Edward_distance_coast_isj <- here("output", "EJA_lcwgs_Edward_distance.rds") |> 
+  readRDS() |>
+  as.matrix() |> 
+  _[pops_coast_isj, pops_coast_isj] |> 
+  as.dist()
+
+rm(pops_coast_isj)
+```
+
+#### Generate plot
+```{r}
+mantel_plot_coast_isj <- mantel_plot(
+  as.dist(
+    geosphere::distm(coordinates_coast_isj, fun = geosphere::distVincentyEllipsoid)
+  ),
+  Edward_distance_coast_isj,
+  xlab = "Ellipsoid Distance", ylab = " Cavalli-Sforza and Edward Chord Distance"
+)
+```
+
+### Triangle plots Coast + ISJ
+
+```{r}
+hi_het_coast_isj <- read_rds(here("output", "Triangle_analysis_coast_isj.rds"))
+parameters <- c(1, .75, .5)
+
+hi_het_coast_isj_plots <- vector(mode = 'list', length=3)
+
+for (i in 1:3) {
+  hi_het_coast_isj_plots[[i]] <- hi_het_coast_isj[[i]] |>
+    mutate(
+      pop = factor(
+        pop,
+        levels = c("BIGC", "BBA", "SCH", "ISJ",  "SD", "LAG",
+                   "HOP",   "PD",  "TB",  "SB", "ELK", "RB")
+      )
+    ) |>
+    arrange(pop) |>
+    triangulaR::triangle.plot(colors = hue_pal()(15)[-c(3, 5, 12)]) + #colors = turbo(n = 12)
+    scale_colour_discrete(name = "Populations") +
+    labs(title = paste0("d = ", as.character(parameters[i])))
+}
+```
+
+### Fuse IBD and Triangle
+
+```{r}
+layout <- "
+AAAB
+AAAB
+AAAB
+"
+  
+Figure_3 <- mantel_plot_coast_isj +
+  (Reduce("/", hi_het_coast_isj_plots) + plot_layout(axes = "collect")) +
+  plot_layout(design = layout, guides = "collect") +
+  plot_annotation(tag_levels = list(c("A", "B"))) &
+  theme(
+    text      = element_text(size = 12.5),
+    axis.text = element_text(size = 9.375),
+    plot.tag  = element_text(face = "bold", size = 18.75)
+  )
 ```
 
 ```{r}
 save_open_plot(
-  here("output", "plots", "pop_areas_K=7_40m_bathy.png"),
-  plot   = pop_area,
-  width  = 9,
-  height = 9
+  here("output", "article_figures", "Figure_3.pdf"),
+  plot   = Figure_3,
+  width  = 180,
+  height = 120,
+  units  = "mm",
+  scale  = 1.5
 )
 ```
+
+### Memory Cleanup
+```{r}
+rm(coordinates_coast_isj, Edward_distance_coast_isj, mantel_plot_coast_isj,
+   hi_het_coast_isj, parameters, hi_het_coast_isj_plots,
+   layout, Figure_3)
+gc()
+```
+
+## Figure 4 - Manhattan plots pairwise
+
+### Load Metadata
+
+```{r}
+#| label: LoadMetadata
+
+SNP_positions <- readRDS(file = here("data", "SNP_positions.rds"))
+
+chromosome_map <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |> 
+  read_tsv() |> 
+  select(`GenBank seq accession`, `Sequence name`, `Seq length`) |> 
+  filter(
+    `GenBank seq accession` %in% (SNP_positions |> distinct(CHROM) |> pull(CHROM))
+  ) |> 
+  add_row(
+    `GenBank seq accession` = "JAKOON010000230.1",
+    `Sequence name`         = NA,
+    `Seq length`            = NA
+  )
+```
+
+#### Coast + ISJ with outliers
+
+```{r}
+pcadapt_lcwgs_coastal_isj <- read_rds(here("output", "pcadapt_lcwgs_coastal_isj_K3.rds"))
+
+manhattan_plot_lcwgs_coast_isj_outliers <- manhattan_plot_custom_2(
+  pcadapt            = pcadapt_lcwgs_coastal_isj,
+  SNP_positions      = SNP_positions,
+  chromosome_map     = chromosome_map,
+  outliers_positions = pcadapt_lcwgs_coastal_isj |> 
+    Get_outliers(pvalue_threshold = 1e-200) |> 
+    select(CHROM, POS)
+) +
+  geom_hline(yintercept = 200, colour = "red", linetype = "dashed") +
+  geom_point(data = tibble(x = 3103574, y = 290), aes(x = x, y = y), shape = 21, fill = "red", size = 5)
+
+rm(pcadapt_lcwgs_coastal_isj)
+```
+
+### Generate all plots from pcadapt analyses
+
+```{r}
+#| label: PlotsGen
+
+manhattans <- tibble(
+  read_files = list.files(here("output")) |> str_subset("pcadapt") |> str_subset(".rds")
+) |> 
+  mutate(
+    plots       = here("output", read_files) |>
+      map(
+        \(x) manhattan_plot_custom_2(
+          read_rds(file = x),
+          SNP_positions  = SNP_positions,
+          chromosome_map = chromosome_map
+        )
+      ),
+    write_files = read_files |>
+      str_replace("pcadapt", "manhattan_plot_custom") |>
+      str_replace(".rds", ".png")
+  )
+```
+
+```{r}
+#| label: PlotsSave
+
+manhattans |> (\(x) {
+  map2(x$write_files, x$plots,
+    \(x, y) {
+      ggsave(
+        x |> here("output", "plots", ... = _),
+        plot   = y,
+        width  = 6000,
+        height = 2000,
+        units  = "px"
+      )
+    }
+  )
+})()
+```
+
+### Fuse panels
+
+#### With text
+```{r}
+layout <- "
+ABBB###CCCCCC
+DEEEFFF######
+GHHHIIIJJJ###
+KLLLMMMNNNOOO
+"
+
+Figure_4 <- wrap_elements(grid::textGrob('Isla\nGuadalupe', gp = gpar(fontsize = 16))) +              (manhattans$plots[[7]] + labs(title = "Coast"))  + (manhattan_plot_lcwgs_coast_isj_outliers + labs(title = "Coastal + Isla San Jerónimo")) +
+            grid::textGrob('Isla San\nJerónimo', gp = gpar(fontsize = 16)) +  manhattans$plots[[9]] + (manhattans$plots[[13]] + labs(title = "Isla Guadalupe")) +
+            grid::textGrob('Santa\nCatalina Is.', gp = gpar(fontsize = 16)) + manhattans$plots[[4]] +  manhattans$plots[[12]] + (manhattans$plots[[2]] + labs(title = "Isla San Jerónimo")) +
+            grid::textGrob('San\nClemente Is.', gp = gpar(fontsize = 16)) +   manhattans$plots[[11]] + manhattans$plots[[14]] +  manhattans$plots[[17]] + (manhattans$plots[[3]] + labs(title = "Santa Catalina Is.")) + 
+  plot_layout(design = layout, axis_titles = "collect") +
+  plot_annotation(tag_levels = list(c("A", "", "B"))) &
+  theme(
+    plot.title  = element_text(size = 16, hjust = 0.5),
+    text        = element_text(size = 16),
+    axis.text   = element_text(size = 12),
+    axis.text.x = element_blank(),
+    plot.tag    = element_text(face = "bold", size = 24)
+  )
+
+ggsave(
+  here("output", "article_figures", "Figure_4.png"),
+  plot   = Figure_4,
+  width  = 180,
+  height = 90,
+  units  = "mm",
+  scale  = 3
+)
+```
+
+#### Without text
+```{r}
+layout <-  "
+AA##BBBB
+CCDD####
+EEFFGG##
+HHIIJJKK
+"
+
+Figure_4 <- manhattans$plots[[7]]  +                                                   manhattan_plot_lcwgs_coast_isj_outliers +
+            manhattans$plots[[9]]  + manhattans$plots[[13]] +
+            manhattans$plots[[4]]  + manhattans$plots[[12]] + manhattans$plots[[2]]  +
+            manhattans$plots[[11]] + manhattans$plots[[14]] + manhattans$plots[[17]] + manhattans$plots[[3]] + 
+  plot_layout(design = layout, axis_titles = "collect") +
+  plot_annotation(tag_levels = list(c("A", "B", "", "", "", "", "", "", "", "", ""))) &
+  theme(
+    text        = element_text(size = 16),
+    axis.text   = element_text(size = 12),
+    axis.text.x = element_blank(),
+    plot.tag    = element_text(face = "bold", size = 24)
+  )
+
+ggsave(
+  here("output", "article_figures", "Figure_4_no_text.png"),
+  plot   = Figure_4,
+  width  = 180,
+  height = 90,
+  units  = "mm",
+  scale  = 3
+)
+```
+
+```{r}
+rm(SNP_positions, chromosome_map,
+   manhattan_plot_lcwgs_coast_isj_outliers, manhattans,
+   layout, Figure_4)
+gc()
+```
+
+## Figure S1 - PCA 2&3 and 4&5
+
+### load data
+```{r}
+#| label: LoadPCA
+
+pcadapt_lcwgs <- read_rds(file = here("output", "pcadapt_lcwgs_all_K6.rds"))
+
+popmap_lcwgs <- factor(
+  c(
+    rep("bodega_bay",          5), # BB
+    rep("big_sur",            13), # BIGC -> BCR -> BS
+    rep("santa_catalina_is.", 11), # CAT
+    rep("elkhorn",             6), # ELK
+    rep("isla_guadalupe",     10), # GUA
+    rep("pacific_grove",      13), # HOP -> Pacific Grove PGR 
+    rep("isla_san_jerónimo",  11), # ISJ
+    rep("laguna_beach",       13), # LB
+    rep("point_dume",          5), # PD
+    rep("santa_barbara",      13), # SB
+    rep("san_clemente_is.",   10), # SCL
+    rep("la_jolla_san_diego", 13), # SD
+    rep("tomales_bay",         1), # TB
+    rep("redondo_beach",      10), # RB
+    rep("santa_cruz",         10) # SCH
+  ),
+  levels = c("big_sur", "bodega_bay", "santa_catalina_is.", "santa_cruz",
+             "isla_guadalupe", "isla_san_jerónimo", "la_jolla_san_diego",
+             "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
+             "san_clemente_is.", "santa_barbara",
+             "elkhorn", "redondo_beach")
+)
+```
+
+### A - PCA 2-3
+```{r}
+#| label: PCAMapPCAPlot
+
+PCA23 <- PCA_plot(
+  pcadapt_output = pcadapt_lcwgs,
+  popmap         = factor(popmap_lcwgs |>  gsub("_", " ", x = _) |> str_to_title(),
+                          levels = c("big_sur", "bodega_bay", "santa_catalina_is.", "santa_cruz",
+                                     "isla_guadalupe", "isla_san_jerónimo", "la_jolla_san_diego",
+                                     "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
+                                     "san_clemente_is.", "santa_barbara",
+                                     "elkhorn", "redondo_beach") |>  gsub("_", " ", x = _) |> str_to_title()),
+  axis_one       = 2,
+  axis_two       = 3
+)
+```
+
+### B - PCA 4-5
+```{r}
+#| label: PCAMapPCAPlot
+
+PCA45 <- PCA_plot(
+  pcadapt_output = pcadapt_lcwgs,
+  popmap         = factor(popmap_lcwgs |>  gsub("_", " ", x = _) |> str_to_title(),
+                          levels = c("big_sur", "bodega_bay", "santa_catalina_is.", "santa_cruz",
+                                     "isla_guadalupe", "isla_san_jerónimo", "la_jolla_san_diego",
+                                     "laguna_beach", "pacific_grove", "point_dume", "tomales_bay",
+                                     "san_clemente_is.", "santa_barbara",
+                                     "elkhorn", "redondo_beach") |>  gsub("_", " ", x = _) |> str_to_title()),
+  axis_one       = 4,
+  axis_two       = 5
+)
+```
+
+### Fuse panels
+```{r}
+#| label: PCAMapPCASave
+
+Figure_S1 <- PCA23 + PCA45 + plot_annotation(tag_levels = list(c("A", "B"))) &
+  theme(
+    text      = element_text(size = 20),
+    axis.text = element_text(size = 15),
+    plot.tag  = element_text(face = "bold", size = 30)
+    )
+
+ggsave(
+  here("output", "article_figures", "Figure_S1.pdf"),
+  plot   = Figure_S1,
+  width  = 120,
+  height = 80,
+  units  = "mm",
+  scale  = 2.4
+)
+```
+
+```{r}
+rm(pcadapt_lcwgs, popmap_lcwgs, PCA23, PCA45, PCAs)
+gc()
+```
+
+## Figure S2 - Cross-Entropy plot
+
+```{r}
+#| label: snmfCrossEntropy
+
+EJA_snmf_analysis <- load.snmfProject(here("data", "lcwgs", "8-Embiotoca_filtered.snmfProject"))
+
+snmf_tb <- tibble(
+  K = seq(5, 8),
+  `Cross-entropy` = c()
+  )
+
+cross_entropy <- rep(0, dim(snmf_tb)[1])
+
+for (i in 1:length(snmf_tb$K)) {
+  cross_entropy[i] <- min(cross.entropy(EJA_snmf_analysis, K = snmf_tb$K[i]))
+}
+
+snmf_plot <- snmf_tb |>
+  mutate(cross_entropy = cross_entropy) |> 
+  ggplot() +
+  geom_point(aes(x = K, y = cross_entropy)) +
+  labs(y = "Cross-entropy") +
+  theme_classic() +
+  theme(
+    text      = element_text(size = 20),
+    axis.text = element_text(size = 15),
+    plot.tag  = element_text(face = "bold", size = 30)
+  )
+```
+
+```{r}
+ggsave(
+  filename = here("output", "article_figures", "Figure_S2.pdf"),
+  plot     = snmf_plot,
+  width    = 80,
+  height   = 80,
+  units    = "mm",
+  scale    = 2.4
+)
+```
+
+```{r}
+rm(EJA_snmf_analysis, snmf_tb, cross_entropy, snmf_plot)
+gc()
+```
+
+## Figure S3 - sNMF K = 5-6-7-8
+
+### Load metadata
+
+```{r}
+Indiv_meta <- here("data", "Individuals_coordinates.csv") |>
+  read_csv2(locale = readr::locale(encoding = "latin1")) |>
+  select(Indiv, popmap_clean) |>
+  rename(popmap = popmap_clean)
+```
+
+#### K = 5 populations
+
+```{r}
+admixture_data_5 <- here("output", "admixture", "8-Embiotoca_filtered_r16.5.Q") |> 
+  read_admixture(pops = 5)
+
+admixture_plot_5 <- admixture_data_5 |> 
+  admixture_plot(pop_map = Indiv_meta |> select(Indiv, popmap)) +
+  labs(title = "K = 5")
+
+rm(admixture_data_5)
+```
+
+#### K = 6 populations
+
+```{r}
+admixture_data_6 <- here("output", "admixture", "8-Embiotoca_filtered_r16.6.Q") |> 
+  read_admixture(pops = 6)
+
+admixture_plot_6 <- admixture_data_6 |> 
+  admixture_plot(pop_map = Indiv_meta |> select(Indiv, popmap)) +
+  labs(title = "K = 6")
+
+rm(admixture_data_6)
+```
+
+#### K = 7 populations
+
+```{r}
+admixture_data_7 <- here("output", "admixture", "8-Embiotoca_filtered_r46.7.Q") |> 
+  read_admixture(pops = 7)
+
+admixture_plot_7 <- admixture_data_7 |> 
+  admixture_plot(pop_map = Indiv_meta |> select(Indiv, popmap)) +
+  labs(title = "K = 7")
+
+rm(admixture_data_7)
+```
+
+#### K = 8 populations
+
+```{r}
+admixture_data_8 <- here("output", "admixture", "8-Embiotoca_filtered_r8.8.Q") |> 
+  read_admixture(pops = 8)
+
+admixture_plot_8 <- admixture_data_8 |> 
+  admixture_plot(pop_map = Indiv_meta |> select(Indiv, popmap)) +
+  labs(title = "K = 8")
+
+rm(admixture_data_8)
+```
+
+### Stitch together
+
+```{r}
+Figure_S3 <- admixture_plot_5 / admixture_plot_6 / admixture_plot_7 / admixture_plot_8 +
+  # plot_annotation(tag_levels = "A") +
+  plot_layout(axes = "collect") &
+  theme(
+    plot.title   = element_text(size = 14.4),
+    text         = element_text(size = 19.2),
+    axis.text    = element_text(size = 14.4),
+    legend.title = element_text(size = 14.4),
+    legend.text  = element_text(size = 11.52),
+  )
+
+ggsave(
+  here("output", "article_figures", "Figure_S3.pdf"),
+  plot   = Figure_S3,
+  width  = 120,
+  height = 120,
+  units  = "mm",
+  scale  = 2.5
+)
+```
+
+```{r}
+rm(Indiv_meta,
+   admixture_plot_5, admixture_plot_6, admixture_plot_7, admixture_plot_8,
+   Figure_S3)
+gc()
+```
+
+## Figure S4 - Fst/Distance Heatmap
+
+### Panel A - Fst and distance Mb among 4 main clusters
+#### Prepare Fst data
+```{r}
+popmap_tb <- read_csv2(here("data", "individuals_coordinates.csv")) |>
+  select(
+    ID     = Indiv,
+    Code   = Localisation,
+    Code_b = Localisation_b,
+    pop    = popmap,
+    pop2   = pop_map_b
+  )
+```
+
+```{r}
+lookup <- popmap_tb |> select(c(Code_b, pop2)) |> distinct(.keep_all = TRUE)
+
+Fst_coast_vs_isl <- here("plink2", "Embiotoca_filtered_coast_Fst.fst.summary") |>
+  read_table(skip = 1, col_names = c("Var1", "Var2", "dist")) |> 
+  mutate(
+    dist = as.numeric(dist)
+  ) |> 
+  reshape2::acast(Var1 ~ Var2)
+
+Fst_coast_vs_isl <- cbind(matrix(rep(NA, 3), 3, 1, dimnames = list(rownames(Fst_coast_vs_isl), "CAT")), Fst_coast_vs_isl)
+Fst_coast_vs_isl <- rbind(Fst_coast_vs_isl, matrix(rep(NA, 4), 1, 4, dimnames = list("SCL", colnames(Fst_coast_vs_isl))))
+Fst_coast_vs_isl[is.na(Fst_coast_vs_isl)] <- 0
+Fst_coast_vs_isl <- Fst_coast_vs_isl + t(Fst_coast_vs_isl)
+
+colnames(Fst_coast_vs_isl) <-  rownames(Fst_coast_vs_isl) <- lookup$pop2[match(colnames(Fst_coast_vs_isl), lookup$Code_b)]
+
+rm(lookup)
+```
+#### Prepare Distance data
+```{r}
+EJA_lcwgs_dist <- here("plink2", "Embiotoca_filtered_dist_matrix.dist") |> 
+  read_table(col_names = FALSE) |> 
+  as.matrix()
+
+IDs <- here("plink2", "Embiotoca_filtered_dist_matrix.dist.id") |> 
+  read_table(col_names = FALSE) |> pull(X2)
+
+colnames(EJA_lcwgs_dist) <- IDs
+rownames(EJA_lcwgs_dist) <- IDs
+
+pop_distance_matrix_2 <- aggregate_by_population(EJA_lcwgs_dist, popmap_tb$pop2)
+pop_distance_matrix_2_sub <- Substract_diagonal(pop_distance_matrix_2)
+
+rm(EJA_lcwgs_dist, IDs, pop_distance_matrix_2)
+```
+#### Generate plot
+```{r}
+plot_order_coast <- c("coast_isj", "catalina_island", "san_clemente_island", "guadalupe_island")
+```
+
+```{r}
+Fst_coast_vs_isl_t <- Fst_coast_vs_isl[plot_order_coast, plot_order_coast]
+Fst_coast_vs_isl_t[lower.tri(Fst_coast_vs_isl_t)] <- NA
+
+pop_distance_matrix_2_sub_t <- pop_distance_matrix_2_sub[plot_order_coast, plot_order_coast]
+pop_distance_matrix_2_sub_t[upper.tri(pop_distance_matrix_2_sub_t)] <- NA
+
+df1 <- Fst_coast_vs_isl_t |> reshape2::melt(value.name = "Fst") |> tibble()
+df2 <- pop_distance_matrix_2_sub_t |> reshape2::melt(value.name = "dist") |> tibble()
+
+coast_islands_distances_biplot <- ggplot() + 
+  geom_raster(df1, mapping = aes(x = Var1, y = Var2, fill = Fst)) +
+  geom_text(df1,  mapping = aes(x = Var1, y = Var2, label = round(Fst, digits = 2)), size = 12) +
+  scale_fill_viridis(
+    name     = "Fst",
+    na.value = "transparent",
+    guide    = guide_colourbar(order = 2)) +
+  new_scale_fill() +
+  geom_raster(df2,  mapping = aes(x = Var1, y = Var2, fill = dist/1000000)) +
+  geom_text(df2,  mapping = aes(x = Var1, y = Var2, label = round(dist/1000000, digits = 2)), size = 12) +
+  scale_fill_viridis(
+    name     = "Distance\nin Mb",
+    option   = "turbo",
+    na.value = "transparent",
+    guide    = guide_colourbar(order = 1)
+  ) +
+  labs(x = "", y = "") +
+  scale_x_discrete(
+    position = "top",
+    labels   = c("Coast + Isla\nSan Jerónimo", "Santa\nCatalina Is.",
+                 "San\nClemente Is.", "Isla\nGuadalupe")
+  ) +
+  scale_y_discrete(
+    limits = rev(levels(df1$Var2)),
+    labels = c("Isla\nGuadalupe", "San\nClemente Is.",
+               "Santa\nCatalina Is.", "Coast + Isla\nSan Jerónimo")
+  ) +
+  theme(
+    axis.text.x      = element_text(hjust = 0.5),
+    axis.text.y      = element_text(hjust = 0.5),
+    panel.background = element_blank(),
+  )
+```
+
+```{r}
+rm(pop_distance_matrix_2_sub, pop_distance_matrix_2_sub_t,
+   pop_distance_matrix_2_sub, pop_distance_matrix_2_sub_t,
+   df1, df2,
+   plot_order_coast)
+gc()
+```
+
+### Panel B - Fst distances between all populations
+
+```{r}
+lookup <- popmap_tb |> select(c(Code, pop)) |> distinct(.keep_all = TRUE)
+
+Fst_all <- here("plink2", "Embiotoca_filtered_Fst.fst.summary") |>
+  read_table(skip = 1, col_names = c("Var1", "Var2", "dist")) |> 
+  mutate(
+    dist = as.numeric(dist)
+  ) |> 
+  reshape2::acast(Var1 ~ Var2)
+
+Fst_all <- cbind(matrix(rep(NA, 14), 14, 1, dimnames = list(rownames(Fst_all), "BBA")), Fst_all)
+Fst_all <- rbind(Fst_all, matrix(rep(NA, 15), 1, 15, dimnames = list("TB", colnames(Fst_all))))
+Fst_all[is.na(Fst_all)] <- 0
+Fst_all <- Fst_all + t(Fst_all)
+
+colnames(Fst_all) <- rownames(Fst_all) <- lookup$pop[match(colnames(Fst_all), lookup$Code)]
+rm(lookup)
+```
+
+```{r}
+pop_order_b <- c("bodega_bay", "tomales_bay", "santa_cruz_harbour", "elkhorn", "pacific_grove", "big_creek", "santa_barbara", "point_dume", "redondo_beach", "laguna_beach", "la_jolla_san_diego", "isla_san_jeronimo", "catalina_island", "san_clemente_island", "guadalupe_island")
+
+labels <- c("bodega_bay", "tomales_bay", "santa_cruz", "elkhorn", "pacific_grove", "big_sur", "santa_barbara", "point_dume", "redondo_beach", "laguna_beach", "la_jolla_san_diego", "isla_san_jerónimo", "santa_catalina_is.", "san_clemente_is.", "isla_guadalupe") |>  gsub("_", " ", x = _) |> str_to_title()
+```
+
+```{r}
+Fst_all_t <- Fst_all[pop_order_b, pop_order_b]
+Fst_all_t[lower.tri(Fst_all_t)] <- NA
+
+df <- reshape2::melt(
+  Fst_all_t[pop_order_b , pop_order_b ]*1000000,
+  value.name = "dist"
+)
+
+pop_Fst_matrix_plot <- df |> 
+  ggplot(aes(x = Var1, y = Var2)) + 
+  geom_raster(aes(fill = dist/1000000)) +
+  geom_text(aes(label = round(dist/1000000, digits = 2)), size = 6) +
+  scale_fill_viridis(name = "Fst", na.value = "transparent") +
+  scale_x_discrete(labels = labels) +
+  scale_y_discrete(limits = rev(levels(df$Var2)), labels = rev(labels)) +
+  labs(x = "", y = "") +
+  # scale_x_discrete(position = "bottom") +
+  # scale_y_discrete(limits = rev) +
+  theme(
+    axis.text.x      = element_text(angle = 45, vjust = 1, hjust = 1),
+    panel.background = element_blank()
+  )
+```
+
+```{r}
+rm(Fst_all, pop_order_b)
+gc()
+```
+### Fuse Panels
+
+```{r}
+layout <- "
+AB
+"
+
+Figure_S4 <- coast_islands_distances_biplot + pop_Fst_matrix_plot +
+  plot_layout(design = layout) +
+  plot_annotation(tag_levels = list(c("A", "B"))) &
+  theme(
+    text      = element_text(size = 19.2),
+    axis.text = element_text(size = 20),
+    plot.tag  = element_text(face = "bold", size = 40)
+  )
+
+save_open_plot(
+  here("output", "article_figures", "Figure_S4.pdf"),
+  plot   = Figure_S4,
+  width  = 180,
+  height = 90,
+  units  = "mm",
+  scale  = 3.2
+)
+```
+
+## Figure S5 - Fst Tree?
+
+## Figure S6 - OutFlank
+
+### Generate plots
+```{r}
+
+OutFLANK_plots <- tibble(
+  read_files = list.files(here("data"), pattern = "HeFst.rds$")
+  ) |> 
+  mutate(
+    plots = here("data", read_files) |>
+      map(
+        \(x) ggplot(readRDS(x)) +
+              geom_point(aes(x = He, y = FST), alpha = .01) +
+              labs(x = "Heterozygosity", y = "Fst") +
+              theme_classic()
+      )
+  )
+```
+
+### Fuse plots
+```{r}
+layout <- "
+AB#
+CDE
+"
+
+Figure_S6 <- (OutFLANK_plots$plots[[1]] + labs(title = "All populations")) + (OutFLANK_plots$plots[[7]] + labs(title = "Coastal Populations")) + (OutFLANK_plots$plots[[2]] + labs(title = "Coastal Populations + Santa Catalina Is.")) + (OutFLANK_plots$plots[[6]] + labs(title = "Coastal Populations + Isla Guadalupe + San Clemente Is.")) +  (OutFLANK_plots$plots[[4]] + labs(title = "Coastal Populations + Santa Catalina Is. +\nIsla Guadalupe + San Clemente Is.")) +
+             plot_layout(design = layout, axis_titles = "collect") &
+             theme(
+               plot.title  = element_text(size = 16, hjust = 0.5),
+               text        = element_text(size = 16),
+               axis.text   = element_text(size = 12),
+               axis.text.x = element_blank()
+             )
+
+ggsave(
+  here("output", "article_figures", "Figure_S6.png"),
+  plot   = Figure_S6,
+  width  = 180,
+  height = 90,
+  units  = "mm",
+  scale  = 3
+)
+```
+
+```{r}
+rm(OutFLANK_plots, layout, Figure_S6)
+gc()
+```
+
+
+## Figure S7 - KEGG
+
+## Table 1 - Sampling locations and sample counts
