@@ -472,7 +472,7 @@ coordinates <- here("data", "individuals_coordinates.csv") |>
   as.matrix()
 
 q_matrix <- read_table(
-  here("data", "8-Embiotoca_filtered_r46.7.Q"),
+  here("output", "admixture", "8-Embiotoca_filtered_r46.7.Q"),
   col_names = paste0("Pop ", seq(1, 7))
 ) |> as.matrix()
 
@@ -516,8 +516,9 @@ sample_sites[14, "Popmap"] <- "isla_san_jerónimo"
 
 ### Plot map
 
+#### Geographic ranges interpolation
 ```{r}
-gg_obj <- ggtess3Q( #Interpolates geographic ranges as a gg layer
+gg_obj <- ggtess3Q(
   q_matrix,
   coordinates,
   resolution      = c(1000, 1000),
@@ -527,7 +528,10 @@ gg_obj <- ggtess3Q( #Interpolates geographic ranges as a gg layer
   # raster.filename = here("data", "ocean_map.tif"),
   col.palette     = CreatePalette(turbo(n = 7), 25)
 )
+```
 
+#### Put map together
+```{r}
 pop_area <- gg_obj +
   ggnewscale::new_scale_fill() +
   geom_raster(
@@ -550,19 +554,17 @@ pop_area <- gg_obj +
     shape       = 21,
     show.legend = FALSE
   ) +
-  geom_label(
+  geom_text(
     sample_sites,
     mapping = aes(x        = lab_lon, y = lab_lat,
                   label    = Popmap |> gsub("_", " ", x = _) |> str_to_title(),
                   fontface = "bold"),
     hjust   = c("left", "left", "left", "left", "left",
                 "left", "left", "left", "left", "left",
-                "right", "right", "left", "left", "left"),
-    label.r = unit(0, "lines"),
-    alpha   = .6
+                "right", "right", "left", "left", "left")
   ) +
   geom_label(
-    aes(x = -119.14, y = 28.69, label = "        "),
+    aes(x = -119.12, y = 28.69, label = "        "),
     label.r = unit(0, "lines")
   ) +
   annotation_scale(location = "bl", width_hint = 0.4) +
@@ -586,12 +588,16 @@ pop_area <- gg_obj +
   theme_classic()
 
 pop_area$layers <- pop_area$layers[c(2, 1, 3, 4, 5, 6, 7, 8)]
+```
 
+#### Import fish
+```{r}
 EJA_drawing <- magick::image_read(here("images", "EJA_drawing.png")) |> 
   magick::image_background("none") |> 
   grid::rasterGrob()
 ```
 
+#### Fuse and save
 ```{r}
 Figure_2 <- pop_area + annotation_custom(EJA_drawing,
                                          xmin = -123.4, xmax = -119.1,
