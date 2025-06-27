@@ -39,56 +39,6 @@ popmap_tb <- read_csv2(here("data", "individuals_coordinates.csv")) |>
   )
 ```
 
-## Data conversion
-
-### Convert vcf to genlight
-
-```{r}
-#| echo: false
-
-lcwgs_gl <- here("plink2", "8-Embiotoca_filtered.vcf.gz") |>
-  gl.read.vcf()
-
-lcwgs_gl@other$latlon <- tibble(
-  Indiv = lcwgs_gl@ind.names,
-  Pop   = lcwgs_gl@pop
-  ) |> 
-  left_join(
-    y = read_csv2(here("data", "low_coverage_sampling_sites.csv")) |>
-      select(Popmap, Latitude, Longitude)
-  ) |>
-  rename(lat = Latitude, lon = Longitude) |> 
-  as.data.frame()
-
-lcwgs_gl@pop <- factor(popmap_lcwgs)
-
-saveRDS(lcwgs_gl, file = here("data", "Embiotoca_lcwgs_gl.rds"))
-```
-
-```{r}
-#| echo: false
-
-lcwgs_gl <- readRDS(file = here("data", "Embiotoca_lcwgs_gl.rds"))
-
-lcwgs_gl_islanders <- lcwgs_gl[!lcwgs_gl$pop %in% c("guadalupe_island", "catalina_island", "san_clemente_island"), ] |>
-  gl.filter.monomorphs(lcwgs_gl_islanders, verbose = 5) |> 
-  gl.recalc.metrics(lcwgs_gl_islanders, verbose = 5)
-
-lcwgs_gl_islanders@other$latlon <- here("data", "low_coverage_sampling.csv") |> 
-  read_csv2() |>
-  select(Popmap, Latitude, Longitude) |>
-  right_join(tibble(Popmap = pop(lcwgs_gl_islanders))) |> 
-  rename(lat = Latitude, lon = Longitude) |> 
-  select(-c(Popmap))
-
-saveRDS(
-  lcwgs_gl_islanders,
-  file = here("data", "Embiotoca_lcwgs_islanders_gl.rds")
-)
-
-rm(lcwgs_gl)
-```
-
 ## Genetic distances
 
 ### Pairwise Hamming genetic distances
@@ -586,13 +536,14 @@ states <- ne_states(
 #### Barrier distance
 
 ```{r}
-geo_dist_cells <- here("data", "low_coverage_sampling_sites.csv") |> 
-  read_csv2(show_col_types = FALSE) |> 
-  select(c(Code, Longitude, Latitude, Popmap)) |> 
-  rename(pop = Popmap) |> 
+geo_dist_cells <- here("data", "individuals_coordinates.csv") |> 
+  read_csv2() |> 
+  select(c(Localisation, Longitude, Latitude, popmap)) |> 
+  distinct() |> 
+  rename(pop = popmap, Code = Localisation) |> 
   mutate(
-    pop  = as.factor(pop),
-    Code = as.factor(Code)
+      pop  = as.factor(pop),
+      Code = as.factor(Code)
   ) |>
   arrange(pop) |> 
   (\(x) {
@@ -614,12 +565,13 @@ Distances correlate -> don't use barrier distance
 #### Geographic distance considering batymetry
 
 ```{r}
-coordinates <- here("data", "low_coverage_sampling_sites.csv") |>
+coordinates <- here("data", "individuals_coordinates.csv") |>
   read_csv2() |>
-  select(Popmap, Longitude, Latitude) |> 
-  mutate(Popmap = as.factor(Popmap)) |> 
-  arrange(Popmap) |> 
-  column_to_rownames(var = "Popmap") |> 
+  select(popmap, Longitude, Latitude) |> 
+  distinct() |> 
+  mutate(popmap = as.factor(popmap)) |> 
+  arrange(popmap) |> 
+  column_to_rownames(var = "popmap") |> 
   as.matrix()
 ```
 
@@ -741,13 +693,14 @@ plot(ibd)
 
 #### Euclidean distance
 ```{r}
-Dist_geo_isl <- here("data", "low_coverage_sampling_sites.csv") |> 
-  read_csv2(show_col_types = FALSE) |> 
-  select(c(Code, Longitude, Latitude, Popmap)) |>
-  rename(pop = Popmap) |> 
+Dist_geo_isl <- here("data", "individuals_coordinates.csv") |> 
+  read_csv2() |> 
+  select(c(Localisation, Longitude, Latitude, popmap)) |>
+  distinct() |> 
+  rename(pop = popmap, Code = Localisation) |> 
   arrange(pop) |> 
   filter(
-    !pop %in% c("guadalupe_island", "catalina_island", "san_clemente_island")
+      !pop %in% c("guadalupe_island", "catalina_island", "san_clemente_island")
   ) |>
   as.data.frame()
 
@@ -759,10 +712,11 @@ Dist_geo_isl <- Dist_geo_isl[, 2:3] |> dist()
 #### Barrier distance
 
 ```{r}
-coordinates_coast_isj <- here("data", "low_coverage_sampling_sites.csv") |>
-  read_csv2() |>
-  dplyr::select(Popmap, Longitude, Latitude) |> 
-  mutate(Popmap = as.factor(Popmap)) |> 
+coordinates_coast_isj <- here("data", "individuals_coordinates.csv") |> 
+  read_csv2() |> 
+  select(c(popmap, Longitude, Latitude)) |>
+  distinct() |> 
+  mutate(Popmap = as.factor(popmap)) |> 
   arrange(Popmap) |> 
   filter(
     !Popmap %in% c("guadalupe_island", "catalina_island", "san_clemente_island")
@@ -890,10 +844,11 @@ rm(combined, p1, p2, p3, p4)
 
 #### Euclidean distance
 ```{r}
-coordinates_coast <- here("data", "low_coverage_sampling_sites.csv") |>
+coordinates_coast <- here("data", "individuals_coordinates.csv") |>
   read_csv2() |>
-  dplyr::select(Popmap, Longitude, Latitude) |> 
-  mutate(Popmap = as.factor(Popmap)) |> 
+  select(popmap, Longitude, Latitude) |>
+  distinct() |> 
+  mutate(Popmap = as.factor(popmap)) |> 
   arrange(Popmap) |> 
   filter(
     !Popmap %in% c("guadalupe_island", "catalina_island", "san_clemente_island", "isla_san_jeronimo")
@@ -929,7 +884,7 @@ save_open_plot(
 #### LoadPCA distance
 
 ```{r}
-pcadapt_lcwgs_coast <- read_rds(here("output", "pcadapt_lcwgs_coast.rds"))
+pcadapt_lcwgs_coast <- read_rds(here("output", "pcadapt_lcwgs_coast_K5.rds"))
 popmap_lcwgs_coast <- c(
   rep("bodega_bay",            5), # BB
   rep("big_creek",            13), # BIGC -> BCR
