@@ -23,13 +23,14 @@
 /.quarto/
 /conStruct/
 /data/
+/genomics_general/
+/images/
 /metadata/
 /output/
 /plink2/
-/genomics_general/
 _quarto.yml
 manuscript_figures.qmd
 MatMet.qmd
 references.bib
 Surfperch_GenPop.Rproj
-/images/
+EJA_GenPop_data.zip
