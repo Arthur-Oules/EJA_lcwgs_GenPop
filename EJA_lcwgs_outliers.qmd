@@ -5,6 +5,7 @@ format: html
 editor: source
 engine: knitr
 ---
+
 ## Load packages
 
 ```{r}
@@ -17,7 +18,7 @@ c("here", "tidyverse",
   lapply(library, character.only = TRUE) |> invisible()
 ```
 
-## Load data analysis functions
+## Load custom functions
 ```{r}
 #| label: LoadExtFunc
 
@@ -52,9 +53,7 @@ rm(lcwgs_vcf)
 
 ## Data conversions
 
-### Convert vcf to bed file using plink2
-
-#### Initial vcf conversion
+### Initial .vcf to .bed conversion
 
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
@@ -62,7 +61,7 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 ./plink2 --vcf 8-Embiotoca_filtered.vcf.gz --make-bed --out 8-Embiotoca_filtered
 ```
 
-#### Generate whitelists and subset bed files
+### Generate whitelists and subset .bed files
 
 ```{r}
 #| label: GenerateSaveWhitelists
@@ -138,6 +137,8 @@ Individuals_list |>
 rm(Individuals_list)
 ```
 
+Subset initial bedfile with whitelists using plink2
+
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
@@ -170,14 +171,13 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 ./plink2 --bfile 8-Embiotoca_filtered --keep whitelist_south.txt --make-bed --out 8-Embiotoca_filtered_south
 ```
 
-#### Corresponding popmaps
+### Generate corresponding popmaps for later use
 
 ```{r}
 #| label: GenerateSavePopMaps
 #| echo: false
 
 popmaps <- tibble(
-  vcf_paths = here("plink2") |> list.files(pattern = ".vcf$"),
   bed_paths = here("plink2") |> list.files(pattern = ".bed$"),
   ) |> 
   mutate(
@@ -405,9 +405,20 @@ cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 ./plink2 --bfile 8-Embiotoca_filtered_coastal_gua_cat_scl --keep-allele-order --recode vcf --out 8-Embiotoca_filtered_coastal_gua_cat_scl
 ```
 
-## pcadapt analyses
+Update popmaps object
 
-### All preanalysis to determine optimal K value
+```{r}
+popmaps <- readRDS(here("data", "popmaps.rds"))
+
+popmaps$vcf_paths <- list.files(here("plink2"), pattern = ".vcf$")
+
+saveRDS(popmaps, here("data", "popmaps.rds"))
+```
+
+
+## Outliers with pcadapt
+
+### All preanalysis to determine optimal K value for each subset
 
 ```{r}
 for (i in 1:dim(popmaps)[1]) {
@@ -462,6 +473,8 @@ popmaps <- popmaps |> mutate(K = c(6, 1, 1, 2, 3,
                                    3, 4, 5, 4, 3,
                                    3, 1, 1, 1, 3,
                                    3, 1, 2))
+
+saveRDS(popmaps, here("data", "popmaps.rds"))
 ```
 
 ### All analyses with correct value of K
@@ -474,14 +487,14 @@ for (i in 1:dim(popmaps)[1]) {
     write_rds(
       file = here(
         "output",
-        paste0("pcadapt_lcwgs", popmaps$names[[i]], "K", as.character(popmaps$K[i]), ".rds")
+        paste0("pcadapt_lcwgs_", popmaps$names[[i]], "_K", as.character(popmaps$K[i]), ".rds")
       )
     )
   
   pcadapt <- readRDS(
     here(
         "output",
-        paste0("pcadapt_lcwgs", popmaps$names[[i]], "K", as.character(popmaps$K[i]), ".rds")
+        paste0("pcadapt_lcwgs_", popmaps$names[[i]], "_K", as.character(popmaps$K[i]), ".rds")
       )
   )
 
@@ -507,7 +520,7 @@ for (i in 1:dim(popmaps)[1]) {
 }
 ```
 
-### Loading plots example
+### Loading plots example (gives weight of each SNP to a PC)
 
 ```{r}
 #| label: LoadingsPlots
@@ -522,16 +535,19 @@ for (i in paste0("PC", seq(1, 6))) {
       ggplot() +
       geom_point(aes_string(x = "index", y = i)) +
       theme_bw(),
-    filename  = here(paste0("pcadapt_all_pops_K9_loadings_", i, ".png")),
+    filename  = here("output", "plots", paste0("pcadapt_all_pops_K9_loadings_", i, ".png")),
     width     = 60,
     limitsize = FALSE
   )
 }
 ```
 
-## Outliers determination and annotation
+### Outliers determination and annotation
 
-### Load species Metadata
+#### Load genome and metadata
+
+Download here: <https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_022577435.1/>
+Annotation features as .GFF and Chromosomes > RefSeq qequence_repot.tsv
 
 ```{r}
 EJA_annotations <- here("data", "EJA_annotations.gff") |> # Load annotated genome
@@ -544,7 +560,7 @@ chromosomes_info <- here("data", "JAKOON01_catalog", "sequence_report.tsv") |>  
   select(c(`GenBank seq accession`, `RefSeq seq accession`))
 ```
 
-#### All outliers
+#### Generate outliers for all analyses
 
 ```{r}
 read_write_locations <- tibble(
@@ -573,18 +589,20 @@ map2(
 
 Summary is saved in `EJA_lcwgs_outliers_log.log`.
 
-### For only one
+##### Example for one analysis
 
 ```{r}
-test <- here("output", "pcadapt_lcwgs_K9.rds") |>
+#| eval: false
+
+here("output", "pcadapt_lcwgs_coastal_isj_K3.rds") |>
   readRDS() |>
-  Get_outliers(method = "bonferroni", pvalue_threshold = .001, minimize_length = FALSE) |>
+  Get_outliers(method = "bonferroni", pvalue_threshold = .001, minimize_length = TRUE) |>
   Get_annotations(chrom_info = chromosomes_info, gff_annotation = EJA_annotations) |>
-  Clean_annotations() |> 
-  write_csv2(here("output", "EJA_lcwgs_cat_isj_5E-2_outliers_annotations.csv"))
+  Clean_annotations() |>
+  write_csv2(here("output", "EJA_lcwgs_coastal_isj_K3_1E-3_outliers_annotations.csv"))
 ```
 
-### Add Principal Components association to tables
+#### Add Principal Components association to tables
 
 ```{r}
 tibble(
@@ -611,29 +629,29 @@ tibble(
   })()
 ```
 
-### Add Allele frequencies
-
-#### Send-away code
+##### For only one
 
 ```{r}
-#| eval: false
-
-EJA_gen <- readRDS(here("data", "EJA_lcwgs_gen.rds"))
-
-EJA_allele_frequencies <- makefreq(EJA_gen)
-
-EJA_allele_frequencies_tb <- EJA_allele_frequencies |>
-    t() |>
-    as_tibble(rownames = "POSITION") |>
-    separate_wider_delim(POSITION, delim = "_", names = c("CHROM", "TBD", "POSALLELE")) |>
-    separate_wider_delim(POSALLELE, delim = ".", names = c("POS", "ALLELE")) |>
-    select(-c(TBD)) |>
-    mutate(CHROM = paste0(CHROM, ".1"))
-
-saveRDS(EJA_allele_frequencies_tb, here("output", "EJA_allele_frequencies_tb.rds"))
+here("output", "EJA_lcwgs_coastal_isj_K3_1E-3_outliers_annotations.csv") |> 
+  read_csv2() |> 
+  inner_join(
+    readRDS(file = here("data", "SNP_positions.rds")),
+    by = join_by("GenBank seq accession" == "CHROM", "POS")
+  ) |> 
+  mutate(
+    PC = here("output", "pcadapt_lcwgs_coastal_isj_K3.rds") |> read_rds() |> get.pc(list = rank) |> pull(PC)
+  ) |> 
+  select(-c(rank)) |> 
+  write_csv2(file = here("output", sub(".csv", "_PC.csv", "EJA_lcwgs_coastal_isj_K3_1E-3_outliers_annotations.csv")))
 ```
 
-#### Add results to tables
+#### Add Allele frequencies
+
+##### Send-away code
+
+See `sendaway/Compute_AlleleFreq.R` and import resulting file `EJA_allele_frequencies_tb.rds`.
+
+##### Add results to tables
 
 ```{r}
 EJA_allele_freq <- readRDS(here("output", "EJA_allele_frequencies_tb.rds")) |> 
@@ -654,11 +672,14 @@ list.files(here("output")) |>
 ```
 
 
-### Get outliers fasta
+### Get outliers sequences for BLAST (deprecated since genome is now annotated)
 #### Read genome
+
+Download full genome here: <https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_022577435.1/>
+
 ```{r}
 lcwgs_catalog <- read.dna(
-    here("data", "JAKOON01_catalog", "catalog.fa"),
+    here("data", "JAKOON01_catalog", "GCA_022577435.1_fEmbJac1.0.p_genomic.fna"),
     format       = "fasta",
     as.character = TRUE
   )
@@ -671,8 +692,6 @@ names(lcwgs_catalog) <- names(lcwgs_catalog) |>
 
 #### Get corresponding read windows
 ```{r}
-chromosomes_length <- read_tsv(here("data", "JAKOON01_catalog", "JAKOON01_contigs.tsv"))
-
 pvalues_positions_filtered_dup_sequences <- pvalues_positions_filtered_dup |>
   mutate(
     sequences = row_number() |>
@@ -730,7 +749,7 @@ rm(chromosomes_length,
 gc()
 ```
 
-## Outliers Protein sequences for KEGG
+## Get Outliers Protein sequences for KEGG
 
 ### Get BLAST results
 
@@ -786,7 +805,7 @@ lcwgs_protein_sequences |>
   )
 ```
 
-### Get BLAST results A. ocellaris
+### Get BLAST results from *A. ocellaris*
 
 ```{r}
 pvalues_positions <- readRDS(
@@ -822,9 +841,9 @@ lcwgs_EJA_outliers_blast_A_ocellaris_tib_filtered |>
   write.csv2(here("output", "lcwgs_outliers_match_A_ocellaris.csv"))
 ```
 
-# Outliers with `outFLANK`
+## Outliers with `outFLANK`
 
-## Load data and convert to format:
+### Load data and convert to format:
 
 ```{r}
 #| echo: false
@@ -839,7 +858,7 @@ Vectorize(convert_to_outflank)(
 )
 ```
 
-## Compute Fst and He
+### Compute Fst and He
 
 ```{r}
 for (file in list.files(here("data"), pattern = "_outflank.rds$")) {
@@ -867,13 +886,13 @@ for (file in list.files(here("data"), pattern = "_outflank.rds$")) {
             str_replace(file, pattern = "outflank.rds", replacement = "HeFst.rds")
           )
         )
-    }, error = function(e){cat("ERROR :",conditionMessage(e), "\n")})
+    }, error = function(e) {cat("ERROR :", conditionMessage(e), "\n")})
 
   }
 }
 ```
 
-## Plot FstHe
+### Plot FstHe
 
 ```{r}
 for (file in list.files(here("data"), pattern = "HeFst.rds$")) {
@@ -908,7 +927,7 @@ plot(EJA_Fst$FST, EJA_Fst$FSTNoCorr, col = alpha("black", alpha = .01))
 abline(0, 1)
 ```
 
-## Coast *vs.* GUA *vs.* CAT
+### Coast *vs.* GUA *vs.* CAT
 
 ```{r}
  here("data", "8-Embiotoca_filtered_coastal_gua_cat_outflank.rds") |> 
@@ -926,7 +945,7 @@ abline(0, 1)
         )
 ```
 
-## Coast *vs.* GUA *vs.* SCL
+### Coast *vs.* GUA *vs.* SCL
 
 ```{r}
  here("data", "8-Embiotoca_filtered_coastal_gua_scl_outflank.rds") |> 
@@ -944,7 +963,7 @@ abline(0, 1)
         )
 ```
 
-## Coast *vs.* GUA *vs.* CAT *vs.* SCL
+### Coast *vs.* GUA *vs.* CAT *vs.* SCL
 
 ```{r}
  here("data", "8-Embiotoca_filtered_coastal_gua_cat_scl_outflank.rds") |> 
@@ -962,8 +981,8 @@ abline(0, 1)
         )
 ```
 
-# Outliers with `bayscan`
-
+## Outliers with `BayeScan2.1`
+### Conversion to .geste file format
 ```{r}
 library(hierfstat)
 library(radiator)
@@ -980,4 +999,37 @@ EJA_geste <- genomic_converter(
   filename = "8-Embiotoca_filtered_outflank.geste",
   parallel.core = 1
 )
+```
+
+```{r}
+source(here("BayeScan2.1", "R functions", "plot_R.R"))
+```
+
+### Plot results
+```{r}
+plot_bayescan(here("BayeScan2.1", "EJA_Bayescan_fst.txt"), add_text = FALSE)
+```
+
+### Check posterior distributions
+
+Posterior distributions:
+
+```{r}
+mydata <- read.table(here("BayeScan2.1", "EJA_Bayescan.sel"), colClasses = "numeric")
+parameter <- "Fst1"
+
+plot(
+  density(mydata[[parameter]]),
+  xlab = parameter,
+  main = paste(parameter, "posterior distribution"),
+)
+
+# if you have non-codominant data you can plot posterior for Fis coefficients in each population:
+parameter="Fis1"
+
+# if you test for selection, you can plot the posterior for alpha coefficient for selection:
+parameter="alpha1"
+
+# you also have access to the likelihood with:
+parameter="logL"
 ```
