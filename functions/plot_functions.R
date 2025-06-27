@@ -1,15 +1,10 @@
 library("scales")
 
-save_open_plot <- function(path,         plot,
-                           width = NA,   height = NA,
-                           units = "in", dpi = 300) {
+save_open_plot <- function(path, plot, ...) {
   ggsave(
     path,
     plot   = plot,
-    width  = width,
-    height = height,
-    units  = units,
-    dpi    = dpi
+    ... = ...
   )
   system2(
     "open",
@@ -173,10 +168,10 @@ manhattan_plot_custom_2 <- function(pcadapt,
   p + scale_colour_manual(values = c("black", "grey")) +
     scale_x_continuous(
       breaks = df$rank[df$lab_position],
-      labels = df$CHROM[df$lab_positin],
+      labels = df$CHROM[df$lab_position],
       guide  = guide_axis(angle = 45)
     ) +
-    labs(x = "chromosome", y = bquote(-log[10]~("p-value"))) +
+    labs(x = "Genome Position", y = bquote(-log[10]~("p-value"))) +
     theme_classic() +
     theme(legend.position = "none")
 }
@@ -230,7 +225,7 @@ admixture_plot <- function(data, pop_map = NULL) {
     scale_y_continuous(expand = c(0,0)) +
     theme_minimal() +
     theme(
-      axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1),
+      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
       panel.grid  = element_blank()
     )
   
