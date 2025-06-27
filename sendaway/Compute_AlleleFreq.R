@@ -1,6 +1,6 @@
 # This codes is sent to a cluster because the computations are time sonsuming on
-# a regular computer. See EJA_lcwgs_population_structure lines 528-870 for
-# conversion to genlight
+# a regular computer. See /sendaway/Compute_Edward_distance.R for conversion to
+# genpop. This file needs a folder /data/ and /output/ at root
 
 library(tidyverse)
 library(adegenet)
