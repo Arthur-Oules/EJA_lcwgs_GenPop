@@ -562,7 +562,7 @@ mantel_plot(IBD$Dgeo, barrier_dist_mat)
 
 Distances correlate -> don't use barrier distance
 
-#### Geographic distance considering batymetry
+#### Geographic distance considering bathymetry
 
 ```{r}
 coordinates <- here("data", "individuals_coordinates.csv") |>
@@ -657,7 +657,11 @@ mantel.randtest(as.dist(Topo_Dist_w[[1]]), PCA_distance)
 p2 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), PCA_distance, xlab = "Bathy", ylab = "PCA")
 
 mantel.randtest(as.dist(geosphere::distm(coordinates)), Edward_distance)
-p3 <- mantel_plot(as.dist(geosphere::distm(coordinates)), Edward_distance, xlab = "Euclidean", ylab = "Chord distance")
+p3 <- mantel_plot(
+  as.dist(geosphere::distm(coordinates)),
+  Edward_distance,
+  xlab = "Ellipsoid Distance", ylab = " Cavalli-Sforza and Edward Chord Distance"
+)
 
 mantel.randtest(as.dist(Topo_Dist_w[[1]]), Edward_distance)
 p4 <- mantel_plot(as.dist(Topo_Dist_w[[1]]), Edward_distance, xlab = "Bathy", ylab = "Chord distance")
@@ -722,6 +726,7 @@ coordinates_coast_isj <- here("data", "individuals_coordinates.csv") |>
     !Popmap %in% c("guadalupe_island", "catalina_island", "san_clemente_island")
   ) |> 
   column_to_rownames(var = "Popmap") |> 
+  select(-c(popmap)) |> 
   as.matrix()
 ```
 
@@ -729,7 +734,7 @@ coordinates_coast_isj <- here("data", "individuals_coordinates.csv") |>
 vegan::mantel(Dist_geo_isl, lcwgs_IBD_islanders$Dgeo)
 ```
 
-#### Geographic distance considering batymetry
+#### Geographic distance considering bathymetry
 
 ```{r}
 Topo_Dist_w_coast_isj <- topoDist(catalina_df_water, coordinates_coast_isj, paths = TRUE)
@@ -813,8 +818,13 @@ mantel.randtest(as.dist(Topo_Dist_w_coast_isj[[1]]), PCA_distances_coast_isj)
 p2 <- mantel_plot(as.dist(Topo_Dist_w_coast_isj[[1]]), PCA_distances_coast_isj, xlab = "Bathy", ylab = "PCA")
 
 mtest <- mantel.randtest(as.dist(geosphere::distm(coordinates_coast_isj)), Edward_distance_coast_isj)
-p3 <- mantel_plot(as.dist(geosphere::distm(coordinates_coast_isj, fun = 
-geosphere::distVincentyEllipsoid)), Edward_distance_coast_isj, xlab = "Ellipsoid Distance", ylab = " Cavalli-Sforza and Edward Chord Distance")
+p3 <- mantel_plot(
+  as.dist(geosphere::distm(coordinates_coast_isj, fun = 
+geosphere::distVincentyEllipsoid)),
+  Edward_distance_coast_isj,
+  xlab = "Ellipsoid Distance",
+  ylab = " Cavalli-Sforza and Edward Chord Distance"
+)
 
 mantel.randtest(as.dist(Topo_Dist_w_coast_isj[[1]]), Edward_distance_coast_isj)
 p4 <- mantel_plot(as.dist(Topo_Dist_w_coast_isj[[1]]), Edward_distance_coast_isj, xlab = "Bathy", ylab = "Chord distance")
@@ -857,7 +867,7 @@ coordinates_coast <- here("data", "individuals_coordinates.csv") |>
   as.matrix()
 ```
 
-#### Geographic distance considering batymetry
+#### Geographic distance considering bathymetry
 
 ```{r}
 Topo_Dist_w_coast <- topoDist(catalina_df_water, coordinates_coast, paths = TRUE)
@@ -1031,7 +1041,7 @@ ped2geno(
 
 snmf_analysis <- snmf(
   here("data", "SNPs", "8-Embiotoca_filtered.geno"),
-  K           = 4:8,
+  K           = 4:9,
   project     = "continue",
   repetitions = 50,
   entropy     = TRUE
@@ -1130,7 +1140,7 @@ See `EJA_populations_lcwgs_Figures.qmd` for pretty plots.
 
 ## Triangle plots
 
-### North-South Gradient
+### Coastal
 
 ```{bash}
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
@@ -1239,7 +1249,7 @@ popmap_lcwgs_coast_isj <- read_csv2(here("data", "individuals_coordinates.csv"))
 ```
 
 ```{r}
-EJA_lcwgs_coast_isj_vcf_diff <- vector(mode='list', length=3)
+EJA_lcwgs_coast_isj_vcf_diff <- vector(mode = 'list', length = 3)
 parameters <- c(.5, .75, 1)
 
 for (i in 1:3) {
@@ -1258,7 +1268,7 @@ With .75 : "166077 sites passed allele frequency difference threshold"
 With .5 : "424389 sites passed allele frequency difference threshold"
 
 ```{r}
-hi_het_coast_isj <- vector(mode='list', length=3)
+hi_het_coast_isj <- vector(mode = 'list', length = 3)
 
 for (i in 1:3) {
   hi_het_coast_isj[[i]] <- hybridIndex(EJA_lcwgs_coast_isj_vcf_diff[[i]],
