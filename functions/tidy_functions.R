@@ -385,15 +385,18 @@ Substract_diagonal <- function(matrix) {
   return(matrix)
 }
 
-lm_eqn <- function(df, r = manteltest$statistic, pp = manteltest$signif) {
+lm_eqn <- function(df, r, pp) {
   m <- lm(Dgen ~ Dgeo, df)
+  
   eq <- substitute(
-    italic(y) == a + b %.% italic(x) * "," ~ ~italic(R)^2 ~ "=" ~ r2 * "," ~ ~italic(p) ~ "=" ~ pp,
+    atop(italic(y) == a + b %.% italic(x) * "," ~ ~italic(R)^2 ~ "=" ~ r2 * "," ~ ~italic(p) ~ "=" ~ pp, italic(R)^2 ~ "=" ~ mr2 * "," ~ ~italic(p) ~ "=" ~ mpp),
     list(
-      a = format(unname(coef(m)[1]), digits = 2),
-      b = format(unname(coef(m)[2]), digits = 2),
-      r2 = format(summary(m)$r.squared, digits = 3),
-      pp = format(pp, digits = 3)
+      a   = format(unname(coef(m)[1]), digits = 2),
+      b   = format(unname(coef(m)[2]), digits = 2),
+      r2  = format(summary(m)$r.squared, digits = 3),
+      pp  = format(pp, digits = 3),
+      mr2 = format(r, digits  = 3),
+      mpp = format(pp, digits = 3)
     )
   )
   as.character(as.expression(eq))
