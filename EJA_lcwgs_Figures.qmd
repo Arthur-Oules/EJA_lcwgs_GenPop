@@ -11,7 +11,7 @@ editor: source
 c("here", "tidyverse",
   "ncdf4", "rnaturalearth", "rnaturalearthdata", "rnaturalearthhires", "marmap",
   "patchwork", "grid", "plotly", "sf", "ggrepel", "ggspatial", "ggtree", "RColorBrewer", "viridis", 
-  "ggnewscale", "terra", "tidyterra", "tess3r") |>
+  "ggnewscale", "scales", "terra", "tidyterra", "tess3r") |>
   lapply(library, character.only = TRUE) |> invisible()
 ```
 
@@ -342,7 +342,7 @@ lcwgs_map <- ggplot() +
   ) +
   # Cartographic scale
   geom_label(
-    aes(x = -119.09, y = 28.71, label = "        "),
+    aes(x = -119.085, y = 28.71, label = "        "),
     label.r = unit(0, "lines")
   ) +
   annotation_scale(location = "bl", width_hint = 0.4) +
@@ -461,6 +461,8 @@ getNOAA.bathy(
                           "polygon"),
               inverse = TRUE) |> 
   terra::writeRaster(here("data", "fourty_meter_mask.tif"), overwrite = TRUE)
+
+rm(polygon_mask)
 ```
 
 ### Load Data
@@ -537,10 +539,12 @@ pop_area <- gg_obj +
   geom_raster(
     data    = catalina_df,
     mapping = aes(x = x, y = y, fill = z),
-    alpha = .5
+    alpha   = .5
   ) +
   scale_fill_hypso_c(
-    palette = "colombia_bathy"
+    name    = "Depth (m)",
+    palette = "colombia_bathy",
+    guide   = guide_colourbar(title.vjust = 1.5)
   ) +
   geom_sf(data = states) +
   coord_sf(xlim = c(-124, -113), ylim = c(28.5, 38.5), expand = FALSE) +
@@ -564,7 +568,7 @@ pop_area <- gg_obj +
                 "right", "right", "left", "left", "left")
   ) +
   geom_label(
-    aes(x = -119.12, y = 28.69, label = "        "),
+    aes(x = -119.09, y = 28.69, label = "        "),
     label.r = unit(0, "lines")
   ) +
   annotation_scale(location = "bl", width_hint = 0.4) +
@@ -587,6 +591,7 @@ pop_area <- gg_obj +
   ) +
   theme_classic()
 
+
 pop_area$layers <- pop_area$layers[c(2, 1, 3, 4, 5, 6, 7, 8)]
 ```
 
@@ -603,8 +608,8 @@ Figure_2 <- pop_area + annotation_custom(EJA_drawing,
                                          xmin = -123.4, xmax = -119.1,
                                          ymin = 28.7,   ymax = 31.7) +
   theme(
-    text      = element_text(size = 17.45),
-    axis.text = element_text(size = 13.09)
+    text        = element_text(size = 17.45),
+    axis.text   = element_text(size = 13.09)
   )
 
 save_open_plot(
@@ -620,7 +625,7 @@ save_open_plot(
 ### Memory Cleanup
 
 ```{r}
-rm(polygon_mask, coordinates, q_matrix, catalina_df, states, sample_sites,
+rm(coordinates, q_matrix, catalina_df, states, sample_sites,
    gg_obj, pop_area, EJA_drawing,
    Figure_2)
 gc()
@@ -672,9 +677,9 @@ mantel_plot_coast_isj <- mantel_plot(
 
 ```{r}
 hi_het_coast_isj <- read_rds(here("output", "Triangle_analysis_coast_isj.rds"))
-parameters <- c(1, .75, .5)
+parameters <- c(.5, .75, 1)
 
-hi_het_coast_isj_plots <- vector(mode = 'list', length=3)
+hi_het_coast_isj_plots <- vector(mode = 'list', length = 3)
 
 for (i in 1:3) {
   hi_het_coast_isj_plots[[i]] <- hi_het_coast_isj[[i]] |>
@@ -688,7 +693,7 @@ for (i in 1:3) {
     arrange(pop) |>
     triangulaR::triangle.plot(colors = hue_pal()(15)[-c(3, 5, 12)]) + #colors = turbo(n = 12)
     scale_colour_discrete(name = "Populations") +
-    labs(title = paste0("d = ", as.character(parameters[i])))
+    labs(title = paste0("δ = ", as.character(parameters[i])))
 }
 ```
 
@@ -719,7 +724,8 @@ save_open_plot(
   width  = 180,
   height = 120,
   units  = "mm",
-  scale  = 1.5
+  scale  = 1.5,
+  device = cairo_pdf
 )
 ```
 
@@ -986,24 +992,26 @@ gc()
 ```{r}
 #| label: snmfCrossEntropy
 
-EJA_snmf_analysis <- load.snmfProject(here("data", "lcwgs", "8-Embiotoca_filtered.snmfProject"))
+EJA_snmf_analysis <- load.snmfProject(here("data", "snmf", "8-Embiotoca_filtered.snmfProject"))
 
 snmf_tb <- tibble(
-  K = seq(5, 8),
-  `Cross-entropy` = c()
+  "4" = cross.entropy(EJA_snmf_analysis, K = 4) |> as.vector(),
+  "5" = cross.entropy(EJA_snmf_analysis, K = 5) |> as.vector(),
+  "6" = cross.entropy(EJA_snmf_analysis, K = 6) |> as.vector(),
+  "7" = cross.entropy(EJA_snmf_analysis, K = 7) |> as.vector(),
+  "8" = cross.entropy(EJA_snmf_analysis, K = 8) |> as.vector(),
+  "9" = cross.entropy(EJA_snmf_analysis, K = 9) |> as.vector(),
   )
 
-cross_entropy <- rep(0, dim(snmf_tb)[1])
-
-for (i in 1:length(snmf_tb$K)) {
-  cross_entropy[i] <- min(cross.entropy(EJA_snmf_analysis, K = snmf_tb$K[i]))
-}
+snmf_tb <- snmf_tb |>
+  pivot_longer(everything(), names_to = "K", values_to = "Cross-entropy") |>
+  mutate(K = as.numeric(K))
 
 snmf_plot <- snmf_tb |>
-  mutate(cross_entropy = cross_entropy) |> 
   ggplot() +
-  geom_point(aes(x = K, y = cross_entropy)) +
-  labs(y = "Cross-entropy") +
+  geom_violin(aes(x = factor(K), y = `Cross-entropy`), position = "dodge", scale = "width") +
+  geom_jitter(aes(x = factor(K), y = `Cross-entropy`), alpha = .1) +
+  labs(x = "K") +
   theme_classic() +
   theme(
     text      = element_text(size = 20),
@@ -1156,6 +1164,7 @@ colnames(Fst_coast_vs_isl) <-  rownames(Fst_coast_vs_isl) <- lookup$pop2[match(c
 
 rm(lookup)
 ```
+
 #### Prepare Distance data
 ```{r}
 EJA_lcwgs_dist <- here("plink2", "Embiotoca_filtered_dist_matrix.dist") |> 
@@ -1173,6 +1182,7 @@ pop_distance_matrix_2_sub <- Substract_diagonal(pop_distance_matrix_2)
 
 rm(EJA_lcwgs_dist, IDs, pop_distance_matrix_2)
 ```
+
 #### Generate plot
 ```{r}
 plot_order_coast <- c("coast_isj", "catalina_island", "san_clemente_island", "guadalupe_island")
@@ -1313,6 +1323,57 @@ save_open_plot(
 ```
 
 ## Figure S5 - Fst Tree?
+
+```{r}
+popmap_tb <- read_csv2(here("data", "individuals_coordinates.csv"), locale = locale(encoding = "latin1")) |>
+  select(
+    ID     = Indiv,
+    Code   = Localisation,
+    pop    = popmap_clean
+  )
+```
+
+```{r}
+lookup <- popmap_tb |> select(c(Code, pop)) |> distinct(.keep_all = TRUE)
+
+Fst_all <- here("plink2", "Embiotoca_filtered_Fst.fst.summary") |>
+  read_table(skip = 1, col_names = c("Var1", "Var2", "dist")) |> 
+  mutate(
+    dist = as.numeric(dist)
+  ) |> 
+  reshape2::acast(Var1 ~ Var2)
+
+Fst_all <- cbind(matrix(rep(NA, 14), 14, 1, dimnames = list(rownames(Fst_all), "BBA")), Fst_all)
+Fst_all <- rbind(Fst_all, matrix(rep(NA, 15), 1, 15, dimnames = list("TB", colnames(Fst_all))))
+Fst_all[is.na(Fst_all)] <- 0
+Fst_all <- Fst_all + t(Fst_all)
+
+colnames(Fst_all) <- rownames(Fst_all) <- lookup$pop[match(colnames(Fst_all), lookup$Code)]
+rm(lookup)
+```
+
+```{r}
+NJ_Tree_lcwgs <- Fst_all |> as.dist() |> nj()
+
+NJ_Tree_lcwgs$tip.label <- NJ_Tree_lcwgs$tip.label |>
+  gsub("_", " ", x = _) |>
+  str_to_title()
+
+# options(ignore.negative.edge = TRUE)
+
+# NJ_Tree_lcwgs_plot <- NJ_Tree_lcwgs |>
+#   ggtree(layout = "circular") +
+#   geom_tiplab(size = 2.8) +
+#   geom_treescale(x = 0, y = 0)
+
+NJ_Tree_lcwgs_rooted <- NJ_Tree_lcwgs |> root(outgroup = "Isla Guadalupe")
+
+NJ_Tree_lcwgs_rooted_plot <- NJ_Tree_lcwgs_rooted |>
+  ggtree() +
+  geom_tiplab(size = 2.8) +
+  geom_treescale() +
+  xlim(0, 0.35)
+```
 
 ## Figure S6 - OutFlank
 
