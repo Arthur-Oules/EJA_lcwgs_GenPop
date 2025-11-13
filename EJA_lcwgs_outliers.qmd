@@ -26,31 +26,6 @@ source(here("functions", "tidy_functions.R"))
 source(here("functions", "plot_functions.R"))
 ```
 
-## Helper objects
-
-```{r}
-#| label: GenomeMap
-#| echo: false
-
-lcwgs_vcf <- read.vcfR(here("data", "8-Embiotoca_filtered.vcf.gz"))
-
-lcwgs_vcf |>
-  getFIX() |>
-  as_tibble() |>
-  select(CHROM, POS) |>
-  mutate(POS = as.numeric(POS)) |>
-  mutate(rank = row_number()) |>
-  select(rank, CHROM, POS) |> 
-  saveRDS(file = here("data", "SNP_positions.rds"))
-
-lcwgs_vcf |>
-  extract_gt_tidy() |>
-  _$Indiv |>
-  write_rds(file = here("data", "Individual_list.rds"))
-
-rm(lcwgs_vcf)
-```
-
 ## Data conversions
 
 ### Initial .vcf to .bed conversion
@@ -59,6 +34,26 @@ rm(lcwgs_vcf)
 cd C:/Users/aoules/Desktop/R_projects/Surfperch_GenPop/plink2
 
 ./plink2 --vcf 8-Embiotoca_filtered.vcf.gz --make-bed --out 8-Embiotoca_filtered
+```
+
+## Helper objects
+
+`8-Embiotoca_filtered.fam` contains individuals IDs in second column
+
+```{r}
+read_tsv(here("plink2", "8-Embiotoca_filtered.fam"), col_names = FALSE) |> 
+  pull(X2) |> 
+  write_rds(file = here("data", "Individual_list.rds"))
+```
+
+`8-Embiotoca_filtered.bim` contains SNPs chromosome in column 1 and chromosome position in column 4.
+
+```{r}
+read_tsv(here("plink2", "8-Embiotoca_filtered.bim"), col_names = FALSE) |> 
+  mutate(rank = row_number()) |> 
+  select(rank, X1, X4) |>
+  rename("CHROM" = "X1", "POS" = "X4") |> 
+  write_rds(file = here("data", "SNP_positions.rds"))
 ```
 
 ### Generate whitelists and subset .bed files
